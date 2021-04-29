@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Type, Union
 
 from flask import send_file
 from restapi import decorators
@@ -41,7 +41,7 @@ def check_platform_availability(platform: str) -> bool:
     return os.access(os.path.join(MEDIA_ROOT, platform), os.X_OK)
 
 
-def get_schema(set_required: bool) -> Schema:
+def get_schema(set_required: bool) -> Type[Schema]:
     attributes: Dict[str, Union[fields.Field, type]] = {}
     attributes["run"] = fields.Str(validate=validate.OneOf(RUNS), required=True)
     attributes["res"] = fields.Str(validate=validate.OneOf(RESOLUTIONS), required=True)
@@ -127,13 +127,12 @@ class MapImage(MapEndpoint):
         env: str = "PROD",
     ) -> Response:
         """Get a forecast map for a specific run."""
-        # log.debug('Retrieve map image by offset <{}>'.format(map_offset))
 
         # flash flood offset is a bit more complicate
         if field == "percentile":
-            map_offset = "_".join((map_offset, level_pe))
+            map_offset = f"{map_offset}_{level_pe}"
         elif field == "probability":
-            map_offset = "_".join((map_offset, level_pr))
+            map_offset = f"{map_offset}_{level_pr}"
 
         log.debug(f"Retrieve map image by offset <{map_offset}>")
 
@@ -228,14 +227,13 @@ class MapSet(MapEndpoint):
         ready_file = self.get_ready_file(base_path, area)
         reftime = ready_file[:10]
 
-        data = {"reftime": reftime, "offsets": [], "platform": platform}
-
         # load image offsets
         images_path = os.path.join(base_path, area, field)
 
         list_file = sorted(os.listdir(images_path))
 
         if field == "percentile" or field == "probability":
+            offsets = []
             # flash flood offset is a bit more complicate
             for f in list_file:
                 if os.path.isfile(os.path.join(images_path, f)):
@@ -243,18 +241,19 @@ class MapSet(MapEndpoint):
                     # offset is like this now: 0006_10
                     offset, level = offset.split("_")
                     if field == "percentile" and level_pe == level:
-                        data["offsets"].append(offset)
+                        offsets.append(offset)
                     elif field == "probability" and level_pr == level:
-                        data["offsets"].append(offset)
+                        offsets.append(offset)
         else:
-            data["offsets"] = [
+            offsets = [
                 f.split(".")[-2]
                 for f in list_file
                 if os.path.isfile(os.path.join(images_path, f))
             ]
 
-        log.debug("data offsets: {}".format(data["offsets"]))
+        log.debug("data offsets: {}", offsets)
 
+        data = {"reftime": reftime, "offsets": offsets, "platform": platform}
         return self.response(data)
 
 
@@ -285,11 +284,7 @@ class MapLegend(MapEndpoint):
         """Get a forecast legend for a specific run."""
         # NOTE: 'area' param is not strictly necessary here
         # although present among the parameters of the request
-        log.debug(
-            "Retrieve legend for run <{run}, {res}, {field}>".format(
-                run=run, res=res, field=field
-            )
-        )
+        log.debug("Retrieve legend for run <{}, {}, {}>", run, res, field)
 
         base_path = self.get_base_path(field, platform, env, run, res)
 
