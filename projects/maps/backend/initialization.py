@@ -1,4 +1,5 @@
-class Initializer:
+# Unused since Auth is not enabled
+class Initializer:  # pragma: no cover
 
     """
     This class is instantiated just after restapi init

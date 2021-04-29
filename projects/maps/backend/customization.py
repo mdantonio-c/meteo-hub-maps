@@ -6,7 +6,8 @@ from restapi.rest.definition import EndpointResource
 # from restapi.utilities.logs import log
 
 
-class Customizer(BaseCustomizer):
+# Unused since Auth is not enabled
+class Customizer(BaseCustomizer):  # pragma: no cover
     @staticmethod
     def custom_user_properties_pre(
         properties: Props,
