@@ -1,11 +1,11 @@
 import os
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 from flask import send_file
 from restapi import decorators
 from restapi.exceptions import NotFound, ServiceUnavailable
 from restapi.models import Schema, fields, validate
-from restapi.rest.definition import EndpointResource
+from restapi.rest.definition import EndpointResource, Response
 from restapi.utilities.logs import log
 
 MEDIA_ROOT = "/meteo/"
@@ -37,11 +37,11 @@ ENVS = ["PROD", "DEV"]
 DEFAULT_PLATFORM = os.environ.get("PLATFORM", "GALILEO")
 
 
-def check_platform_availability(platform):
+def check_platform_availability(platform: str) -> bool:
     return os.access(os.path.join(MEDIA_ROOT, platform), os.X_OK)
 
 
-def get_schema(set_required):
+def get_schema(set_required: bool) -> Schema:
     attributes: Dict[str, Union[fields.Field, type]] = {}
     attributes["run"] = fields.Str(validate=validate.OneOf(RUNS), required=True)
     attributes["res"] = fields.Str(validate=validate.OneOf(RESOLUTIONS), required=True)
@@ -63,7 +63,7 @@ def get_schema(set_required):
 
 class MapEndpoint(EndpointResource):
     @staticmethod
-    def get_base_path(field, platform, env, run, res):
+    def get_base_path(field: str, platform: str, env: str, run: str, res: str) -> str:
         # flood fields have a different path
         if field == "percentile" or field == "probability":
             folder = f"PROB-{run}-iff.web"
@@ -80,7 +80,7 @@ class MapEndpoint(EndpointResource):
         return base_path
 
     @staticmethod
-    def get_ready_file(base_path, area):
+    def get_ready_file(base_path: str, area: str) -> str:
         ready_path = os.path.join(base_path, area)
         log.debug(f"ready_path: {ready_path}")
 
@@ -116,16 +116,16 @@ class MapImage(MapEndpoint):
     )
     def get(
         self,
-        map_offset,
-        run,
-        res,
-        field,
-        area,
-        platform,
-        level_pe=None,
-        level_pr=None,
-        env="PROD",
-    ):
+        map_offset: str,
+        run: str,
+        res: str,
+        field: str,
+        area: str,
+        platform: str,
+        level_pe: Optional[str] = None,
+        level_pr: Optional[str] = None,
+        env: str = "PROD",
+    ) -> Response:
         """Get a forecast map for a specific run."""
         # log.debug('Retrieve map image by offset <{}>'.format(map_offset))
 
@@ -177,15 +177,15 @@ class MapSet(MapEndpoint):
     )
     def get(
         self,
-        run,
-        res,
-        field,
-        area,
-        platform=None,
-        level_pe=None,
-        level_pr=None,
-        env="PROD",
-    ):
+        run: str,
+        res: str,
+        field: str,
+        area: str,
+        platform: Optional[str] = None,
+        level_pe: Optional[str] = None,
+        level_pr: Optional[str] = None,
+        env: str = "PROD",
+    ) -> Response:
         """
         Get the last available map set for a specific run
         and return the reference time as well
@@ -272,8 +272,16 @@ class MapLegend(MapEndpoint):
         },
     )
     def get(
-        self, run, res, field, area, platform, level_pe=None, level_pr=None, env="PROD"
-    ):
+        self,
+        run: str,
+        res: str,
+        field: str,
+        area: str,
+        platform: str,
+        level_pe: Optional[str] = None,
+        level_pr: Optional[str] = None,
+        env: str = "PROD",
+    ) -> Response:
         """Get a forecast legend for a specific run."""
         # NOTE: 'area' param is not strictly necessary here
         # although present among the parameters of the request
