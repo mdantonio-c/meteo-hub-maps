@@ -1,4 +1,5 @@
 import os
+from typing import Dict, Tuple, TypedDict
 
 from restapi.exceptions import NotFound
 from restapi.utilities.logs import log
@@ -53,7 +54,21 @@ PLATFORMS = ["GALILEO", "MEUCCI"]
 ENVS = ["PROD", "DEV"]
 DEFAULT_PLATFORM = os.environ.get("PLATFORM", "GALILEO")
 
-DATASETS = {
+
+class Boundaries(TypedDict):
+    SW: Tuple[int, int]
+    NE: Tuple[int, int]
+
+
+class DatasetType(TypedDict):
+    area: str
+    start_offset: int
+    end_offset: int
+    step: int
+    boundaries: Boundaries
+
+
+DATASETS: Dict[str, DatasetType] = {
     "lm5": {
         "area": "Area_Mediterranea",
         "start_offset": 0,

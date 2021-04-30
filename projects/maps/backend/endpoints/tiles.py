@@ -2,7 +2,13 @@ import os
 from functools import lru_cache
 from typing import Optional
 
-from maps.endpoints.config import DATASETS, MEDIA_ROOT, RUNS, get_ready_file
+from maps.endpoints.config import (
+    DATASETS,
+    MEDIA_ROOT,
+    RUNS,
+    DatasetType,
+    get_ready_file,
+)
 from restapi import decorators
 from restapi.exceptions import NotFound
 from restapi.models import fields, validate
@@ -38,9 +44,9 @@ class TilesEndpoint(EndpointResource):
         },
     )
     def get(self, dataset: str, run: Optional[str] = None) -> Response:
-        ready_file = None
-        info = DATASETS.get(dataset, {})
-        area = info.get("area")
+        ready_file: Optional[str] = None
+        info: DatasetType = DATASETS.get(dataset, {})
+        area: str = info.get("area")
 
         # check for run param: if not provided get the "last" run available
         if not run:
@@ -66,6 +72,7 @@ class TilesEndpoint(EndpointResource):
         info["platform"] = None
         return self.response(info)
 
+    @lru_cache
     def _get_ready_file(self, area: str, run: str, dataset: str) -> Optional[str]:
         base_path = self.get_base_path(run, dataset)
         try:
