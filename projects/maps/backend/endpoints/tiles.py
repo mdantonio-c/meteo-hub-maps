@@ -38,10 +38,14 @@ class TilesEndpoint(EndpointResource):
         },
     )
     def get(self, dataset: str, run: Optional[str] = None) -> Response:
-        ready_file: Optional[str] = None
-        info: DatasetType = DATASETS.get(dataset, {})
+
+        info: DatasetType = DATASETS.get(dataset)
+        if not info:
+            raise NotFound(f"Dataset {dataset} is not available")
+
         area: str = info.get("area")
 
+        ready_file: Optional[str] = None
         # check for run param: if not provided get the "last" run available
         if not run:
             log.debug("No run param provided: look for the last run available")
