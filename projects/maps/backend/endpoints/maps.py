@@ -3,39 +3,24 @@ from functools import lru_cache
 from typing import Dict, Optional, Type, Union
 
 from flask import send_file
+from maps.endpoints.config import (
+    AREAS,
+    DEFAULT_PLATFORM,
+    ENVS,
+    FIELDS,
+    LEVELS_PE,
+    LEVELS_PR,
+    MEDIA_ROOT,
+    PLATFORMS,
+    RESOLUTIONS,
+    RUNS,
+    get_ready_file,
+)
 from restapi import decorators
 from restapi.exceptions import NotFound, ServiceUnavailable
 from restapi.models import Schema, fields, validate
 from restapi.rest.definition import EndpointResource, Response
 from restapi.utilities.logs import log
-
-MEDIA_ROOT = "/meteo/"
-
-RUNS = ["00", "12"]
-RESOLUTIONS = ["lm2.2", "lm5"]
-FIELDS = [
-    "prec1",
-    "prec3",
-    "prec6",
-    "prec12",
-    "prec24",
-    "t2m",
-    "wind",
-    "cloud",
-    "pressure",
-    "cloud_hml",
-    "humidity",
-    "snow3",
-    "snow6",
-    "percentile",
-    "probability",
-]
-LEVELS_PE = ["1", "10", "25", "50", "70", "75", "80", "90", "95", "99"]
-LEVELS_PR = ["5", "10", "20", "50"]
-AREAS = ["Italia", "Nord_Italia", "Centro_Italia", "Sud_Italia", "Area_Mediterranea"]
-PLATFORMS = ["GALILEO", "MEUCCI"]
-ENVS = ["PROD", "DEV"]
-DEFAULT_PLATFORM = os.environ.get("PLATFORM", "GALILEO")
 
 
 def check_platform_availability(platform: str) -> bool:
@@ -81,30 +66,9 @@ class MapEndpoint(EndpointResource):
         log.debug(f"base_path: {base_path}")
         return base_path
 
-    @staticmethod
-    def get_ready_file(base_path: str, area: str) -> str:
-        ready_path = os.path.join(base_path, area)
-        log.debug(f"ready_path: {ready_path}")
-
-        ready_files = []
-        if os.path.exists(ready_path):
-            ready_files = [
-                f
-                for f in os.listdir(ready_path)
-                if os.path.isfile(os.path.join(ready_path, f)) and ".READY" in f
-            ]
-
-        # Check if .READY file exists (if not, images are not ready yet)
-        log.debug(f"Looking for .READY files in: {ready_path}")
-        if not ready_files:
-            raise NotFound("no .READY files found")
-
-        log.debug(f".READY files found: {ready_files}")
-        return ready_files[0]
-
 
 class MapImage(MapEndpoint):
-    labels = ["map image"]
+    labels = ["maps"]
 
     @decorators.cache(timeout=900)
     @decorators.use_kwargs(get_schema(True), location="query")
@@ -142,7 +106,7 @@ class MapImage(MapEndpoint):
         base_path = self.get_base_path(field, platform, env, run, res)
 
         # Check if the images are ready: 2017112900.READY
-        ready_file = self.get_ready_file(base_path, area)
+        ready_file = get_ready_file(base_path, area)
         reftime = ready_file[:10]
 
         # get map image
@@ -164,7 +128,7 @@ class MapImage(MapEndpoint):
 
 
 class MapSet(MapEndpoint):
-    labels = ["map set"]
+    labels = ["maps"]
 
     @decorators.cache(timeout=900)
     @decorators.use_kwargs(get_schema(False), location="query")
@@ -228,7 +192,7 @@ class MapSet(MapEndpoint):
         base_path = self.get_base_path(field, platform, env, run, res)
 
         # Check if the images are ready: 2017112900.READY
-        ready_file = self.get_ready_file(base_path, area)
+        ready_file = get_ready_file(base_path, area)
         reftime = ready_file[:10]
 
         # load image offsets
@@ -262,7 +226,7 @@ class MapSet(MapEndpoint):
 
 
 class MapLegend(MapEndpoint):
-    labels = ["legend"]
+    labels = ["maps"]
 
     @decorators.cache(timeout=900)
     @decorators.use_kwargs(get_schema(True), location="query")
