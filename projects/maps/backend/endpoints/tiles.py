@@ -1,12 +1,12 @@
-import os
 from functools import lru_cache
 from typing import Optional
 
 from maps.endpoints.config import (
     DATASETS,
-    MEDIA_ROOT,
+    DEFAULT_PLATFORM,
     RUNS,
     DatasetType,
+    get_base_path,
     get_ready_file,
 )
 from restapi import decorators
@@ -18,12 +18,6 @@ from restapi.utilities.logs import log
 
 class TilesEndpoint(EndpointResource):
     labels = ["tiles"]
-
-    @staticmethod
-    @lru_cache
-    def get_base_path(run: str, dataset: str) -> str:
-        # e.g. Tiles-00-lm2.2.web
-        return os.path.join(MEDIA_ROOT, "PROD", f"Tiles-{run}-{dataset}.web")
 
     @decorators.use_kwargs(
         {
@@ -61,7 +55,9 @@ class TilesEndpoint(EndpointResource):
             except ValueError:
                 log.warning("No Run is available: .READY file not found")
         else:
-            base_path = self.get_base_path(run, dataset)
+            base_path = self.get_base_path(
+                "tiles", DEFAULT_PLATFORM, "PROD", run, dataset
+            )
             ready_file = get_ready_file(base_path, area)
 
         if not ready_file:
@@ -74,7 +70,7 @@ class TilesEndpoint(EndpointResource):
 
     @lru_cache
     def _get_ready_file(self, area: str, run: str, dataset: str) -> Optional[str]:
-        base_path = self.get_base_path(run, dataset)
+        base_path = self.get_base_path("tiles", DEFAULT_PLATFORM, "PROD", run, dataset)
         try:
             return get_ready_file(base_path, area)
         except NotFound:

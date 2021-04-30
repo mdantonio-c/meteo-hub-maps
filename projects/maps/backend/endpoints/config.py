@@ -1,8 +1,32 @@
 import os
+from functools import lru_cache
 from typing import Dict, Tuple, TypedDict
 
 from restapi.exceptions import NotFound
 from restapi.utilities.logs import log
+
+
+@lru_cache
+def get_base_path(field: str, platform: str, env: str, run: str, dataset: str) -> str:
+    # flood fields have a different path
+    if field == "percentile" or field == "probability":
+        dataset = "iff"
+        prefix = "PROB"
+    elif field == "tiles":
+        prefix = "Tiles"
+    else:
+        prefix = "Magics"
+
+    folder = f"{prefix}-{run}-{dataset}.web"
+
+    base_path = os.path.join(
+        MEDIA_ROOT,
+        platform,
+        env,
+        folder,
+    )
+    log.debug(f"base_path: {base_path}")
+    return base_path
 
 
 def get_ready_file(base_path: str, area: str) -> str:
@@ -24,6 +48,10 @@ def get_ready_file(base_path: str, area: str) -> str:
 
     log.debug(f".READY files found: {ready_files}")
     return ready_files[0]
+
+
+def check_platform_availability(platform: str) -> bool:
+    return os.access(os.path.join(MEDIA_ROOT, platform), os.X_OK)
 
 
 MEDIA_ROOT = "/meteo/"

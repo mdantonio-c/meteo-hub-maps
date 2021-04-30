@@ -1,5 +1,4 @@
 import os
-from functools import lru_cache
 from typing import Dict, Optional, Type, Union
 
 from flask import send_file
@@ -10,10 +9,11 @@ from maps.endpoints.config import (
     FIELDS,
     LEVELS_PE,
     LEVELS_PR,
-    MEDIA_ROOT,
     PLATFORMS,
     RESOLUTIONS,
     RUNS,
+    check_platform_availability,
+    get_base_path,
     get_ready_file,
 )
 from restapi import decorators
@@ -21,10 +21,6 @@ from restapi.exceptions import NotFound, ServiceUnavailable
 from restapi.models import Schema, fields, validate
 from restapi.rest.definition import EndpointResource, Response
 from restapi.utilities.logs import log
-
-
-def check_platform_availability(platform: str) -> bool:
-    return os.access(os.path.join(MEDIA_ROOT, platform), os.X_OK)
 
 
 def get_schema(set_required: bool) -> Type[Schema]:
@@ -47,27 +43,7 @@ def get_schema(set_required: bool) -> Type[Schema]:
     return Schema.from_dict(attributes, name="MapsSchema")
 
 
-class MapEndpoint(EndpointResource):
-    @staticmethod
-    @lru_cache
-    def get_base_path(field: str, platform: str, env: str, run: str, res: str) -> str:
-        # flood fields have a different path
-        if field == "percentile" or field == "probability":
-            folder = f"PROB-{run}-iff.web"
-        else:
-            folder = f"Magics-{run}-{res}.web"
-
-        base_path = os.path.join(
-            MEDIA_ROOT,
-            platform,
-            env,
-            folder,
-        )
-        log.debug(f"base_path: {base_path}")
-        return base_path
-
-
-class MapImage(MapEndpoint):
+class MapImage(EndpointResource):
     labels = ["maps"]
 
     # @decorators.cache(timeout=900)
@@ -103,7 +79,7 @@ class MapImage(MapEndpoint):
 
         log.debug(f"Retrieve map image by offset <{map_offset}>")
 
-        base_path = self.get_base_path(field, platform, env, run, res)
+        base_path = get_base_path(field, platform, env, run, res)
 
         # Check if the images are ready: 2017112900.READY
         ready_file = get_ready_file(base_path, area)
@@ -127,7 +103,7 @@ class MapImage(MapEndpoint):
         return send_file(map_image_file, mimetype="image/png")
 
 
-class MapSet(MapEndpoint):
+class MapSet(EndpointResource):
     labels = ["maps"]
 
     # @decorators.cache(timeout=900)
@@ -189,7 +165,7 @@ class MapSet(MapEndpoint):
         else:
             raise ServiceUnavailable("Map service is currently unavailable")
 
-        base_path = self.get_base_path(field, platform, env, run, res)
+        base_path = get_base_path(field, platform, env, run, res)
 
         # Check if the images are ready: 2017112900.READY
         ready_file = get_ready_file(base_path, area)
@@ -225,7 +201,7 @@ class MapSet(MapEndpoint):
         return self.response(data)
 
 
-class MapLegend(MapEndpoint):
+class MapLegend(EndpointResource):
     labels = ["maps"]
 
     # @decorators.cache(timeout=900)
@@ -255,7 +231,7 @@ class MapLegend(MapEndpoint):
         # although present among the parameters of the request
         log.debug("Retrieve legend for run <{}, {}, {}>", run, res, field)
 
-        base_path = self.get_base_path(field, platform, env, run, res)
+        base_path = get_base_path(field, platform, env, run, res)
 
         # Get legend image
         legend_path = os.path.join(base_path, "legends")
