@@ -55,9 +55,7 @@ class TilesEndpoint(EndpointResource):
             except ValueError:
                 log.warning("No Run is available: .READY file not found")
         else:
-            base_path = self.get_base_path(
-                "tiles", DEFAULT_PLATFORM, "PROD", run, dataset
-            )
+            base_path = get_base_path("tiles", DEFAULT_PLATFORM, "PROD", run, dataset)
             ready_file = get_ready_file(base_path, area)
 
         if not ready_file:
@@ -70,7 +68,7 @@ class TilesEndpoint(EndpointResource):
 
     @lru_cache
     def _get_ready_file(self, area: str, run: str, dataset: str) -> Optional[str]:
-        base_path = self.get_base_path("tiles", DEFAULT_PLATFORM, "PROD", run, dataset)
+        base_path = get_base_path("tiles", DEFAULT_PLATFORM, "PROD", run, dataset)
         try:
             return get_ready_file(base_path, area)
         except NotFound:
