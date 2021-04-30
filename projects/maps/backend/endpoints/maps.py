@@ -144,13 +144,13 @@ class MapImage(MapEndpoint):
 
         # get map image
         if field == "percentile":
-            field = "perc6"
+            png_name = f"perc6.{reftime}.{map_offset}.png"
         elif field == "probability":
-            field = "prob6"
+            png_name = f"prob6.{reftime}.{map_offset}.png"
+        else:
+            png_name = f"{field}.{reftime}.{map_offset}.png"
 
-        map_image_file = os.path.join(
-            base_path, area, field, f"{field}.{reftime}.{map_offset}.png"
-        )
+        map_image_file = os.path.join(base_path, area, field, png_name)
 
         log.debug(f"map_image_file: {map_image_file}")
 
