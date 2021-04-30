@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 from typing import Dict, Optional, Type, Union
 
 from flask import send_file
@@ -63,6 +64,7 @@ def get_schema(set_required: bool) -> Type[Schema]:
 
 class MapEndpoint(EndpointResource):
     @staticmethod
+    @lru_cache
     def get_base_path(field: str, platform: str, env: str, run: str, res: str) -> str:
         # flood fields have a different path
         if field == "percentile" or field == "probability":
@@ -104,6 +106,7 @@ class MapEndpoint(EndpointResource):
 class MapImage(MapEndpoint):
     labels = ["map image"]
 
+    @decorators.cache(timeout=900)
     @decorators.use_kwargs(get_schema(True), location="query")
     @decorators.endpoint(
         path="/maps/offset/<map_offset>",
@@ -163,6 +166,7 @@ class MapImage(MapEndpoint):
 class MapSet(MapEndpoint):
     labels = ["map set"]
 
+    @decorators.cache(timeout=900)
     @decorators.use_kwargs(get_schema(False), location="query")
     @decorators.endpoint(
         path="/maps/ready",
@@ -260,6 +264,7 @@ class MapSet(MapEndpoint):
 class MapLegend(MapEndpoint):
     labels = ["legend"]
 
+    @decorators.cache(timeout=900)
     @decorators.use_kwargs(get_schema(True), location="query")
     @decorators.endpoint(
         path="/maps/legend",
