@@ -84,8 +84,8 @@ DEFAULT_PLATFORM = os.environ.get("PLATFORM", "GALILEO")
 
 
 class Boundaries(TypedDict):
-    SW: Tuple[int, int]
-    NE: Tuple[int, int]
+    SW: Tuple[float, float]
+    NE: Tuple[float, float]
 
 
 class DatasetType(TypedDict):
