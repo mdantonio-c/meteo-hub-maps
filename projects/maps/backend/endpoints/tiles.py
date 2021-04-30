@@ -43,7 +43,10 @@ class TilesEndpoint(EndpointResource):
         if not info:
             raise NotFound(f"Dataset {dataset} is not available")
 
-        area: str = info.get("area")
+        area: str = info.get("area", "")
+
+        if not area:
+            raise NotFound(f"Dataset area not available for {dataset}")
 
         ready_file: Optional[str] = None
         # check for run param: if not provided get the "last" run available
