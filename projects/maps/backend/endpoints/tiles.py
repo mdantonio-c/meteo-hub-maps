@@ -39,7 +39,7 @@ class TilesEndpoint(EndpointResource):
     )
     def get(self, dataset: str, run: Optional[str] = None) -> Response:
 
-        info: DatasetType = DATASETS.get(dataset)
+        info: Optional[DatasetType] = DATASETS.get(dataset)
         if not info:
             raise NotFound(f"Dataset {dataset} is not available")
 
@@ -65,10 +65,17 @@ class TilesEndpoint(EndpointResource):
         if not ready_file:
             raise NotFound("No .READY file found")
 
-        info["dataset"] = dataset
-        info["reftime"] = ready_file[:10]
-        info["platform"] = None
-        return self.response(info)
+        response = {
+            "dataset": dataset,
+            "area": info["area"],
+            "start_offset": info["start_offset"],
+            "end_offset": info["end_offset"],
+            "step": info["step"],
+            "boundaries": info["boundaries"],
+            "reftime": ready_file[:10],
+            "platform": None,
+        }
+        return self.response(response)
 
     @lru_cache
     def _get_ready_file(self, area: str, run: str, dataset: str) -> Optional[str]:
