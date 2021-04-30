@@ -10,3 +10,4 @@ variables:
     ACTIVATE_AUTH: 0
     FRONTEND_FRAMEWORK: nofrontend
     CORS_ALLOWED_ORIGIN: "*"
+    ACTIVATE_REDIS: 1

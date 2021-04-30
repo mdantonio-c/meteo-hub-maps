@@ -106,6 +106,7 @@ class MapEndpoint(EndpointResource):
 class MapImage(MapEndpoint):
     labels = ["map image"]
 
+    @decorators.cache(timeout=900)
     @decorators.use_kwargs(get_schema(True), location="query")
     @decorators.endpoint(
         path="/maps/offset/<map_offset>",
@@ -165,6 +166,7 @@ class MapImage(MapEndpoint):
 class MapSet(MapEndpoint):
     labels = ["map set"]
 
+    @decorators.cache(timeout=900)
     @decorators.use_kwargs(get_schema(False), location="query")
     @decorators.endpoint(
         path="/maps/ready",
@@ -262,6 +264,7 @@ class MapSet(MapEndpoint):
 class MapLegend(MapEndpoint):
     labels = ["legend"]
 
+    @decorators.cache(timeout=900)
     @decorators.use_kwargs(get_schema(True), location="query")
     @decorators.endpoint(
         path="/maps/legend",
