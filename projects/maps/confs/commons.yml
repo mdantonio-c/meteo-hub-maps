@@ -1,6 +1,6 @@
-version: "3.2"
+version: "3.8"
 
 services:
   backend:
     volumes:
-      - ${VANILLA_DIR}/data/maps:/meteo
+      - ${DATA_DIR}/maps:/meteo
