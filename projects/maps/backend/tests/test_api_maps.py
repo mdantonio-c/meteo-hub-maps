@@ -106,6 +106,32 @@ class TestApp(BaseTests):
         # check if the retrieved file is the same created (and if it's complete)
         assert retrieved_map_content == fcontent
 
+        # TEST LEGEND RETRIEVING
+        # legend file does not exists
+        leg_endpoint = (
+            API_URI
+            + f"/maps/legend?field={field}&run={run}&res={res}&area={area}&platform={platform}&env={env}"
+        )
+        r = client.get(leg_endpoint)
+        assert r.status_code == 404
+
+        # create a legend file
+        cosmo_legend_dir = Path(cosmo_map_path.parent, "legends")
+        cosmo_legend_dir.mkdir(parents=True, exist_ok=True)
+        # create a fake cosmo legend file
+        fcontent = faker.paragraph()
+        cosmo_legend_path = Path(cosmo_legend_dir, f"{field}.png")
+        with open(cosmo_legend_path, "w") as f:
+            f.write(fcontent)
+
+        # get the legend
+        r = client.get(leg_endpoint)
+        assert r.status_code == 200
+        retrieved_legend_content = r.data.decode("utf-8")
+
+        # check if the retrieved file is the same created (and if it's complete)
+        assert retrieved_legend_content == fcontent
+
         # PERCENTILE CASE
         field = "percentile"
         level_pe = LEVELS_PE[0]
@@ -162,6 +188,28 @@ class TestApp(BaseTests):
         # check if the retrieved file is the same created (and if it's complete)
         assert retrieved_map_content == fcontent
 
+        # TEST LEGENDS
+        # create a legend file
+        iff_legend_dir = Path(iff_map_path.parent, "legends")
+        iff_legend_dir.mkdir(parents=True, exist_ok=True)
+        # create a fake percentile legend file
+        fcontent = faker.paragraph()
+        perc_legend_path = Path(iff_legend_dir, "perc6.png")
+        with open(perc_legend_path, "w") as f:
+            f.write(fcontent)
+
+        # get the legend
+        leg_endpoint = (
+            API_URI
+            + f"/maps/legend?field={field}&run={run}&res={res}&area={area}&platform={platform}&env={env}&level_pe={level_pe}"
+        )
+        r = client.get(leg_endpoint)
+        assert r.status_code == 200
+        retrieved_legend_content = r.data.decode("utf-8")
+
+        # check if the retrieved file is the same created (and if it's complete)
+        assert retrieved_legend_content == fcontent
+
         # PROBABILITY CASE
         field = "probability"
         level_pr = LEVELS_PR[0]
@@ -201,9 +249,30 @@ class TestApp(BaseTests):
         # check if the retrieved file is the same created (and if it's complete)
         assert retrieved_map_content == fcontent
 
+        # create a fake probability legend file
+        fcontent = faker.paragraph()
+        prob_legend_path = Path(iff_legend_dir, "prob6.png")
+        with open(prob_legend_path, "w") as f:
+            f.write(fcontent)
+
+        # get the legend
+        leg_endpoint = (
+            API_URI
+            + f"/maps/legend?field={field}&run={run}&res={res}&area={area}&platform={platform}&env={env}&level_pr={level_pr}"
+        )
+        r = client.get(leg_endpoint)
+        assert r.status_code == 200
+        retrieved_legend_content = r.data.decode("utf-8")
+
+        # check if the retrieved file is the same created (and if it's complete)
+        assert retrieved_legend_content == fcontent
+
         # delete all the files used for the tests
         Path.unlink(cosmo_readyfile_path)
         Path.unlink(cosmo_mapfile_path)
+        Path.unlink(cosmo_legend_path)
         Path.unlink(iff_readyfile_path)
         Path.unlink(perc_mapfile_path)
+        Path.unlink(perc_legend_path)
         Path.unlink(prob_mapfile_path)
+        Path.unlink(prob_legend_path)
