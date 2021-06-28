@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from faker import Faker
+from faker import Faker  # type:ignore
 from flask.wrappers import Response
 from maps.endpoints.config import (
     AREAS,

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from faker import Faker
+from faker import Faker  # type:ignore
 from maps.endpoints.config import DATASETS, DEFAULT_PLATFORM, MEDIA_ROOT, RUNS
 from restapi.tests import API_URI, BaseTests, FlaskClient
 from restapi.utilities.logs import log
@@ -15,7 +15,7 @@ class TestApp(BaseTests):
         area = DATASETS[dataset]["area"]
 
         # case of a dataset without metadata
-        DATASETS["fake_dataset"] = {}
+        DATASETS["fake_dataset"] = {}  # type:ignore
         r = client.get(f"{API_URI}/tiles?dataset=fake_dataset")
         assert r.status_code == 404
         no_metadata_msg = self.get_content(r)
