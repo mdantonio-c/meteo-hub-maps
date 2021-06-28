@@ -70,11 +70,7 @@ class TestApp(BaseTests):
             API_URI
             + f"/maps/ready?field={field}&run={run}&res={res}&area={area}&platform={no_avail_platform}&env={env}"
         )
-        # # admin check for an unavailable platform
-        # admin_headers, _ = self.do_login(client, None, None)
-        # r = client.get(ready_endpoint,headers=admin_headers,)
-        # assert r.status_code == 500
-        # normal user check for an unaival platform
+        # check for an unaivalable platform
         r = client.get(ready_endpoint)
         assert r.status_code == 200
         ready_res = self.get_content(r)
