@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from faker import Faker  # type:ignore
+from faker import Faker
 from maps.endpoints.config import (
     AREAS,
     DEFAULT_PLATFORM,
