@@ -3,7 +3,6 @@ from pathlib import Path
 from faker import Faker  # type:ignore
 from maps.endpoints.config import DATASETS, DEFAULT_PLATFORM, MEDIA_ROOT, RUNS
 from restapi.tests import API_URI, BaseTests, FlaskClient
-from restapi.utilities.logs import log
 
 
 class TestApp(BaseTests):

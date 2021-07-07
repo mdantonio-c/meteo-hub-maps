@@ -80,8 +80,9 @@ class TilesEndpoint(EndpointResource):
         }
         return self.response(response)
 
+    @staticmethod
     @lru_cache
-    def _get_ready_file(self, area: str, run: str, dataset: str) -> Optional[str]:
+    def _get_ready_file(area: str, run: str, dataset: str) -> Optional[str]:
         base_path = get_base_path("tiles", DEFAULT_PLATFORM, "PROD", run, dataset)
         try:
             return get_ready_file(base_path, area)

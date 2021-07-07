@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from faker import Faker  # type:ignore
-from flask.wrappers import Response
 from maps.endpoints.config import (
     AREAS,
     DEFAULT_PLATFORM,
@@ -15,7 +14,6 @@ from maps.endpoints.config import (
     RUNS,
 )
 from restapi.tests import API_URI, BaseTests, FlaskClient
-from restapi.utilities.logs import log
 
 
 class TestApp(BaseTests):
