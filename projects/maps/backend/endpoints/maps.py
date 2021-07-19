@@ -183,10 +183,11 @@ class MapSet(EndpointResource):
                     reftime = dt_reftime
                     base_path = get_base_path(field, pl, env, run, res)
                     platform = pl
+                    last_reftime = reftime.strftime("%Y%m%d%H")
 
             if not base_path:
                 raise NotFound("no .READY files found")
-            last_reftime = reftime.strftime("%Y%m%d%H")
+
         else:
             # check platform availability
             if not check_platform_availability(platform):
