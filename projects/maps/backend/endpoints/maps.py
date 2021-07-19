@@ -179,13 +179,14 @@ class MapSet(EndpointResource):
                     continue
 
                 dt_reftime = datetime.strptime(ready_file[:10], "%Y%m%d%H")
-                if not reftime or dt_reftime > reftime:
+                if not reftime or dt_reftime > reftime:  # type: ignore
                     reftime = dt_reftime
                     base_path = get_base_path(field, pl, env, run, res)
                     platform = pl
 
             if not base_path:
                 raise NotFound("no .READY files found")
+            last_reftime = reftime.strftime("%Y%m%d%H")
         else:
             # check platform availability
             if not check_platform_availability(platform):
@@ -195,7 +196,7 @@ class MapSet(EndpointResource):
             # check if there is a ready file
             base_path = get_base_path(field, platform, env, run, res)
             ready_file = get_ready_file(base_path, area)
-            reftime = ready_file[:10]
+            last_reftime = ready_file[:10]
 
         # load image offsets
         images_path = os.path.join(base_path, area, field)
@@ -223,7 +224,7 @@ class MapSet(EndpointResource):
 
         log.debug("data offsets: {}", offsets)
 
-        data = {"reftime": reftime, "offsets": offsets, "platform": platform}
+        data = {"reftime": last_reftime, "offsets": offsets, "platform": platform}
         return self.response(data)
 
 

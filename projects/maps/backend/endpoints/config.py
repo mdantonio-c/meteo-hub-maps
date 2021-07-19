@@ -47,7 +47,7 @@ def get_ready_file(base_path: str, area: str, raiseError: Optional[bool] = True)
         if raiseError:
             raise NotFound("no .READY files found")
         else:
-            return None
+            return ""
 
     log.debug(f".READY files found: {ready_files}")
     return ready_files[0]
