@@ -44,6 +44,7 @@ class TestApp(BaseTests):
         assert r.status_code == 200
         # check response
         tiles_metadata = self.get_content(r)
+        assert isinstance(tiles_metadata, dict)
         assert tiles_metadata["area"] == area
         assert tiles_metadata["reftime"] == str(reftime)
 

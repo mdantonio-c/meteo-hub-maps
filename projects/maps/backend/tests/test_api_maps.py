@@ -72,6 +72,7 @@ class TestApp(BaseTests):
         r = client.get(ready_endpoint)
         assert r.status_code == 200
         ready_res = self.get_content(r)
+        assert isinstance(ready_res, dict)
         assert ready_res["reftime"] == str(reftime)
         assert len(ready_res["offsets"]) == 1 and ready_res["offsets"][0] == map_offset
         assert ready_res["platform"] == platform
@@ -166,6 +167,7 @@ class TestApp(BaseTests):
         r = client.get(perc_ready_endpoint)
         assert r.status_code == 200
         ready_res = self.get_content(r)
+        assert isinstance(ready_res, dict)
         assert ready_res["reftime"] == str(reftime)
         assert len(ready_res["offsets"]) == 1 and ready_res["offsets"][0] == map_offset
         assert ready_res["platform"] == platform
@@ -227,6 +229,7 @@ class TestApp(BaseTests):
         r = client.get(prob_ready_endpoint)
         assert r.status_code == 200
         ready_res = self.get_content(r)
+        assert isinstance(ready_res, dict)
         assert ready_res["reftime"] == str(reftime)
         assert len(ready_res["offsets"]) == 1 and ready_res["offsets"][0] == map_offset
         assert ready_res["platform"] == platform
