@@ -106,6 +106,7 @@ class TestApp(BaseTests):
         r = client.get(ready_endpoint)
         assert r.status_code == 200
         ready_res = self.get_content(r)
+        assert isinstance(ready_res, dict)
         assert ready_res["platform"] == platform
 
         # not specify a platform with both the platform available
@@ -133,6 +134,7 @@ class TestApp(BaseTests):
         r = client.get(ready_endpoint)
         assert r.status_code == 200
         ready_res = self.get_content(r)
+        assert isinstance(ready_res, dict)
         assert ready_res["platform"] == no_avail_platform
 
         # get a map that does not exists
