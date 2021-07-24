@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from typing import Dict, Optional, Type, Union
 
 from flask import send_file
@@ -41,6 +42,12 @@ def get_schema(set_required: bool) -> Type[Schema]:
     attributes["env"] = fields.Str(validate=validate.OneOf(ENVS), required=False)
 
     return Schema.from_dict(attributes, name="MapsSchema")
+
+
+class MapReadyOutputSchema(Schema):
+    reftime = fields.Str(required=True)
+    offsets = fields.List(fields.Str(), required=True)
+    platform = fields.Str(required=True)
 
 
 class MapImage(EndpointResource):
@@ -118,6 +125,7 @@ class MapSet(EndpointResource):
             404: "Map set does not exists",
         },
     )
+    @decorators.marshal_with(MapReadyOutputSchema, code=200)
     def get(
         self,
         run: str,
@@ -136,10 +144,6 @@ class MapSet(EndpointResource):
 
         log.debug(f"Retrieve map set for last run <{run}>")
 
-        # only admin user can request for a specific platform
-        if platform is not None and not self.verify_admin():
-            platform = None
-
         if field == "percentile" or field == "probability":
             # force GALILEO as platform
             platform = "GALILEO"
@@ -153,23 +157,47 @@ class MapSet(EndpointResource):
             platforms_to_be_check = [DEFAULT_PLATFORM] + list(
                 set(PLATFORMS) - {DEFAULT_PLATFORM}
             )
-        else:
-            platforms_to_be_check = [platform]
 
-        for platform in platforms_to_be_check:
+            # check platform availability
+            platforms_available = []
+            for check_pl in platforms_to_be_check:
+                if not check_platform_availability(check_pl):
+                    log.warning(f"platform {check_pl} not available")
+                    continue
+                platforms_available.append(check_pl)
+            if not platforms_available:
+                raise ServiceUnavailable("Map service is currently unavailable")
+
+            # check if maps are ready and which platform has the latest one
+            base_path = None
+            reftime = None
+            for pl in platforms_available:
+                # Check if the images are ready: 2017112900.READY
+                temp_base_path = get_base_path(field, pl, env, run, res)
+                ready_file = get_ready_file(temp_base_path, area, raiseError=False)
+                if not ready_file:
+                    continue
+
+                dt_reftime = datetime.strptime(ready_file[:10], "%Y%m%d%H")
+                if not reftime or dt_reftime > reftime:  # type: ignore
+                    reftime = dt_reftime
+                    base_path = get_base_path(field, pl, env, run, res)
+                    platform = pl
+                    last_reftime = reftime.strftime("%Y%m%d%H")
+
+            if not base_path:
+                raise NotFound("no .READY files found")
+
+        else:
+            # check platform availability
             if not check_platform_availability(platform):
-                log.warning(f"platform {platform} not available")
-                continue
-            log.debug("Found available platform: {}", platform)
-            break
-        else:
-            raise ServiceUnavailable("Map service is currently unavailable")
-
-        base_path = get_base_path(field, platform, env, run, res)
-
-        # Check if the images are ready: 2017112900.READY
-        ready_file = get_ready_file(base_path, area)
-        reftime = ready_file[:10]
+                raise ServiceUnavailable(
+                    f"Map service is currently unavailable for {platform} platform"
+                )
+            # check if there is a ready file
+            base_path = get_base_path(field, platform, env, run, res)
+            ready_file = get_ready_file(base_path, area)
+            last_reftime = ready_file[:10]
 
         # load image offsets
         images_path = os.path.join(base_path, area, field)
@@ -197,7 +225,7 @@ class MapSet(EndpointResource):
 
         log.debug("data offsets: {}", offsets)
 
-        data = {"reftime": reftime, "offsets": offsets, "platform": platform}
+        data = {"reftime": last_reftime, "offsets": offsets, "platform": platform}
         return self.response(data)
 
 

@@ -1,3 +1,4 @@
+import datetime
 from pathlib import Path
 
 from faker import Faker
@@ -31,9 +32,20 @@ class TestApp(BaseTests):
                 break
         platform = DEFAULT_PLATFORM
         env = ENVS[0]
+        # test case where any platform is unavailable
+        ready_endpoint = (
+            API_URI
+            + f"/maps/ready?field={field}&run={run}&res={res}&area={area}&env={env}"
+        )
+        r = client.get(ready_endpoint)
+        assert r.status_code == 503
+        service_down_msg = self.get_content(r)
+
+        # create filesystem
         cosmo_map_dir = f"Magics-{run}-{res}.web"
         cosmo_map_path = Path(MEDIA_ROOT, platform, env, cosmo_map_dir, area)
-        reftime = faker.pyint(1000000000, 9999999999)
+        reftime_dt = faker.date_time()
+        reftime = reftime_dt.strftime("%Y%m%d%H")
         # create the base directory for the maps
         cosmo_map_path.mkdir(parents=True, exist_ok=True)
         # create the directory for the field
@@ -61,6 +73,7 @@ class TestApp(BaseTests):
         open(cosmo_readyfile_path, "a").close()
 
         # TEST API FOR CHECK MAPS READINESS
+        # test an unavailable platform
         for p in PLATFORMS:
             if p != DEFAULT_PLATFORM:
                 no_avail_platform = p
@@ -68,7 +81,15 @@ class TestApp(BaseTests):
             API_URI
             + f"/maps/ready?field={field}&run={run}&res={res}&area={area}&platform={no_avail_platform}&env={env}"
         )
-        # check for an unaivalable platform
+        r = client.get(ready_endpoint)
+        assert r.status_code == 503
+        assert self.get_content(r) != service_down_msg
+
+        # test an available platform
+        ready_endpoint = (
+            API_URI
+            + f"/maps/ready?field={field}&run={run}&res={res}&area={area}&platform={platform}&env={env}"
+        )
         r = client.get(ready_endpoint)
         assert r.status_code == 200
         ready_res = self.get_content(r)
@@ -76,6 +97,43 @@ class TestApp(BaseTests):
         assert ready_res["reftime"] == str(reftime)
         assert len(ready_res["offsets"]) == 1 and ready_res["offsets"][0] == map_offset
         assert ready_res["platform"] == platform
+
+        # not specifying a platform with one platform not available
+        ready_endpoint = (
+            API_URI
+            + f"/maps/ready?field={field}&run={run}&res={res}&area={area}&env={env}"
+        )
+        r = client.get(ready_endpoint)
+        assert r.status_code == 200
+        ready_res = self.get_content(r)
+        assert ready_res["platform"] == platform
+
+        # not specify a platform with both the platform available
+        # create the filesystem for the other platform
+        cosmo_alt_map_path = Path(
+            MEDIA_ROOT, no_avail_platform, env, cosmo_map_dir, area
+        )
+        latest_reftime_dt = reftime_dt + datetime.timedelta(days=1)
+        alt_reftime = latest_reftime_dt.strftime("%Y%m%d%H")
+        # create the base directory for the maps
+        cosmo_alt_map_path.mkdir(parents=True, exist_ok=True)
+        # create the directory for the field
+        cosmo_alt_field_dir = Path(cosmo_alt_map_path, field)
+        cosmo_alt_field_dir.mkdir(parents=True, exist_ok=True)
+        # create a fake map file
+        cosmo_alt_mapfile_path = Path(
+            cosmo_alt_field_dir, f"{field}.{reftime}.{map_offset}.png"
+        )
+        open(cosmo_alt_mapfile_path, "a").close()
+
+        # create a ready file
+        cosmo_alt_readyfile_path = Path(cosmo_alt_map_path, f"{alt_reftime}.READY")
+        open(cosmo_alt_readyfile_path, "a").close()
+
+        r = client.get(ready_endpoint)
+        assert r.status_code == 200
+        ready_res = self.get_content(r)
+        assert ready_res["platform"] == no_avail_platform
 
         # get a map that does not exists
         endpoint = (
@@ -266,7 +324,9 @@ class TestApp(BaseTests):
 
         # delete all the files used for the tests
         Path.unlink(cosmo_readyfile_path)
+        Path.unlink(cosmo_alt_readyfile_path)
         Path.unlink(cosmo_mapfile_path)
+        Path.unlink(cosmo_alt_mapfile_path)
         Path.unlink(cosmo_legend_path)
         Path.unlink(iff_readyfile_path)
         Path.unlink(perc_mapfile_path)

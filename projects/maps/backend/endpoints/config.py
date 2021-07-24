@@ -1,6 +1,6 @@
 import os
 from functools import lru_cache
-from typing import Dict, Tuple, TypedDict
+from typing import Dict, Optional, Tuple, TypedDict
 
 from restapi.exceptions import NotFound
 from restapi.utilities.logs import log
@@ -29,7 +29,7 @@ def get_base_path(field: str, platform: str, env: str, run: str, dataset: str) -
     return base_path
 
 
-def get_ready_file(base_path: str, area: str) -> str:
+def get_ready_file(base_path: str, area: str, raiseError: Optional[bool] = True) -> str:
     ready_path = os.path.join(base_path, area)
     log.debug(f"ready_path: {ready_path}")
 
@@ -44,7 +44,10 @@ def get_ready_file(base_path: str, area: str) -> str:
     # Check if .READY file exists (if not, images are not ready yet)
     log.debug(f"Looking for .READY files in: {ready_path}")
     if not ready_files:
-        raise NotFound("no .READY files found")
+        if raiseError:
+            raise NotFound("no .READY files found")
+        else:
+            return ""
 
     log.debug(f".READY files found: {ready_files}")
     return ready_files[0]
