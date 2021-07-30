@@ -2,5 +2,7 @@ version: "3.8"
 
 services:
   backend:
+    environment:
+      PLATFORM: ${PLATFORM}
     volumes:
       - ${DATA_DIR}/maps:/meteo
