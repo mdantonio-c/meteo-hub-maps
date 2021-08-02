@@ -145,8 +145,7 @@ class MapSet(EndpointResource):
         log.debug(f"Retrieve map set for last run <{run}>")
 
         if field == "percentile" or field == "probability":
-            # force GALILEO as platform
-            platform = "GALILEO"
+            platform = "G100"
             log.warning("Forcing platform to {} because field is {}", platform, field)
 
         # if PLATFORM is not provided, set as default the first available
