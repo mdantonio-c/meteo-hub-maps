@@ -2,8 +2,8 @@
 project:
   title: MeteoHub Maps
   description: "Static maps for the MeteoHub project"
-  version: "0.2"
-  rapydo: "2.0"
+  version: "0.3"
+  rapydo: "2.1"
 
 variables:
   env:
