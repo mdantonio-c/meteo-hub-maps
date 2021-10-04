@@ -47,7 +47,7 @@ jobs:
           project: ${PROJECT}
           step: backend
 
-      - name: Production mode
+      - name: Production Mode
         run: |
           rapydo remove --all
           rapydo --prod init --force
