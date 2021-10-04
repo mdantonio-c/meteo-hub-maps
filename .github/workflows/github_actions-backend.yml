@@ -24,13 +24,7 @@ jobs:
 
       - name: Run Pytest
         run: |
-
           rapydo pull --quiet
-          # Added just to be prepared if a custom build is added
-          rapydo build
-
-          rapydo add task test_task
-
           rapydo start
           rapydo shell --no-tty backend 'restapi wait'
 
