@@ -88,8 +88,10 @@ class MapImage(EndpointResource):
         base_path = get_base_path(field, platform, env, run, res)
 
         # Check if the images are ready: 2017112900.READY
-        ready_file = get_ready_file(base_path, area)
-        reftime = ready_file[:10]
+        ready_file = get_ready_file(base_path, area, raiseError=False)
+        if not ready_file:
+            raise NotFound("no .READY files found")
+        reftime = ready_file.name[:10]
 
         # get map image
         if field == "percentile":
@@ -177,7 +179,7 @@ class MapSet(EndpointResource):
                 if not ready_file:
                     continue
 
-                dt_reftime = datetime.strptime(ready_file[:10], "%Y%m%d%H")
+                dt_reftime = datetime.strptime(ready_file.name[:10], "%Y%m%d%H")
                 if not reftime or dt_reftime > reftime:  # type: ignore
                     reftime = dt_reftime
                     base_path = get_base_path(field, pl, env, run, res)
@@ -195,8 +197,10 @@ class MapSet(EndpointResource):
                 )
             # check if there is a ready file
             base_path = get_base_path(field, platform, env, run, res)
-            ready_file = get_ready_file(base_path, area)
-            last_reftime = ready_file[:10]
+            ready_file = get_ready_file(base_path, area, raiseError=False)
+            if not ready_file:
+                raise NotFound("no .READY files found")
+            last_reftime = ready_file.name[:10]
 
         # load image offsets
         images_path = base_path.joinpath(area, field)

@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
 from maps.endpoints.config import (
@@ -53,7 +54,7 @@ class TilesEndpoint(EndpointResource):
         if not run:
             log.debug("No run param provided: look for the last run available")
             ready_files = [
-                x
+                x.name
                 for x in (self._get_ready_file(area, r, dataset) for r in ["00", "12"])
                 if x is not None
             ]
@@ -81,9 +82,6 @@ class TilesEndpoint(EndpointResource):
         return self.response(response)
 
     @lru_cache
-    def _get_ready_file(self, area: str, run: str, dataset: str) -> Optional[str]:
+    def _get_ready_file(self, area: str, run: str, dataset: str) -> Optional[Path]:
         base_path = get_base_path("tiles", DEFAULT_PLATFORM, "PROD", run, dataset)
-        try:
-            return get_ready_file(base_path, area)
-        except NotFound:
-            return None
+        return get_ready_file(base_path, area, raiseError=False)
