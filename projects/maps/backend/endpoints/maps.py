@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Optional, Type, Union
 
-from flask import send_file
 from maps.endpoints.config import (
     AREAS,
     DEFAULT_PLATFORM,
@@ -21,6 +21,7 @@ from restapi import decorators
 from restapi.exceptions import NotFound, ServiceUnavailable
 from restapi.models import Schema, fields, validate
 from restapi.rest.definition import EndpointResource, Response
+from restapi.services.download import Downloader
 from restapi.utilities.logs import log
 
 
@@ -94,20 +95,21 @@ class MapImage(EndpointResource):
 
         # get map image
         if field == "percentile":
-            png_name = f"perc6.{reftime}.{map_offset}.png"
+            image_name = f"perc6.{reftime}.{map_offset}.png"
         elif field == "probability":
-            png_name = f"prob6.{reftime}.{map_offset}.png"
+            image_name = f"prob6.{reftime}.{map_offset}.png"
         else:
-            png_name = f"{field}.{reftime}.{map_offset}.png"
+            image_name = f"{field}.{reftime}.{map_offset}.png"
 
-        map_image_file = os.path.join(base_path, area, field, png_name)
+        image_path = Path(base_path, area, field)
+        map_image_file = image_path.joinpath(image_name)
 
         log.debug(f"map_image_file: {map_image_file}")
 
-        if not os.path.isfile(map_image_file):
+        if not map_image_file.is_file():
             raise NotFound(f"Map image not found for offset {map_offset}")
 
-        return send_file(map_image_file, mimetype="image/png")
+        return Downloader.download(image_name, subfolder=image_path, mime="image/png")
 
 
 class MapSet(EndpointResource):
@@ -261,16 +263,20 @@ class MapLegend(EndpointResource):
         base_path = get_base_path(field, platform, env, run, res)
 
         # Get legend image
-        legend_path = os.path.join(base_path, "legends")
+        legend_path = Path(base_path, "legends")
         if field == "percentile":
-            map_legend_file = os.path.join(legend_path, "perc6.png")
+            map_legend_file = "perc6.png"
         elif field == "probability":
-            map_legend_file = os.path.join(legend_path, "prob6.png")
+            map_legend_file = "prob6.png"
         else:
-            map_legend_file = os.path.join(legend_path, field + ".png")
-        log.debug(map_legend_file)
+            map_legend_file = field + ".png"
 
-        if not os.path.isfile(map_legend_file):
+        map_legend_path = legend_path.joinpath(map_legend_file)
+        log.debug(map_legend_path)
+
+        if not map_legend_path.is_file():
             raise NotFound(f"Map legend not found for field <{field}>")
 
-        return send_file(map_legend_file, mimetype="image/png")
+        return Downloader.download(
+            map_legend_file, subfolder=legend_path, mime="image/png"
+        )
