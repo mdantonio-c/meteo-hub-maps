@@ -1,6 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Optional, Tuple, TypedDict
+from typing import Dict, List, Optional, Tuple, TypedDict
 
 from restapi.env import Env
 from restapi.exceptions import NotFound
@@ -32,7 +32,7 @@ LEVELS_PR = ["5", "10", "20", "50"]
 AREAS = ["Italia", "Nord_Italia", "Centro_Italia", "Sud_Italia", "Area_Mediterranea"]
 PLATFORMS = ["G100", "MEUCCI"]
 ENVS = ["PROD", "DEV"]
-DEFAULT_PLATFORM = Env.get("PLATFORM", default="G100")
+DEFAULT_PLATFORM = Env.get("PLATFORM") or "G100"
 
 
 class Boundaries(TypedDict):
@@ -124,11 +124,11 @@ def get_base_path(field: str, platform: str, env: str, run: str, dataset: str) -
 
 def get_ready_file(
     base_path: Path, area: str, raiseError: Optional[bool] = True
-) -> str:
+) -> Optional[Path]:
     ready_path = base_path.joinpath(area)
     log.debug(f"ready_path: {ready_path}")
 
-    ready_files = []
+    ready_files: List[Path] = []
     if ready_path.exists():
         ready_files = [
             f for f in ready_path.iterdir() if f.is_file() and ".READY" in f.name
@@ -140,7 +140,7 @@ def get_ready_file(
         if raiseError:
             raise NotFound("no .READY files found")
         else:
-            return ""
+            return None
 
     log.debug(f".READY files found: {ready_files}")
     return ready_files[0]

@@ -208,7 +208,7 @@ class MapSet(EndpointResource):
             # flash flood offset is a bit more complicate
             for f in list_file:
                 if f.is_file():
-                    offset = f.split(".")[-2]
+                    offset = f.name.split(".")[-2]
                     # offset is like this now: 0006_10
                     offset, level = offset.split("_")
                     if field == "percentile" and level_pe == level:
@@ -216,7 +216,7 @@ class MapSet(EndpointResource):
                     elif field == "probability" and level_pr == level:
                         offsets.append(offset)
         else:
-            offsets = [f.split(".")[-2] for f in list_file if f.is_file()]
+            offsets = [f.name.split(".")[-2] for f in list_file if f.is_file()]
 
         log.debug("data offsets: {}", offsets)
 
