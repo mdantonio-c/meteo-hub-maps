@@ -1,6 +1,4 @@
-import os
 from datetime import datetime
-from pathlib import Path
 from typing import Dict, Optional, Type, Union
 
 from maps.endpoints.config import (
@@ -101,7 +99,7 @@ class MapImage(EndpointResource):
         else:
             image_name = f"{field}.{reftime}.{map_offset}.png"
 
-        image_path = Path(base_path, area, field)
+        image_path = base_path.joinpath(area, field)
         map_image_file = image_path.joinpath(image_name)
 
         log.debug(f"map_image_file: {map_image_file}")
@@ -201,15 +199,15 @@ class MapSet(EndpointResource):
             last_reftime = ready_file[:10]
 
         # load image offsets
-        images_path = os.path.join(base_path, area, field)
+        images_path = base_path.joinpath(area, field)
 
-        list_file = sorted(os.listdir(images_path))
+        list_file = sorted(images_path.iterdir())
 
         if field == "percentile" or field == "probability":
             offsets = []
             # flash flood offset is a bit more complicate
             for f in list_file:
-                if os.path.isfile(os.path.join(images_path, f)):
+                if f.is_file():
                     offset = f.split(".")[-2]
                     # offset is like this now: 0006_10
                     offset, level = offset.split("_")
@@ -218,11 +216,7 @@ class MapSet(EndpointResource):
                     elif field == "probability" and level_pr == level:
                         offsets.append(offset)
         else:
-            offsets = [
-                f.split(".")[-2]
-                for f in list_file
-                if os.path.isfile(os.path.join(images_path, f))
-            ]
+            offsets = [f.split(".")[-2] for f in list_file if f.is_file()]
 
         log.debug("data offsets: {}", offsets)
 
@@ -263,7 +257,7 @@ class MapLegend(EndpointResource):
         base_path = get_base_path(field, platform, env, run, res)
 
         # Get legend image
-        legend_path = Path(base_path, "legends")
+        legend_path = base_path.joinpath("legends")
         if field == "percentile":
             map_legend_file = "perc6.png"
         elif field == "probability":

@@ -1,63 +1,12 @@
-import os
 from functools import lru_cache
+from pathlib import Path
 from typing import Dict, Optional, Tuple, TypedDict
 
+from restapi.env import Env
 from restapi.exceptions import NotFound
 from restapi.utilities.logs import log
 
-
-@lru_cache
-def get_base_path(field: str, platform: str, env: str, run: str, dataset: str) -> str:
-    # flood fields have a different path
-    if field == "percentile" or field == "probability":
-        dataset = "iff"
-        prefix = "PROB"
-    elif field == "tiles":
-        prefix = "Tiles"
-    else:
-        prefix = "Magics"
-
-    folder = f"{prefix}-{run}-{dataset}.web"
-
-    base_path = os.path.join(
-        MEDIA_ROOT,
-        platform,
-        env,
-        folder,
-    )
-    log.debug(f"base_path: {base_path}")
-    return base_path
-
-
-def get_ready_file(base_path: str, area: str, raiseError: Optional[bool] = True) -> str:
-    ready_path = os.path.join(base_path, area)
-    log.debug(f"ready_path: {ready_path}")
-
-    ready_files = []
-    if os.path.exists(ready_path):
-        ready_files = [
-            f
-            for f in os.listdir(ready_path)
-            if os.path.isfile(os.path.join(ready_path, f)) and ".READY" in f
-        ]
-
-    # Check if .READY file exists (if not, images are not ready yet)
-    log.debug(f"Looking for .READY files in: {ready_path}")
-    if not ready_files:
-        if raiseError:
-            raise NotFound("no .READY files found")
-        else:
-            return ""
-
-    log.debug(f".READY files found: {ready_files}")
-    return ready_files[0]
-
-
-def check_platform_availability(platform: str) -> bool:
-    return os.access(os.path.join(MEDIA_ROOT, platform), os.X_OK)
-
-
-MEDIA_ROOT = "/meteo/"
+MEDIA_ROOT = Path("/meteo")
 
 RUNS = ["00", "12"]
 RESOLUTIONS = ["lm2.2", "lm5"]
@@ -83,7 +32,7 @@ LEVELS_PR = ["5", "10", "20", "50"]
 AREAS = ["Italia", "Nord_Italia", "Centro_Italia", "Sud_Italia", "Area_Mediterranea"]
 PLATFORMS = ["G100", "MEUCCI"]
 ENVS = ["PROD", "DEV"]
-DEFAULT_PLATFORM = os.environ.get("PLATFORM", "G100")
+DEFAULT_PLATFORM = Env.get("PLATFORM", default="G100")
 
 
 class Boundaries(TypedDict):
@@ -149,3 +98,53 @@ DATASETS: Dict[str, DatasetType] = {
         },
     },
 }
+
+
+@lru_cache
+def get_base_path(field: str, platform: str, env: str, run: str, dataset: str) -> Path:
+    # flood fields have a different path
+    if field == "percentile" or field == "probability":
+        dataset = "iff"
+        prefix = "PROB"
+    elif field == "tiles":
+        prefix = "Tiles"
+    else:
+        prefix = "Magics"
+
+    folder = f"{prefix}-{run}-{dataset}.web"
+
+    base_path = MEDIA_ROOT.joinpath(
+        platform,
+        env,
+        folder,
+    )
+    log.debug(f"base_path: {base_path}")
+    return base_path
+
+
+def get_ready_file(
+    base_path: Path, area: str, raiseError: Optional[bool] = True
+) -> str:
+    ready_path = base_path.joinpath(area)
+    log.debug(f"ready_path: {ready_path}")
+
+    ready_files = []
+    if ready_path.exists():
+        ready_files = [
+            f for f in ready_path.iterdir() if f.is_file() and ".READY" in f.name
+        ]
+
+    # Check if .READY file exists (if not, images are not ready yet)
+    log.debug(f"Looking for .READY files in: {ready_path}")
+    if not ready_files:
+        if raiseError:
+            raise NotFound("no .READY files found")
+        else:
+            return ""
+
+    log.debug(f".READY files found: {ready_files}")
+    return ready_files[0]
+
+
+def check_platform_availability(platform: str) -> bool:
+    return MEDIA_ROOT.joinpath(platform).exists()
