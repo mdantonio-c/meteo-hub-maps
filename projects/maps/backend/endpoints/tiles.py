@@ -55,9 +55,10 @@ class TilesEndpoint(EndpointResource):
 
             for r in ["00", "12"]:
                 base_path = get_base_path("tiles", DEFAULT_PLATFORM, "PROD", r, dataset)
-                for x in get_ready_file(base_path, area):
-                    if x is not None:
-                        ready_files.append(x.name)
+                x = get_ready_file(base_path, area)
+                # add walrus here
+                if x:
+                    ready_files.append(x.name)
             try:
                 ready_file = max(ready_files)
             except ValueError:
