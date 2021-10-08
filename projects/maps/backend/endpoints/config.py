@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, TypedDict
 
 from restapi.env import Env
-from restapi.exceptions import NotFound
 from restapi.utilities.logs import log
 
 MEDIA_ROOT = Path("/meteo")
@@ -122,9 +121,7 @@ def get_base_path(field: str, platform: str, env: str, run: str, dataset: str) -
     return base_path
 
 
-def get_ready_file(
-    base_path: Path, area: str, raiseError: Optional[bool] = True
-) -> Optional[Path]:
+def get_ready_file(base_path: Path, area: str) -> Optional[Path]:
     ready_path = base_path.joinpath(area)
     log.debug(f"ready_path: {ready_path}")
 
@@ -137,10 +134,7 @@ def get_ready_file(
     # Check if .READY file exists (if not, images are not ready yet)
     log.debug(f"Looking for .READY files in: {ready_path}")
     if not ready_files:
-        if raiseError:
-            raise NotFound("no .READY files found")
-        else:
-            return None
+        return None
 
     log.debug(f".READY files found: {ready_files}")
     return ready_files[0]

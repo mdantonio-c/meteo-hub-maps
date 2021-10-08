@@ -1,6 +1,4 @@
-from functools import lru_cache
-from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from maps.endpoints.config import (
     DATASETS,
@@ -53,18 +51,22 @@ class TilesEndpoint(EndpointResource):
         # check for run param: if not provided get the "last" run available
         if not run:
             log.debug("No run param provided: look for the last run available")
-            ready_files = [
-                x.name
-                for x in (self._get_ready_file(area, r, dataset) for r in ["00", "12"])
-                if x is not None
-            ]
+            ready_files: List[str] = []
+
+            for r in ["00", "12"]:
+                base_path = get_base_path("tiles", DEFAULT_PLATFORM, "PROD", r, dataset)
+                for x in get_ready_file(base_path, area):
+                    if x is not None:
+                        ready_files.append(x.name)
             try:
                 ready_file = max(ready_files)
             except ValueError:
                 log.warning("No Run is available: .READY file not found")
         else:
             base_path = get_base_path("tiles", DEFAULT_PLATFORM, "PROD", run, dataset)
-            ready_file = get_ready_file(base_path, area)
+            tmp_ready_file = get_ready_file(base_path, area)
+            if tmp_ready_file:
+                ready_file = tmp_ready_file.name
 
         if not ready_file:
             raise NotFound("No .READY file found")
@@ -80,8 +82,3 @@ class TilesEndpoint(EndpointResource):
             "platform": None,
         }
         return self.response(response)
-
-    @lru_cache
-    def _get_ready_file(self, area: str, run: str, dataset: str) -> Optional[Path]:
-        base_path = get_base_path("tiles", DEFAULT_PLATFORM, "PROD", run, dataset)
-        return get_ready_file(base_path, area, raiseError=False)
