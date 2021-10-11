@@ -2,10 +2,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, TypedDict
 
+from restapi.config import UPLOAD_PATH
 from restapi.env import Env
 from restapi.utilities.logs import log
-
-MEDIA_ROOT = Path("/meteo")
 
 RUNS = ["00", "12"]
 RESOLUTIONS = ["lm2.2", "lm5"]
@@ -112,7 +111,7 @@ def get_base_path(field: str, platform: str, env: str, run: str, dataset: str) -
 
     folder = f"{prefix}-{run}-{dataset}.web"
 
-    base_path = MEDIA_ROOT.joinpath(
+    base_path = UPLOAD_PATH.joinpath(
         platform,
         env,
         folder,
@@ -141,4 +140,4 @@ def get_ready_file(base_path: Path, area: str) -> Optional[Path]:
 
 
 def check_platform_availability(platform: str) -> bool:
-    return MEDIA_ROOT.joinpath(platform).exists()
+    return UPLOAD_PATH.joinpath(platform).exists()
