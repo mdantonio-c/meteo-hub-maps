@@ -30,7 +30,7 @@ LEVELS_PR = ["5", "10", "20", "50"]
 AREAS = ["Italia", "Nord_Italia", "Centro_Italia", "Sud_Italia", "Area_Mediterranea"]
 PLATFORMS = ["G100", "MEUCCI"]
 ENVS = ["PROD", "DEV"]
-DEFAULT_PLATFORM = Env.get("PLATFORM") or "G100"
+DEFAULT_PLATFORM = Env.get("PLATFORM", "G100")
 
 
 class Boundaries(TypedDict):
