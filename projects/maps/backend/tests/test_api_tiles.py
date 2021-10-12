@@ -2,7 +2,7 @@ from pathlib import Path
 
 from faker import Faker
 from maps.endpoints.config import DATASETS, DEFAULT_PLATFORM, RUNS
-from restapi.config import UPLOAD_PATH
+from restapi.config import DATA_PATH
 from restapi.tests import API_URI, BaseTests, FlaskClient
 
 
@@ -29,7 +29,7 @@ class TestApp(BaseTests):
 
         # no run specified any maps is ready
         tiles_dir = f"Tiles-{run}-{dataset}.web"
-        tiles_path = UPLOAD_PATH.joinpath(platform, "PROD", tiles_dir, area)
+        tiles_path = DATA_PATH.joinpath(platform, "PROD", tiles_dir, area)
         tiles_path.mkdir(parents=True, exist_ok=True)
         r = client.get(f"{API_URI}/tiles?dataset={dataset}")
         assert r.status_code == 404

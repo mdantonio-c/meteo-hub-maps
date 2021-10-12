@@ -13,7 +13,7 @@ from maps.endpoints.config import (
     RESOLUTIONS,
     RUNS,
 )
-from restapi.config import UPLOAD_PATH
+from restapi.config import DATA_PATH
 from restapi.tests import API_URI, BaseTests, FlaskClient
 
 
@@ -44,7 +44,7 @@ class TestApp(BaseTests):
 
         # create filesystem
         cosmo_map_dir = f"Magics-{run}-{res}.web"
-        cosmo_map_path = UPLOAD_PATH.joinpath(platform, env, cosmo_map_dir, area)
+        cosmo_map_path = DATA_PATH.joinpath(platform, env, cosmo_map_dir, area)
         reftime_dt = faker.date_time()
         reftime = reftime_dt.strftime("%Y%m%d%H")
         # create the base directory for the maps
@@ -112,7 +112,7 @@ class TestApp(BaseTests):
 
         # not specify a platform with both the platform available
         # create the filesystem for the other platform
-        cosmo_alt_map_path = UPLOAD_PATH.joinpath(
+        cosmo_alt_map_path = DATA_PATH.joinpath(
             no_avail_platform, env, cosmo_map_dir, area
         )
         latest_reftime_dt = reftime_dt + datetime.timedelta(days=1)
@@ -193,7 +193,7 @@ class TestApp(BaseTests):
         level_pe = LEVELS_PE[0]
 
         iff_map_dir = f"PROB-{run}-iff.web"
-        iff_map_path = UPLOAD_PATH.joinpath(platform, env, iff_map_dir, area)
+        iff_map_path = DATA_PATH.joinpath(platform, env, iff_map_dir, area)
         # create the directory for the field
         perc_field_dir = iff_map_path.joinpath(field)
         perc_field_dir.mkdir(parents=True, exist_ok=True)

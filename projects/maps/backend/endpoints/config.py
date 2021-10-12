@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, TypedDict
 
-from restapi.config import UPLOAD_PATH
+from restapi.config import DATA_PATH
 from restapi.env import Env
 from restapi.utilities.logs import log
 
@@ -111,7 +111,7 @@ def get_base_path(field: str, platform: str, env: str, run: str, dataset: str) -
 
     folder = f"{prefix}-{run}-{dataset}.web"
 
-    base_path = UPLOAD_PATH.joinpath(
+    base_path = DATA_PATH.joinpath(
         platform,
         env,
         folder,
@@ -140,4 +140,4 @@ def get_ready_file(base_path: Path, area: str) -> Optional[Path]:
 
 
 def check_platform_availability(platform: str) -> bool:
-    return UPLOAD_PATH.joinpath(platform).exists()
+    return DATA_PATH.joinpath(platform).exists()

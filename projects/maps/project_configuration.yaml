@@ -12,4 +12,4 @@ variables:
     CORS_ALLOWED_ORIGIN: "*"
     SET_MAX_REQUESTS_PER_SECOND_API: 999999
     PLATFORM: G100
-    UPLOAD_PATH: /meteo
+    DATA_PATH: /meteo
