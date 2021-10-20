@@ -109,7 +109,9 @@ class MapImage(EndpointResource):
         if not map_image_file.is_file():
             raise NotFound(f"Map image not found for offset {map_offset}")
 
-        return Downloader.download(image_name, subfolder=image_path, mime="image/png")
+        return Downloader.send_file_content(
+            image_name, subfolder=image_path, mime="image/png"
+        )
 
 
 class MapSet(EndpointResource):
@@ -275,6 +277,6 @@ class MapLegend(EndpointResource):
         if not map_legend_path.is_file():
             raise NotFound(f"Map legend not found for field <{field}>")
 
-        return Downloader.download(
+        return Downloader.send_file_content(
             map_legend_file, subfolder=legend_path, mime="image/png"
         )
