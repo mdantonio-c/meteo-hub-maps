@@ -6,6 +6,8 @@ from restapi.config import DATA_PATH
 from restapi.env import Env
 from restapi.utilities.logs import log
 
+import calendar
+
 RUNS = ["00", "12"]
 RESOLUTIONS = ["lm2.2", "lm5"]
 FIELDS = [
@@ -31,7 +33,7 @@ AREAS = ["Italia", "Nord_Italia", "Centro_Italia", "Sud_Italia", "Area_Mediterra
 PLATFORMS = ["G100", "MEUCCI"]
 ENVS = ["PROD", "DEV"]
 DEFAULT_PLATFORM = Env.get("PLATFORM", "G100")
-
+WEEKDAYS = ["0", "1", "2", "3", "4", "5", "6"]
 
 class Boundaries(TypedDict):
     SW: Tuple[float, float]
@@ -97,9 +99,8 @@ DATASETS: Dict[str, DatasetType] = {
     },
 }
 
-
 @lru_cache
-def get_base_path(field: str, platform: str, env: str, run: str, dataset: str) -> Path:
+def get_base_path(field: str, platform: str, env: str, run: str, dataset: str, weekday: Optional[str] = None) -> Path:
     # flood fields have a different path
     if field == "percentile" or field == "probability":
         dataset = "iff"
@@ -109,7 +110,17 @@ def get_base_path(field: str, platform: str, env: str, run: str, dataset: str) -
     else:
         prefix = "Magics"
 
-    folder = f"{prefix}-{run}-{dataset}.web"
+    # weekday is transformed into a weekday_name to be integrated in the base_path.
+    if weekday is not None:
+        weekday = int(weekday)
+        # The *.READY files of PROB-12* folders are actually inside the folders
+        # with names corresponding to weekday-1 dates.
+        if prefix == "PROB" and run == "12":
+            weekday = int(WEEKDAYS[weekday-1])
+        weekday_name = calendar.day_name[weekday]
+        folder = f"{prefix}-{run}-{dataset}.{weekday_name}.web"
+    else:
+        folder = f"{prefix}-{run}-{dataset}.web"
 
     base_path = DATA_PATH.joinpath(
         platform,
@@ -117,6 +128,7 @@ def get_base_path(field: str, platform: str, env: str, run: str, dataset: str) -
         folder,
     )
     log.debug(f"base_path: {base_path}")
+    log.info(f"base_path: {base_path}")
     return base_path
 
 

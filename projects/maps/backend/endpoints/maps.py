@@ -11,6 +11,7 @@ from maps.endpoints.config import (
     PLATFORMS,
     RESOLUTIONS,
     RUNS,
+    WEEKDAYS,
     check_platform_availability,
     get_base_path,
     get_ready_file,
@@ -39,6 +40,7 @@ def get_schema(set_required: bool) -> Type[Schema]:
         validate=validate.OneOf(LEVELS_PR), required=False
     )
     attributes["env"] = fields.Str(validate=validate.OneOf(ENVS), required=False)
+    attributes["weekday"] = fields.Str(validate=validate.OneOf(WEEKDAYS), required=False)
 
     return Schema.from_dict(attributes, name="MapsSchema")
 
@@ -47,7 +49,7 @@ class MapReadyOutputSchema(Schema):
     reftime = fields.Str(required=True)
     offsets = fields.List(fields.Str(), required=True)
     platform = fields.Str(required=True)
-
+    weekday = fields.Str(required=True)
 
 class MapImage(EndpointResource):
     labels = ["maps"]
@@ -56,7 +58,7 @@ class MapImage(EndpointResource):
     @decorators.use_kwargs(get_schema(True), location="query")
     @decorators.endpoint(
         path="/maps/offset/<map_offset>",
-        summary="Get a forecast map for a specific run.",
+        summary="Get a forecast map for a specific run and weekday, if provided.",
         responses={
             200: "Map successfully retrieved",
             400: "Invalid parameters",
@@ -73,6 +75,7 @@ class MapImage(EndpointResource):
         platform: str,
         level_pe: Optional[str] = None,
         level_pr: Optional[str] = None,
+        weekday: Optional[str] = None,
         env: str = "PROD",
     ) -> Response:
         """Get a forecast map for a specific run."""
@@ -85,7 +88,7 @@ class MapImage(EndpointResource):
 
         log.debug(f"Retrieve map image by offset <{map_offset}>")
 
-        base_path = get_base_path(field, platform, env, run, res)
+        base_path = get_base_path(field, platform, env, run, res, weekday)
 
         # Check if the images are ready: 2017112900.READY
         ready_file = get_ready_file(base_path, area)
@@ -139,11 +142,14 @@ class MapSet(EndpointResource):
         platform: Optional[str] = None,
         level_pe: Optional[str] = None,
         level_pr: Optional[str] = None,
+        weekday: Optional[str] = None,
         env: str = "PROD",
     ) -> Response:
         """
         Get the last available map set for a specific run
-        and return the reference time as well
+        and return the reference time as well as the corresponding weekday.
+        If a weekday is provided, get the last available map set for
+        that weekday.
         """
 
         log.debug(f"Retrieve map set for last run <{run}>")
@@ -176,7 +182,7 @@ class MapSet(EndpointResource):
             reftime = None
             for pl in platforms_available:
                 # Check if the images are ready: 2017112900.READY
-                temp_base_path = get_base_path(field, pl, env, run, res)
+                temp_base_path = get_base_path(field, pl, env, run, res, weekday)
                 ready_file = get_ready_file(temp_base_path, area)
                 if not ready_file:
                     continue
@@ -184,9 +190,10 @@ class MapSet(EndpointResource):
                 dt_reftime = datetime.strptime(ready_file.name[:10], "%Y%m%d%H")
                 if not reftime or dt_reftime > reftime:  # type: ignore
                     reftime = dt_reftime
-                    base_path = get_base_path(field, pl, env, run, res)
+                    base_path = get_base_path(field, pl, env, run, res, weekday)
                     platform = pl
                     last_reftime = reftime.strftime("%Y%m%d%H")
+                    weekday = str(datetime.strptime(ready_file.name[:8], "%Y%m%d").weekday())
 
             if not base_path:
                 raise NotFound("no .READY files found")
@@ -198,17 +205,15 @@ class MapSet(EndpointResource):
                     f"Map service is currently unavailable for {platform} platform"
                 )
             # check if there is a ready file
-            base_path = get_base_path(field, platform, env, run, res)
+            base_path = get_base_path(field, platform, env, run, res, weekday)
             ready_file = get_ready_file(base_path, area)
             if not ready_file:
                 raise NotFound("no .READY files found")
             last_reftime = ready_file.name[:10]
-
+            weekday = str(datetime.strptime(ready_file.name[:8], "%Y%m%d").weekday())
         # load image offsets
         images_path = base_path.joinpath(area, field)
-
         list_file = sorted(images_path.iterdir())
-
         if field == "percentile" or field == "probability":
             offsets = []
             # flash flood offset is a bit more complicate
@@ -225,8 +230,8 @@ class MapSet(EndpointResource):
             offsets = [f.name.split(".")[-2] for f in list_file if f.is_file()]
 
         log.debug("data offsets: {}", offsets)
-
-        data = {"reftime": last_reftime, "offsets": offsets, "platform": platform}
+        log.info(f'But just before printing {weekday}')
+        data = {"reftime": last_reftime, "offsets": offsets, "platform": platform, "weekday": weekday}
         return self.response(data)
 
 
@@ -253,6 +258,7 @@ class MapLegend(EndpointResource):
         platform: str,
         level_pe: Optional[str] = None,
         level_pr: Optional[str] = None,
+        weekday: Optional[str] = None,
         env: str = "PROD",
     ) -> Response:
         """Get a forecast legend for a specific run."""
@@ -260,7 +266,7 @@ class MapLegend(EndpointResource):
         # although present among the parameters of the request
         log.debug("Retrieve legend for run <{}, {}, {}>", run, res, field)
 
-        base_path = get_base_path(field, platform, env, run, res)
+        base_path = get_base_path(field, platform, env, run, res, weekday)
 
         # Get legend image
         legend_path = base_path.joinpath("legends")
