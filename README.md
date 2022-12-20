@@ -7,13 +7,13 @@
 ```
 $ git clone https://gitlab.hpc.cineca.it/mistral/meteo-hub-maps.git
 $ cd meteo-hub-maps
-$ git checkout 0.4
+$ git checkout 0.6
 ```
 
 ### Install the controller
 
 ```
-$ sudo pip3 install --upgrade git+https://github.com/rapydo/do.git@2.2`
+$ sudo pip3 install --upgrade git+https://github.com/rapydo/do.git@2.4`
 
 $ rapydo install
 ```
@@ -76,8 +76,6 @@ server {
 ```
 
 ## Data organization
-
-To be completed
 
 ```
 ├── CLUSTER_NAME
