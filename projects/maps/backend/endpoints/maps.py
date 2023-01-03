@@ -193,7 +193,7 @@ class MapSet(EndpointResource):
                     base_path = get_base_path(field, pl, env, run, res, weekday)
                     platform = pl
                     last_reftime = reftime.strftime("%Y%m%d%H")
-                    weekday = str(datetime.strptime(ready_file.name[:8], "%Y%m%d").weekday())
+                    last_weekday = str(datetime.strptime(ready_file.name[:8], "%Y%m%d").weekday())
 
             if not base_path:
                 raise NotFound("no .READY files found")
@@ -210,7 +210,7 @@ class MapSet(EndpointResource):
             if not ready_file:
                 raise NotFound("no .READY files found")
             last_reftime = ready_file.name[:10]
-            weekday = str(datetime.strptime(ready_file.name[:8], "%Y%m%d").weekday())
+            last_weekday = str(datetime.strptime(ready_file.name[:8], "%Y%m%d").weekday())
         # load image offsets
         images_path = base_path.joinpath(area, field)
         list_file = sorted(images_path.iterdir())
@@ -231,7 +231,7 @@ class MapSet(EndpointResource):
 
         log.debug("data offsets: {}", offsets)
         log.info(f'But just before printing {weekday}')
-        data = {"reftime": last_reftime, "offsets": offsets, "platform": platform, "weekday": weekday}
+        data = {"reftime": last_reftime, "offsets": offsets, "platform": platform, "weekday": last_weekday}
         return self.response(data)
 
 
