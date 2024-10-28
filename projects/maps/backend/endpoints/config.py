@@ -1,3 +1,4 @@
+import calendar
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, TypedDict
@@ -5,8 +6,6 @@ from typing import Dict, List, Optional, Tuple, TypedDict
 from restapi.config import DATA_PATH
 from restapi.env import Env
 from restapi.utilities.logs import log
-
-import calendar
 
 RUNS = ["00", "12"]
 RESOLUTIONS = ["lm2.2", "lm5", "WRF_OL", "WRF_DA_ITA"]
@@ -30,10 +29,11 @@ FIELDS = [
 LEVELS_PE = ["1", "10", "25", "50", "70", "75", "80", "90", "95", "99"]
 LEVELS_PR = ["5", "10", "20", "50"]
 AREAS = ["Italia", "Nord_Italia", "Centro_Italia", "Sud_Italia", "Area_Mediterranea"]
-PLATFORMS = ["G100", "MEUCCI"]
+PLATFORMS = ["G100", "Leonardo"]
 ENVS = ["PROD", "DEV"]
 DEFAULT_PLATFORM = Env.get("PLATFORM", "G100")
 WEEKDAYS = ["0", "1", "2", "3", "4", "5", "6"]
+
 
 class Boundaries(TypedDict):
     SW: Tuple[float, float]
@@ -99,8 +99,16 @@ DATASETS: Dict[str, DatasetType] = {
     },
 }
 
+
 @lru_cache
-def get_base_path(field: str, platform: str, env: str, run: str, dataset: str, weekday: Optional[str] = None) -> Path:
+def get_base_path(
+    field: str,
+    platform: str,
+    env: str,
+    run: str,
+    dataset: str,
+    weekday: Optional[str] = None,
+) -> Path:
     # flood fields have a different path
     if field == "percentile" or field == "probability":
         dataset = "iff"
@@ -116,7 +124,7 @@ def get_base_path(field: str, platform: str, env: str, run: str, dataset: str, w
         # The *.READY files of PROB-12* folders are actually inside the folders
         # with names corresponding to weekday-1 dates.
         if prefix == "PROB" and run == "12":
-            weekday = int(WEEKDAYS[weekday-1])
+            weekday = int(WEEKDAYS[weekday - 1])
         weekday_name = calendar.day_name[weekday]
         folder = f"{prefix}-{run}-{dataset}.{weekday_name}.web"
     else:
