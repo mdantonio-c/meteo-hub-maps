@@ -8,7 +8,7 @@ from restapi.env import Env
 from restapi.utilities.logs import log
 
 RUNS = ["00", "12"]
-RESOLUTIONS = ["lm2.2", "lm5", "WRF_OL", "WRF_DA_ITA"]
+RESOLUTIONS = ["lm2.2", "lm5", "WRF_OL", "WRF_DA_ITA", "icon"]
 FIELDS = [
     "prec1",
     "prec3",
@@ -21,8 +21,11 @@ FIELDS = [
     "pressure",
     "cloud_hml",
     "humidity",
+    "snow1",
     "snow3",
     "snow6",
+    "snow12",
+    "snow24",
     "percentile",
     "probability",
 ]
@@ -126,9 +129,14 @@ def get_base_path(
         if prefix == "PROB" and run == "12":
             weekday = int(WEEKDAYS[weekday - 1])
         weekday_name = calendar.day_name[weekday]
+        if dataset == 'icon':
+            dataset = "ICON_2I_all2km"
         folder = f"{prefix}-{run}-{dataset}.{weekday_name}.web"
     else:
+        if dataset == 'icon':
+            dataset = "ICON_2I_all2km"
         folder = f"{prefix}-{run}-{dataset}.web"
+
 
     base_path = DATA_PATH.joinpath(
         platform,
