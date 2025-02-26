@@ -100,6 +100,22 @@ DATASETS: Dict[str, DatasetType] = {
             ),
         },
     },
+    "icon": {
+        "area": "Italia",
+        "start_offset": 0,
+        "end_offset": 72,
+        "step": 1,
+        "boundaries": {
+            "SW": (
+                33.69,
+                2.9875,
+            ),
+            "NE": (
+                48.91,
+                22.0125
+            ),
+        }
+    }
 }
 
 
@@ -118,6 +134,8 @@ def get_base_path(
         prefix = "PROB"
     elif field == "tiles":
         prefix = "Tiles"
+    elif field == "windy":
+        prefix = "Windy"
     else:
         prefix = "Magics"
 
@@ -136,7 +154,6 @@ def get_base_path(
         if dataset == 'icon':
             dataset = "ICON_2I_all2km"
         folder = f"{prefix}-{run}-{dataset}.web"
-
 
     base_path = DATA_PATH.joinpath(
         platform,
