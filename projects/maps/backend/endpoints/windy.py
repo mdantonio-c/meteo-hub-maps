@@ -38,7 +38,7 @@ class WindyEndpoint(EndpointResource):
             404: "Windy map does not exists",
         },
     )
-    def get(self, dataset: str, run: Optional[str] = None, foldername: Optional[str] = None, filename: Optional[str] = None) -> Response:
+    def get(self, dataset: str, run: Optional[str] = None, foldername: Optional[str] = None, filename: Optional[str] = None, stream: Optional[bool] = False) -> Response:
 
         info: Optional[DatasetType] = DATASETS.get(dataset)
         if not info:
@@ -92,4 +92,7 @@ class WindyEndpoint(EndpointResource):
         filepath = latest_x.parent.joinpath(foldername).joinpath(filename)
         if not filepath.exists() or not filepath.is_file():
             raise NotFound(f"File {filepath} does not exist")
-        return Downloader.send_file_content(filepath.name,filepath.parent,'image/tif')
+        if not stream:
+            return Downloader.send_file_content(filepath.name, filepath.parent, 'image/tif')
+        else:
+            return Downloader.send_file_streamed(filepath.name, filepath.parent, 'image/tif')
