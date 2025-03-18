@@ -57,7 +57,7 @@ class WindyEndpoint(EndpointResource):
             latest_x = None
 
             for r in ["00", "12"]:
-                base_path = get_base_path("windy", DEFAULT_PLATFORM, "PROD", r, dataset)
+                base_path = get_base_path("windy", DEFAULT_PLATFORM, "DEV", r, dataset)
                 x = get_ready_file(base_path, area)
                 # add walrus here
                 if x:
@@ -68,7 +68,7 @@ class WindyEndpoint(EndpointResource):
             except ValueError:
                 log.warning("No Run is available: .READY file not found")
         else:
-            base_path = get_base_path("windy", DEFAULT_PLATFORM, "PROD", run, dataset)
+            base_path = get_base_path("windy", DEFAULT_PLATFORM, "DEV", run, dataset)
             tmp_ready_file = get_ready_file(base_path, area)
             if tmp_ready_file:
                 ready_file = tmp_ready_file.name
