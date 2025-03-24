@@ -6,3 +6,71 @@ services:
       PLATFORM: ${PLATFORM}
     volumes:
       - ${DATA_DIR}/maps:/meteo
+  thredds:
+    # environment:
+    #   - JAVA_OPTS=-Xmx2g
+    # image: unidata/thredds-docker:5.6
+    build: ${PROJECT_DIR}/builds/thredds
+    image: sdl/thredds:${RAPYDO_VERSION}
+    command: >
+      "chmod a+x ./init.sh; ./init.sh"
+    ports:
+      - "8081:8080"
+    volumes:
+      # - ${DATA_DIR}/tds/tomcat/logs/:/usr/local/tomcat/logs/
+      # - ${DATA_DIR}/tds/thredds/logs/:/usr/local/tomcat/content/thredds/logs/
+      # - ${DATA_DIR}/tds/tomcat/tomcat-users.xml:/usr/local/tomcat/conf/tomcat-users.xml
+      # - ${DATA_DIR}/tds/thredds/catalog:/usr/local/tomcat/content/thredds
+      - ${DATA_DIR}/maps:/usr/local/tomcat/content/thredds/public/testdata
+    environment:
+      ACTIVATE: ${ACTIVATE_THREDDS}
+      # TDS Content root
+      TDS_CONTENT_ROOT_PATH: /usr/local/tomcat/content
+      # The minimum and maximum Java heap space memory to be allocated to the TDS
+      THREDDS_XMX_SIZE: 4G
+      THREDDS_XMS_SIZE: 4G
+      TDS_HOST: ${PROJECT_DOMAIN}
+      # See https://github.com/Unidata/tomcat-docker#configurable-tomcat-uid-and-gid
+      TOMCAT_USER_ID: ${CURRENT_UID}
+      TOMCAT_GROUP_ID: ${CURRENT_GID}
+    networks:
+      default:
+        aliases:
+          - thredds.dockerized.io
+
+  geoserver:
+    image: meteo-hub-geoserver:${PROJECT_VERSION}
+    build:
+      context: ${PROJECT_DIR}/builds/geoserver
+      args:
+        GEOSERVER_UID: ${CURRENT_UID}
+        GEOSERVER_GID: ${CURRENT_GID}
+        IMAGE_VERSION: 9.0-jdk11-openjdk-slim-buster
+    # image: docker.osgeo.org/geoserver:2.26.1
+    # build:
+    #   context: ${PROJECT_DIR}/builds/geoserver
+    #   args:
+    #     GEOSERVER_UID: ${CURRENT_UID}
+    #     GEOSERVER_GID: ${CURRENT_GID}
+    #     IMAGE_VERSION: 9.0-jdk11-openjdk-slim-buster
+    ports:
+      - "8081:8080"
+    environment:
+      ACTIVATE: ${ACTIVATE_GEOSERVER}
+      # STABLE_EXTENSIONS: netcdf-plugin
+      TOMCAT_EXTRAS: false
+      EXISTING_DATA_DIR: ${GEOSERVER_EXISTING_DATA_DIR}
+      GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
+      GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
+      RECREATE_DATADIR: ${GEOSERVER_RECREATE_DATADIR}
+      JAVA_OPTS: "-Xms512m -Xmx1024m"
+      # JAVA_OPTS: "-Xms512m -Xmx1024m -DNETCDF_DATA_DIR=/opt/geoserver_data"
+    volumes:
+      - ${DATA_DIR}/maps:/opt/geoserver_data
+      # - ${DATA_DIR}/geoserver/settings:/settings
+    networks:
+      default:
+        aliases:
+          - geoserver.dockerized.io
+
+
