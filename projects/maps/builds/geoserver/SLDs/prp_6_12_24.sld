@@ -11,7 +11,7 @@
           <sld:RasterSymbolizer>
             <sld:ColorMap type="intervals">
               <sld:ColorMapEntry color="#deeaf7" quantity="0" opacity="0"/>
-              <sld:ColorMapEntry color="#deeaf7" quantity="1"/>
+              <sld:ColorMapEntry color="#deeaf7" quantity="1" opacity="0"/>
               <sld:ColorMapEntry color="#bdd5ef" quantity="2"/>
               <sld:ColorMapEntry color="#9cc1e7" quantity="5"/>
               <sld:ColorMapEntry color="#79aade" quantity="10"/>
