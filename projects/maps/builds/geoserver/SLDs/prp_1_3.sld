@@ -9,7 +9,7 @@
         <sld:Name>name</sld:Name>
         <sld:Rule>
           <sld:RasterSymbolizer>
-            <sld:ColorMap>
+            <sld:ColorMap type="intervals">
               <sld:ColorMapEntry color="#deeaf7" quantity="0" opacity="0"/>
               <sld:ColorMapEntry color="#deeaf7" quantity="1"/>
               <sld:ColorMapEntry color="#bdd5ef" quantity="2"/>
