@@ -1,4 +1,4 @@
-location /geoserver {
+location /geoserver/ {
     # Handle OPTIONS requests
     if ($request_method = 'OPTIONS') {
         add_header 'Access-Control-Allow-Origin' '*' always;
@@ -23,7 +23,7 @@ location /geoserver {
     proxy_redirect off;
  }
 
- location /wms {
+ location /wms/ {
     # Handle OPTIONS requests
     if ($request_method = 'OPTIONS') {
         add_header 'Access-Control-Allow-Origin' '*' always;
