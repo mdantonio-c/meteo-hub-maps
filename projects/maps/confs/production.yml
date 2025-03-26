@@ -1,5 +1,5 @@
 version: "3.9"
-services:
-  proxy:
-    volumes:
-      - ${PROJECT_DIR}/confs/geoserver.service:/etc/nginx/sites-enabled/geoserver.service
+# services:
+#   proxy:
+#     volumes:
+#       - ${PROJECT_DIR}/confs/geoserver.service:/etc/nginx/sites-enabled/geoserver.service
