@@ -1,4 +1,4 @@
-location /geoserver/ {
+location /api/geoserver/ {
     # Handle OPTIONS requests
     if ($request_method = 'OPTIONS') {
         add_header 'Access-Control-Allow-Origin' '*' always;
@@ -22,7 +22,7 @@ location /geoserver/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
  }
 
- location /wms/ {
+ location /api/wms/ {
     # Handle OPTIONS requests
     if ($request_method = 'OPTIONS') {
         add_header 'Access-Control-Allow-Origin' '*' always;
