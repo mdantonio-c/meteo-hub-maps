@@ -11,6 +11,7 @@ def check_ip_access(allowed_ips):
         def wrapper(requester_ip, *args, **kwargs):
             print(request.remote_addr)
             print(allowed_ips)
+            print(request.environ['HTTP_X_FORWARDED_FOR'])
             if request.remote_addr not in allowed_ips:
                 return EndpointResource.response("Forbidden", code=403)
             return func(requester_ip, *args, **kwargs)
