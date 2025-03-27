@@ -40,7 +40,7 @@ class DataReady(EndpointResource):
 
     )
     @check_ip_access(ALLOWED_IPS)
-    def get( #TODO: make it a post
+    def post( #TODO: make it a post
         self,**kwargs
     ) -> Response:
         # base_directory = "/path/to/directory/Italia"
