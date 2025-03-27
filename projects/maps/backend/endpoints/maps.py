@@ -27,6 +27,7 @@ from restapi.utilities.logs import log
 
 ALLOWED_IPS = Env.get_set("ALLOWED_IPS", frozenset())
 
+
 def get_schema(set_required: bool) -> Type[Schema]:
     attributes: Dict[str, Union[fields.Field, type]] = {}
     attributes["run"] = fields.Str(validate=validate.OneOf(RUNS), required=True)
@@ -304,20 +305,17 @@ class MapLegend(EndpointResource):
 
 
 class MapSensitiveData(EndpointResource):
-    labels = ["maps"]
+    labels = ["test"]
 
-    @decorators.use_kwargs(get_schema(True), location="query")
     @decorators.endpoint(
         path="/maps/sensitive",
-        summary="Get asensitive data.",
+        summary="Test restricted data access.",
         responses={
-            200: "Data successfully retrieved",
+            204: "Data successfully accessed",
             400: "Invalid request",
-            404: "Data not found",
+            403: "Access Forbidden",
         },
     )
     @check_ip_access(ALLOWED_IPS)
-    def get(
-        self,
-    ) -> Response:
-        pass
+    def get(self) -> Response:
+        return self.empty_response()
