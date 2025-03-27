@@ -15,7 +15,7 @@ services:
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
     volumes:
-      - ${DATA_DIR}/maps:/meteo
+      - ${GEOTIFF_DIR}:/meteo
   thredds:
     # environment:
     #   - JAVA_OPTS=-Xmx2g
