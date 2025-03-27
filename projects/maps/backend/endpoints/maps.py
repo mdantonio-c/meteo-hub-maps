@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Dict, Optional, Type, Union
 
+from maps.auth.authz import check_ip_access
 from maps.endpoints.config import (
     AREAS,
     DEFAULT_PLATFORM,
@@ -16,12 +17,15 @@ from maps.endpoints.config import (
     get_base_path,
     get_ready_file,
 )
+from maps.utils.env import Env
 from restapi import decorators
 from restapi.exceptions import NotFound, ServiceUnavailable
 from restapi.models import Schema, fields, validate
 from restapi.rest.definition import EndpointResource, Response
 from restapi.services.download import Downloader
 from restapi.utilities.logs import log
+
+ALLOWED_IPS = Env.get_set("ALLOWED_IPS", {})
 
 
 def get_schema(set_required: bool) -> Type[Schema]:
@@ -40,7 +44,9 @@ def get_schema(set_required: bool) -> Type[Schema]:
         validate=validate.OneOf(LEVELS_PR), required=False
     )
     attributes["env"] = fields.Str(validate=validate.OneOf(ENVS), required=False)
-    attributes["weekday"] = fields.Str(validate=validate.OneOf(WEEKDAYS), required=False)
+    attributes["weekday"] = fields.Str(
+        validate=validate.OneOf(WEEKDAYS), required=False
+    )
 
     return Schema.from_dict(attributes, name="MapsSchema")
 
@@ -50,6 +56,7 @@ class MapReadyOutputSchema(Schema):
     offsets = fields.List(fields.Str(), required=True)
     platform = fields.Str(required=True)
     weekday = fields.Str(required=True)
+
 
 class MapImage(EndpointResource):
     labels = ["maps"]
@@ -193,7 +200,9 @@ class MapSet(EndpointResource):
                     base_path = get_base_path(field, pl, env, run, res, weekday)
                     platform = pl
                     last_reftime = reftime.strftime("%Y%m%d%H")
-                    last_weekday = str(datetime.strptime(ready_file.name[:8], "%Y%m%d").weekday())
+                    last_weekday = str(
+                        datetime.strptime(ready_file.name[:8], "%Y%m%d").weekday()
+                    )
 
             if not base_path:
                 raise NotFound("no .READY files found")
@@ -210,7 +219,9 @@ class MapSet(EndpointResource):
             if not ready_file:
                 raise NotFound("no .READY files found")
             last_reftime = ready_file.name[:10]
-            last_weekday = str(datetime.strptime(ready_file.name[:8], "%Y%m%d").weekday())
+            last_weekday = str(
+                datetime.strptime(ready_file.name[:8], "%Y%m%d").weekday()
+            )
         # load image offsets
         images_path = base_path.joinpath(area, field)
         list_file = sorted(images_path.iterdir())
@@ -230,8 +241,13 @@ class MapSet(EndpointResource):
             offsets = [f.name.split(".")[-2] for f in list_file if f.is_file()]
 
         log.debug("data offsets: {}", offsets)
-        log.info(f'But just before printing {weekday}')
-        data = {"reftime": last_reftime, "offsets": offsets, "platform": platform, "weekday": last_weekday}
+        log.info(f"But just before printing {weekday}")
+        data = {
+            "reftime": last_reftime,
+            "offsets": offsets,
+            "platform": platform,
+            "weekday": last_weekday,
+        }
         return self.response(data)
 
 
@@ -286,3 +302,23 @@ class MapLegend(EndpointResource):
         return Downloader.send_file_content(
             map_legend_file, subfolder=legend_path, mime="image/png"
         )
+
+
+class MapSensitiveData(EndpointResource):
+    labels = ["maps"]
+
+    @decorators.use_kwargs(get_schema(True), location="query")
+    @decorators.endpoint(
+        path="/maps/sensitive",
+        summary="Get asensitive data.",
+        responses={
+            200: "Data successfully retrieved",
+            400: "Invalid request",
+            404: "Data not found",
+        },
+    )
+    @check_ip_access(ALLOWED_IPS)
+    def get(
+        self,
+    ) -> Response:
+        pass
