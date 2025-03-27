@@ -1,9 +1,13 @@
 """
 Simple authz decorator for restricting API access
 """
+
 from functools import wraps
+
 from flask import request
-from restapi.rest.definition import EndpointResource
+from restapi.exceptions import Forbidden
+from restapi.utilities.logs import log
+
 
 def check_ip_access(allowed_ips):
     def decorator(func):
@@ -13,7 +17,7 @@ def check_ip_access(allowed_ips):
             print(allowed_ips)
             print(request.environ['HTTP_X_FORWARDED_FOR'])
             if request.remote_addr not in allowed_ips:
-                return EndpointResource.response("Forbidden", code=403)
+                raise Forbidden("Access Forbidden", is_warning=True)
             return func(requester_ip, *args, **kwargs)
 
         return wrapper
