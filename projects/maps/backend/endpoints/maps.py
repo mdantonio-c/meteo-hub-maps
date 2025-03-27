@@ -25,8 +25,7 @@ from restapi.rest.definition import EndpointResource, Response
 from restapi.services.download import Downloader
 from restapi.utilities.logs import log
 
-ALLOWED_IPS = Env.get_set("ALLOWED_IPS", {})
-
+ALLOWED_IPS = Env.get_set("ALLOWED_IPS", frozenset())
 
 def get_schema(set_required: bool) -> Type[Schema]:
     attributes: Dict[str, Union[fields.Field, type]] = {}
