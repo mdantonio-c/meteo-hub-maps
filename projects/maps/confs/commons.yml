@@ -4,6 +4,16 @@ services:
   backend:
     environment:
       PLATFORM: ${PLATFORM}
+      ALLOWED_IPS: ${ALLOWED_IPS}
+      GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
+      GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
+    volumes:
+      - ${DATA_DIR}/maps:/meteo
+  celery:
+    environment:
+      PLATFORM: ${PLATFORM}
+      GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
+      GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
     volumes:
       - ${DATA_DIR}/maps:/meteo
   thredds:
