@@ -2,6 +2,8 @@ version: "3.9"
 
 services:
   backend:
+    build: ${PROJECT_DIR}/builds/backend
+    image: maps/backend:${RAPYDO_VERSION}
     environment:
       PLATFORM: ${PLATFORM}
       ALLOWED_IPS: ${ALLOWED_IPS}
@@ -10,6 +12,8 @@ services:
     volumes:
       - ${DATA_DIR}/maps:/meteo
   celery:
+    build: ${PROJECT_DIR}/builds/backend
+    image: maps/backend:${RAPYDO_VERSION}
     environment:
       PLATFORM: ${PLATFORM}
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
