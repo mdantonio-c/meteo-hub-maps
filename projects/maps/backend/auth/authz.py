@@ -13,8 +13,8 @@ def check_ip_access(allowed_ips):
     def decorator(func):
         @wraps(func)
         def wrapper(requester_ip, *args, **kwargs):
-            print(request.remote_addr)
-            print(allowed_ips)
+            log.info(request.remote_addr)
+            log.info(allowed_ips)
             # print(request.environ['HTTP_X_FORWARDED_FOR'])
             if request.remote_addr not in allowed_ips:
                 raise Forbidden("Access Forbidden", is_warning=True)
