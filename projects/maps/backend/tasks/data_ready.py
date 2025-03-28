@@ -9,7 +9,7 @@ sld_dir_mapping = {
     "hcc": ["cloud_hml-hcc"],
     "lcc": ["cloud_hml-lcc"],
     "mcc": ["cloud_hml-mcc"],
-    "tcc": ["cloud-tcc"],
+    "tcc_1": ["cloud-tcc"],
     "prp_1_3": ["prec1-tp", "prec3-tp"],
     "prp_6_12_24": ["prec6-tp", "prec12-tp", "prec24-tp"],
     "prs": ["pressure-pmsl"],
@@ -75,8 +75,9 @@ def upload_sld(GEOSERVER_URL, sld, layer_name, USERNAME, PASSWORD):
     style_name = f"{WORKSPACE}:{layer_name}"
     url = f"{GEOSERVER_URL}/rest/styles"
     headers = {"Content-Type": "application/vnd.ogc.sld+xml"}
+    params = {"name": layer_name}
 
-    response = requests.post(url, auth=(USERNAME, PASSWORD), headers=headers, data=sld)
+    response = requests.post(url, auth=(USERNAME, PASSWORD), headers=headers, params=params, data=sld)
 
     print(f"Response Code: {response.status_code}")
     print(f"Response Text: {response.text}")
