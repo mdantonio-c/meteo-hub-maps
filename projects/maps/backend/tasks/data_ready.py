@@ -23,6 +23,7 @@ sld_dir_mapping = {
 COVERAGESTORE_PREFIX = "tiff_store"
 DEFAULT_STORE_NAME = "tiff_store"
 WORKSPACE = "meteohub"
+BASE_DIRECTORY: str = "/meteo"
 
 @CeleryExt.task(idempotent=True)
 def update_geoserver_layers(
@@ -30,12 +31,12 @@ def update_geoserver_layers(
     GEOSERVER_URL: str,
     USERNAME: str,
     PASSWORD: str,
-    base_directory: str = "/meteo",
+    run: str,
     sld_directory: Optional[str] = None,
 ) -> None:
     log.info("Updating geoserver layers")
     # Update geoserver layers
-    process_tiff_files(base_directory, sld_directory, GEOSERVER_URL, USERNAME, PASSWORD)
+    process_tiff_files(BASE_DIRECTORY, sld_directory, GEOSERVER_URL, USERNAME, PASSWORD, run)
 
 def create_workspace(GEOSERVER_URL, USERNAME, PASSWORD):
     """Create a workspace if it doesn't exist."""
@@ -152,10 +153,10 @@ def publish_layer(GEOSERVER_URL, store_name, file_path, layer_name, USERNAME, PA
             print(f"Failed to delete store {store_name}: {delete_response.text}")
         print(f"Failed to publish {sanitized_layer_name}: {response.text}")
 
-def process_tiff_files(base_path, sld_directory, GEOSERVER_URL, USERNAME, PASSWORD):
+def process_tiff_files(base_path, sld_directory, GEOSERVER_URL, USERNAME, PASSWORD, run):
     """Iterate over TIFF files and upload them to GeoServer."""
     create_workspace(GEOSERVER_URL, USERNAME, PASSWORD)
-    
+    data_path = os.path.join(base_path, f"Windy-{run}-ICON_2I_all2km.web/Italia")
     # Read SLD files from the specified directory
     sld_files = {}
     if sld_directory is not None:
@@ -169,11 +170,13 @@ def process_tiff_files(base_path, sld_directory, GEOSERVER_URL, USERNAME, PASSWO
                         sld_files[sld_name] = sld_content
         for sld_name, sld_content in sld_files.items():
             upload_sld(GEOSERVER_URL, sld_content, sld_name, USERNAME, PASSWORD)
-    for root, _, files in os.walk(base_path):
+    for root, _, files in os.walk(data_path):
         for file in files:
             if file.endswith(".tif"):
                 file_path = os.path.join(root, file)
-                store_name = f"{COVERAGESTORE_PREFIX}_{file.replace('.tif', '')}"
+                parent_dir = os.path.dirname(file_path)
+                dirs = parent_dir.split("/")
+                store_name = f"{COVERAGESTORE_PREFIX}_{dirs[-1]}_{file.replace('.tif', '')}"
                 layer_name = file.replace(".tif", "")
 
                 upload_geotiff(GEOSERVER_URL, file_path, store_name, USERNAME, PASSWORD)

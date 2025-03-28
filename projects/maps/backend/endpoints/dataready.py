@@ -34,14 +34,14 @@ class DataReady(EndpointResource):
 
     # @decorators.cache(timeout=900)
     @decorators.endpoint(
-        path="/data/ready",
+        path="/data/ready/<run>",
         summary="Notify that a dataset is ready",
         responses={202: "Notification received"},
 
     )
     @check_ip_access(ALLOWED_IPS)
-    def post( #TODO: make it a post
-        self,**kwargs
+    def post(
+        self, run, **kwargs
     ) -> Response:
         # base_directory = "/path/to/directory/Italia"
         # sld_directory = "/path/to/sld/dir/mount"  # TODO: get from env
@@ -49,9 +49,12 @@ class DataReady(EndpointResource):
         USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
         PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
 
+        available_runs = ["00", "12"]
+        
         if USERNAME is None or PASSWORD is None:
             raise ServiceUnavailable("Geoserver credentials not set")
-        
+        if run not in available_runs:
+            raise NotFound("Run hour not in admitted values ('00', '12')")
         c = celery.get_instance()
         c.celery_app.send_task(
                     "update_geoserver_layers",
@@ -61,6 +64,7 @@ class DataReady(EndpointResource):
                         GEOSERVER_URL,
                         USERNAME,
                         PASSWORD,
+                        run
                     ),
                 )
         return self.response("Notification received", code=202)
