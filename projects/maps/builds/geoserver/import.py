@@ -244,7 +244,9 @@ def process_tiff_files(base_path):
         for file in files:
             if file.endswith(".tif"):
                 file_path = os.path.join(root, file)
-                store_name = f"{COVERAGESTORE_PREFIX}_{file.replace('.tif', '')}"
+                parent_dir = os.path.dirname(file_path)
+                dirs = parent_dir.split("/")
+                store_name = f"{COVERAGESTORE_PREFIX}_{dirs[-1]}_{file.replace('.tif', '')}"
                 layer_name = file.replace(".tif", "")
 
                 upload_geotiff(file_path, store_name)
