@@ -13,7 +13,7 @@ sld_dir_mapping = {
     "prp_1_3": ["prec1-tp", "prec3-tp"],
     "prp_6_12_24": ["prec6-tp", "prec12-tp", "prec24-tp"],
     "prs": ["pressure-pmsl"],
-    "rh": ["humidity-r"],
+    "rh_1": ["humidity-r"],
     "sf_1_3": ["snow1-snow", "snow3-snow"],
     "sf_6_12_24": ["snow6-snow", "snow12-snow", "snow24-snow"],
     "t2m": ["t2m-t2m"],

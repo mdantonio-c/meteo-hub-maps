@@ -259,8 +259,8 @@ def process_tiff_files(base_path):
                         break
 
 # Run the script
-base_directory = "/home/dcrisant/Documents/MISTRAL/meteo-hub-maps/data/maps"  # Adjust this path as needed
-sld_directory = "/home/dcrisant/Documents/MISTRAL/meteo-hub-maps/projects/maps/builds/geoserver/SLDs"  # Adjust this path as needed
+base_directory = "/home/ubuntu/meteo-hub-maps/data/maps/G100/PROD/Windy-12-ICON_2I_all2km.web/Italia"  # Adjust this path as needed
+sld_directory = "/home/ubuntu/meteo-hub-maps/projects/maps/builds/geoserver/SLDs"  # Adjust this path as needed
 sld_dir_mapping = {
     "hcc": ["cloud_hml-hcc"],
     "lcc": ["cloud_hml-lcc"],
@@ -269,7 +269,7 @@ sld_dir_mapping = {
     "prp_1_3": ["prec1-tp", "prec3-tp"],
     "prp_6_12_24": ["prec6-tp", "prec12-tp", "prec24-tp"],
     "prs": ["pressure-pmsl"],
-    "rh": ["humidity-r"],
+    "rh_1": ["humidity-r"],
     "sf_1_3": ["snow1-snow", "snow3-snow"],
     "sf_6_12_24": ["snow6-snow", "snow12-snow"],
     "t2m": ["t2m-t2m"],
