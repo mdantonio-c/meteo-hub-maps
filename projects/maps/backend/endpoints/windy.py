@@ -61,11 +61,11 @@ class WindyEndpoint(EndpointResource):
                 x = get_ready_file(base_path, area)
                 # add walrus here
                 if x:
-                    ready_files.append(x.name)
+                    ready_files.append(x)
                     latest_x = x
             try:
                 ready_files.sort(key=lambda f: f.name[:10], reverse=True)
-                ready_file = ready_files[0]
+                ready_file = ready_files[0].name
                 latest_x = ready_file
                 
             except ValueError:
