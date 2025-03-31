@@ -64,7 +64,8 @@ class WindyEndpoint(EndpointResource):
                     ready_files.append(x.name)
                     latest_x = x
             try:
-                ready_file = max(ready_files)
+                ready_files.sort(key=lambda f: f[:10], reverse=True)
+                ready_file = ready_files[0]
             except ValueError:
                 log.warning("No Run is available: .READY file not found")
         else:
