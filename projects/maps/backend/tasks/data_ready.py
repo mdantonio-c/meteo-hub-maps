@@ -17,7 +17,7 @@ sld_dir_mapping = {
     "sf_1_3": ["snow1-snow", "snow3-snow"],
     "sf_6_12_24": ["snow6-snow", "snow12-snow", "snow24-snow"],
     "t2m": ["t2m-t2m"],
-    "ws10m": ["wind-10u", "wind-10v", "wind-vmax_10m"],
+    "ws10m_1": ["wind-10u", "wind-10v", "wind-vmax_10m"],
 }
 
 COVERAGESTORE_PREFIX = "tiff_store"
