@@ -80,11 +80,9 @@ services:
       JAVA_OPTS: "-Xms512m -Xmx1024m"
       # JAVA_OPTS: "-Xms512m -Xmx1024m -DNETCDF_DATA_DIR=/opt/geoserver_data"
     volumes:
-      - ${DATA_DIR}/maps:/opt/geoserver_data
+      - ${DATA_DIR}/geoserver_data:/opt/geoserver_data
       # - ${DATA_DIR}/geoserver/settings:/settings
     networks:
       default:
         aliases:
           - geoserver.dockerized.io
-
-
