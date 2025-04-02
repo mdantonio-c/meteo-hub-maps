@@ -273,7 +273,7 @@ sld_dir_mapping = {
     "sf_1_3": ["snow1-snow", "snow3-snow"],
     "sf_6_12_24": ["snow6-snow", "snow12-snow"],
     "t2m": ["t2m-t2m"],
-    "ws10m_1": ["wind-10u", "wind-10v", "wind-vmax_10m"],
+    "ws10m_2": ["wind-vmax_10m"],
 }
 DEFAULT_STORE_NAME = "tiff_store"
 process_tiff_files(base_directory)
