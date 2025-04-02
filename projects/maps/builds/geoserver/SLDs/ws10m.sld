@@ -10,12 +10,14 @@
         <sld:Rule>
           <sld:RasterSymbolizer>
             <sld:ColorMap type="intervals">
-              <sld:ColorMapEntry color="#ff0000" quantity="20"/>
-              <sld:ColorMapEntry color="#ff8c00" quantity="40"/>
-              <sld:ColorMapEntry color="#ffff00" quantity="60"/>
-              <sld:ColorMapEntry color="#00ff00" quantity="80"/>
-              <sld:ColorMapEntry color="#00ffff" quantity="90"/>
-              <sld:ColorMapEntry color="#0000ff" quantity="100"/>
+              <sld:ColorMapEntry color="#8bd8f9" quantity="1"/>
+              <sld:ColorMapEntry color="#7070ff" quantity="2"/>
+              <sld:ColorMapEntry color="#4bcf4f" quantity="5"/>
+              <sld:ColorMapEntry color="#ffff00" quantity="10"/>
+              <sld:ColorMapEntry color="#fec601" quantity="20"/>
+              <sld:ColorMapEntry color="#ff3333" quantity="30"/>
+              <sld:ColorMapEntry color="#ee82ee" quantity="50"/>
+              <sld:ColorMapEntry color="#ff00c3" quantity="70"/>
             </sld:ColorMap>
             <sld:ContrastEnhancement/>
           </sld:RasterSymbolizer>

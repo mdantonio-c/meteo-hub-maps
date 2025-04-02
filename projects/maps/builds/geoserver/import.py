@@ -259,8 +259,8 @@ def process_tiff_files(base_path):
                         break
 
 # Run the script
-base_directory = "/home/ubuntu/meteo-hub-maps/data/maps/G100/PROD/Windy-12-ICON_2I_all2km.web/Italia"  # Adjust this path as needed
-sld_directory = "/home/ubuntu/meteo-hub-maps/projects/maps/builds/geoserver/SLDs"  # Adjust this path as needed
+base_directory = "/home/mcarello/Downloads/Windy-12-ICON_2I_all2km.web/Italia"  # Adjust this path as needed
+sld_directory = "/home/mcarello/Desktop/sld_files"  # Adjust this path as needed
 sld_dir_mapping = {
     "hcc": ["cloud_hml-hcc"],
     "lcc": ["cloud_hml-lcc"],
@@ -273,7 +273,7 @@ sld_dir_mapping = {
     "sf_1_3": ["snow1-snow", "snow3-snow"],
     "sf_6_12_24": ["snow6-snow", "snow12-snow"],
     "t2m": ["t2m-t2m"],
-    "ws10m": ["wind-10u", "wind-10v"],
+    "ws10m": ["wind-10u", "wind-10v", "wind-vmax_10m"],
 }
 DEFAULT_STORE_NAME = "tiff_store"
 process_tiff_files(base_directory)
