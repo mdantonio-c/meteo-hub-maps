@@ -183,6 +183,24 @@ def get_ready_file(base_path: Path, area: str) -> Optional[Path]:
     log.debug(f".READY files found: {ready_files}")
     return ready_files[0]
 
+def get_geoserver_ready_file(base_path: Path, area: str) -> Optional[Path]:
+    ready_path = base_path.joinpath(area)
+
+    ready_files: List[Path] = []
+    if ready_path.exists():
+        [log.info(path) for path in ready_path.iterdir()]
+        ready_files = [
+            f for f in ready_path.iterdir() if f.is_file() and ".GEOSERVER.READY" in f.name
+        ]
+
+    # Check if .READY file exists (if not, images are not ready yet)
+    log.info(f"Looking for .READY files in: {ready_path}")
+    if not ready_files:
+        return None
+
+    log.info(f".READY files found: {ready_files}")
+    return ready_files[0]
+
 
 def check_platform_availability(platform: str) -> bool:
     return DATA_PATH.joinpath(platform).exists()

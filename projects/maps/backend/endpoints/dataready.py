@@ -34,7 +34,7 @@ class DataReady(EndpointResource):
 
     # @decorators.cache(timeout=900)
     @decorators.endpoint(
-        path="/data/ready/<run>",
+        path="/data/ready/<run>",   # add /<date>?
         summary="Notify that a dataset is ready",
         responses={202: "Notification received"},
 
@@ -64,7 +64,8 @@ class DataReady(EndpointResource):
                         GEOSERVER_URL,
                         USERNAME,
                         PASSWORD,
-                        run
+                        run,
+                        # date
                     ),
                 )
         return self.response("Notification received", code=202)

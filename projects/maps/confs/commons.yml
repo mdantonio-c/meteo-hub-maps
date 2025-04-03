@@ -82,6 +82,11 @@ services:
     volumes:
       - ${DATA_DIR}/geoserver_data:/opt/geoserver_data
       # - ${DATA_DIR}/geoserver/settings:/settings
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"         # Maximum log size (100 MB in this case)
+        max-file: "3"           # Retain 3 log files before older ones are deleted
     networks:
       default:
         aliases:

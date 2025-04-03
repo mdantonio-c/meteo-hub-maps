@@ -4,6 +4,7 @@ from typing import Optional
 import os
 import requests
 import re
+from datetime import datetime
 
 sld_dir_mapping = {
     "hcc": ["cloud_hml-hcc"],
@@ -32,11 +33,21 @@ def update_geoserver_layers(
     USERNAME: str,
     PASSWORD: str,
     run: str,
+    date: str = datetime.now().strftime("%Y%m%d"),
     sld_directory: Optional[str] = None,
 ) -> None:
     log.info("Updating geoserver layers")
     # Update geoserver layers
     process_tiff_files(BASE_DIRECTORY, sld_directory, GEOSERVER_URL, USERNAME, PASSWORD, run)
+    create_ready_file(run, date)
+
+def create_ready_file(run: str, date: str) -> None:
+    """Create a ready file to indicate that the process is complete."""
+    ready_file_path = os.path.join(BASE_DIRECTORY, f"{date}{run}.GEOSERVER.READY")
+    with open(ready_file_path, "w") as f:
+        f.write(f"Run: {run}\nDate: {date}\n")
+    log.info(f"Ready file created at {ready_file_path}")
+
 
 def create_workspace(GEOSERVER_URL, USERNAME, PASSWORD):
     """Create a workspace if it doesn't exist."""

@@ -15,7 +15,7 @@ from maps.endpoints.config import (
     WEEKDAYS,
     check_platform_availability,
     get_base_path,
-    get_ready_file,
+    get_ready_file
 )
 from maps.utils.env import Env
 from restapi import decorators
