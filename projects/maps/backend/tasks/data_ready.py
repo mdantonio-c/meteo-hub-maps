@@ -39,11 +39,12 @@ def update_geoserver_layers(
     log.info("Updating geoserver layers")
     # Update geoserver layers
     process_tiff_files(BASE_DIRECTORY, sld_directory, GEOSERVER_URL, USERNAME, PASSWORD, run)
-    create_ready_file(run, date)
+    create_ready_file(BASE_DIRECTORY, run, date)
 
-def create_ready_file(run: str, date: str) -> None:
+def create_ready_file(base_path, run: str, date: str) -> None:
     """Create a ready file to indicate that the process is complete."""
-    ready_file_path = os.path.join(BASE_DIRECTORY, f"{date}{run}.GEOSERVER.READY")
+    data_path = os.path.join(base_path, f"Windy-{run}-ICON_2I_all2km.web/Italia")
+    ready_file_path = os.path.join(data_path, f"{date}{run}.GEOSERVER.READY")
     with open(ready_file_path, "w") as f:
         f.write(f"Run: {run}\nDate: {date}\n")
     log.info(f"Ready file created at {ready_file_path}")
