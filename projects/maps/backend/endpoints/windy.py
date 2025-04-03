@@ -7,7 +7,7 @@ from maps.endpoints.config import (
     DatasetType,
     get_base_path,
     get_ready_file,
-    # get_geoserver_ready_file
+    get_geoserver_ready_file
 )
 from restapi import decorators
 from restapi.exceptions import NotFound
@@ -59,8 +59,8 @@ class WindyEndpoint(EndpointResource):
 
             for r in ["00", "12"]:
                 base_path = get_base_path("windy", DEFAULT_PLATFORM, "PROD", r, dataset)
-                x = get_ready_file(base_path, area)
-                # x = get_geoserver_ready_file(base_path, area)
+                # x = get_ready_file(base_path, area)
+                x = get_geoserver_ready_file(base_path, area)
                 # add walrus here
                 if x:
                     ready_files.append(x)
@@ -74,8 +74,8 @@ class WindyEndpoint(EndpointResource):
                 log.warning("No Run is available: .READY file not found")
         else:
             base_path = get_base_path("windy", DEFAULT_PLATFORM, "PROD", run, dataset)
-            tmp_ready_file = get_ready_file(base_path, area)
-            # tmp_ready_file = get_geoserver_ready_file(base_path, area)
+            # tmp_ready_file = get_ready_file(base_path, area)
+            tmp_ready_file = get_geoserver_ready_file(base_path, area)
             if tmp_ready_file:
                 ready_file = tmp_ready_file.name
 
