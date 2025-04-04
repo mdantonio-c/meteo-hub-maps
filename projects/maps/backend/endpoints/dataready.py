@@ -34,14 +34,14 @@ class DataReady(EndpointResource):
 
     # @decorators.cache(timeout=900)
     @decorators.endpoint(
-        path="/data/ready/<run>",   # add /<date>?
+        path="/data/ready/<date>/<run>",
         summary="Notify that a dataset is ready",
         responses={202: "Notification received"},
 
     )
     @check_ip_access(ALLOWED_IPS)
     def post(
-        self, run, **kwargs
+        self, run, date, **kwargs
     ) -> Response:
         # base_directory = "/path/to/directory/Italia"
         # sld_directory = "/path/to/sld/dir/mount"  # TODO: get from env
@@ -65,7 +65,7 @@ class DataReady(EndpointResource):
                         USERNAME,
                         PASSWORD,
                         run,
-                        # date
+                        date
                     ),
                 )
         return self.response("Notification received", code=202)
