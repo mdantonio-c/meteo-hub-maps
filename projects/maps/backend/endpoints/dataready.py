@@ -43,6 +43,7 @@ class DataReady(EndpointResource):
     def post(
         self, run, date, model, **kwargs
     ) -> Response:
+        return self.response("Not implemented", 501)
         # base_directory = "/path/to/directory/Italia"
         # sld_directory = "/path/to/sld/dir/mount"  # TODO: get from env
         GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver" # TODO: get from env
