@@ -34,20 +34,22 @@ class DataReady(EndpointResource):
 
     # @decorators.cache(timeout=900)
     @decorators.endpoint(
-        path="/data/ready/<date>/<run>",
+        path="/data/ready/<date>/<run>/<model>",
         summary="Notify that a dataset is ready",
         responses={202: "Notification received"},
 
     )
     @check_ip_access(ALLOWED_IPS)
     def post(
-        self, run, date, **kwargs
+        self, run, date, model, **kwargs
     ) -> Response:
         # base_directory = "/path/to/directory/Italia"
         # sld_directory = "/path/to/sld/dir/mount"  # TODO: get from env
         GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver" # TODO: get from env
         USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
         PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
+        dataset = "icon"
+        area = "Italia"
 
         available_runs = ["00", "12"]
         
@@ -56,16 +58,45 @@ class DataReady(EndpointResource):
         if run not in available_runs:
             raise NotFound("Run hour not in admitted values ('00', '12')")
         c = celery.get_instance()
-        c.celery_app.send_task(
-                    "update_geoserver_layers",
-                    args=(
-                        # base_directory,
-                        # sld_directory,
-                        GEOSERVER_URL,
-                        USERNAME,
-                        PASSWORD,
-                        run,
-                        date
-                    ),
-                )
-        return self.response("Notification received", code=202)
+        base_path = get_base_path("windy", DEFAULT_PLATFORM, "PROD", run, dataset)
+        log.info(base_path)
+        x = get_ready_file(base_path, area)
+        if x is not None:
+            c.celery_app.send_task(
+                        "update_geoserver_layers",
+                        args=(
+                            # base_directory,
+                            # sld_directory,
+                            GEOSERVER_URL,
+                            USERNAME,
+                            PASSWORD,
+                            run,
+                            date
+                        ),
+                    )
+            return self.response("Notification received", code=202)
+        else:
+            raise NotFound("Dataset not ready yet")
+        
+class StartMonitoring(EndpointResource):
+    labels = ["maps"]
+    # @decorators.cache(timeout=900)
+    @decorators.endpoint(
+        path="/data/monitoring",
+        summary="Start monitoring a dataset",
+        responses={202: "Monitoring started"},
+    )
+    @check_ip_access(ALLOWED_IPS)
+    def post(self):
+        c = celery.get_instance()
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import",
+            args=[],
+        )
+        return task

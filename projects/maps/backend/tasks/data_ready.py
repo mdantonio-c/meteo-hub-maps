@@ -69,8 +69,11 @@ def upload_geotiff(GEOSERVER_URL, file_path, store_name, USERNAME, PASSWORD):
     url = f"{GEOSERVER_URL}/rest/workspaces/{WORKSPACE}/coveragestores/{store_name}/file.geotiff"
     headers = {"Content-Type": "image/tiff"}
 
-    with open(file_path, "rb") as file:
-        response = requests.put(url, data=file, auth=(USERNAME, PASSWORD))
+    try:
+        with open(file_path, "rb") as file:
+            response = requests.put(url, data=file, auth=(USERNAME, PASSWORD))
+    except Exception as e:
+        log.error(f"An error occurred while uploading GeoTIFF: {e}")
 
     if response.status_code in [201, 202]:
         print(f"Uploaded {file_path} as {store_name}.")

@@ -1,5 +1,6 @@
+from restapi.connectors import celery
 # Unused since Auth is not enabled
-class Initializer:  # pragma: no cover
+class Initializer:
 
     """
     This class is instantiated just after restapi init
@@ -7,7 +8,17 @@ class Initializer:  # pragma: no cover
     """
 
     def __init__(self) -> None:
-        pass
+        c = celery.get_instance()
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import",
+            args=[],
+        )
 
     # This method is called after normal initialization if TESTING mode is enabled
     def initialize_testing_environment(self) -> None:
