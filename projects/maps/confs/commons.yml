@@ -20,6 +20,9 @@ services:
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
     volumes:
       - ${GEOTIFF_DIR}:/meteo
+  celerybeat:
+    build: ${PROJECT_DIR}/builds/backend
+    image: maps/backend:${RAPYDO_VERSION}
   thredds:
     # environment:
     #   - JAVA_OPTS=-Xmx2g
