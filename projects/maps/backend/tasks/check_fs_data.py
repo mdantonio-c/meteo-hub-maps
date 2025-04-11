@@ -35,7 +35,9 @@ def check_latest_data_and_trigger_geoserver_import(
 
     # Sort files by date (assuming the filename is a date)
     ready_files.sort(key=lambda x: datetime.strptime(x["file"].split(".")[0], "%Y%m%d%H"))
-
+    if len(ready_files) == 0:
+        log.info("No .READY files found in any path")
+        return
     latest_ready_path, latest_ready_file = [ready_files[-1]["path"], ready_files[-1]["file"]]
     geoserver_ready_path = os.path.join(latest_ready_path, latest_ready_file.split(".")[0] + ".GEOSERVER.READY")
     celery_checked_path = os.path.join(latest_ready_path, latest_ready_file.split(".")[0] + ".CELERY.CHECKED")
