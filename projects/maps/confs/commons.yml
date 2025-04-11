@@ -20,6 +20,7 @@ services:
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
     volumes:
       - ${GEOTIFF_DIR}:/meteo
+      - ${DATA_DIR}/geoserver_data:/geoserver_data
   celerybeat:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
@@ -80,7 +81,7 @@ services:
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
       RECREATE_DATADIR: ${GEOSERVER_RECREATE_DATADIR}
-      JAVA_OPTS: "-Xms512m -Xmx1024m"
+      JAVA_OPTS: "-Xms512m -Xmx1024m -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true"
       # JAVA_OPTS: "-Xms512m -Xmx1024m -DNETCDF_DATA_DIR=/opt/geoserver_data"
     volumes:
       - ${DATA_DIR}/geoserver_data:/opt/geoserver_data

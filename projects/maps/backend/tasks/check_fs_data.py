@@ -9,8 +9,8 @@ from restapi.connectors import celery
 from restapi.env import Env
 
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver" # TODO: get from env
-USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
-PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
+# USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
+# PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
 dataset = "icon"
 area = "Italia"
 
@@ -57,15 +57,22 @@ def check_latest_data_and_trigger_geoserver_import(
         c = celery.get_instance()
         run = latest_ready_file.split(".")[0][:8]
         date = latest_ready_file.split(".")[0][8:10]
+        # c.celery_app.send_task(
+        #             "update_geoserver_layers",
+        #             args=(
+        #                 GEOSERVER_URL,
+        #                 USERNAME,
+        #                 PASSWORD,
+        #                 date,
+        #                 run,
+        #             )
+        # )
         c.celery_app.send_task(
-                    "update_geoserver_layers",
+                    "update_geoserver_image_mosaic",
                     args=(
                         GEOSERVER_URL,
-                        USERNAME,
-                        PASSWORD,
                         date,
                         run,
                     )
         )
-            
     log.info("Finished checking latest data")

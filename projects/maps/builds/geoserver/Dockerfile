@@ -36,7 +36,7 @@ RUN useradd \
     && chown $CURRENT_UID:$CURRENT_GID /home/$TOMCAT_USER
 
 # # Prevent RCE exploit in log4j CVE-2021-44228
-ENV JAVA_OPTS="${JAVA_OPTS} -Dlog4j2.formatMsgNoLookups=true"
+ENV JAVA_OPTS="${JAVA_OPTS} -Dlog4j2.formatMsgNoLookups=true -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true"
 
 # # Force tomcat to run as NO-root user
 # SHELL ["/bin/bash", "-o", "pipefail", "-c"]
