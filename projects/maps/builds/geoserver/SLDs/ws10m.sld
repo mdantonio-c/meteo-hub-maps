@@ -14,7 +14,7 @@
               <sld:ColorMapEntry color="#8bd8f9" quantity="2"/>
               <sld:ColorMapEntry color="#7070ff" quantity="5"/>
               <sld:ColorMapEntry color="#4bcf4f" quantity="10"/>
-              <sld:ColorMapEntry color="#fec601" quantity="20"/>
+              <sld:ColorMapEntry color="#ffff00" quantity="20"/>
               <sld:ColorMapEntry color="#ff3333" quantity="30"/>
               <sld:ColorMapEntry color="#ee82ee" quantity="50"/>
               <sld:ColorMapEntry color="#ff00c3" quantity="70"/>

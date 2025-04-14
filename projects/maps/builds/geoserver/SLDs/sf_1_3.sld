@@ -21,6 +21,7 @@
               <sld:ColorMapEntry color="#d08ac5" quantity="25"/>
               <sld:ColorMapEntry color="#e4beee" quantity="30"/>
               <sld:ColorMapEntry color="#ffffff" quantity="50"/>
+              <sld:ColorMapEntry color="#ffffff" quantity="100"/>
             </sld:ColorMap>
             <sld:ContrastEnhancement/>
           </sld:RasterSymbolizer>

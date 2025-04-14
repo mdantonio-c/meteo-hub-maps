@@ -265,15 +265,15 @@ sld_dir_mapping = {
     "hcc": ["cloud_hml-hcc"],
     "lcc": ["cloud_hml-lcc"],
     "mcc": ["cloud_hml-mcc"],
-    "tcc_1": ["cloud-tcc"],
-    "prp_1_3_1": ["prec1-tp", "prec3-tp"],
-    "prp_6_12_24_1": ["prec6-tp", "prec12-tp", "prec24-tp"],
+    "tcc": ["cloud-tcc"],
+    "prp_1_3": ["prec1-tp", "prec3-tp"],
+    "prp_6_12_24": ["prec6-tp", "prec12-tp", "prec24-tp"],
     "prs": ["pressure-pmsl"],
-    "rh_1": ["humidity-r"],
-    "sf_1_3_1": ["snow1-snow", "snow3-snow"],
-    "sf_6_12_24_1": ["snow6-snow", "snow12-snow"],
+    "rh": ["humidity-r"],
+    "sf_1_3": ["snow1-snow", "snow3-snow"],
+    "sf_6_12_24": ["snow6-snow", "snow12-snow"],
     "t2m": ["t2m-t2m"],
-    "ws10m_2": ["wind-vmax_10m"],
+    "ws10m": ["wind-vmax_10m"],
 }
 DEFAULT_STORE_NAME = "tiff_store"
 process_tiff_files(base_directory)
