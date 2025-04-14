@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Tuple, TypedDict
 from restapi.config import DATA_PATH
 from restapi.env import Env
 from restapi.utilities.logs import log
+import datetime
 
 RUNS = ["00", "12"]
 RESOLUTIONS = ["lm2.2", "lm5", "WRF_OL", "WRF_DA_ITA", "icon"]
@@ -181,7 +182,16 @@ def get_ready_file(base_path: Path, area: str) -> Optional[Path]:
         return None
 
     log.debug(f".READY files found: {ready_files}")
-    return ready_files[0]
+    if len(ready_files) > 1:
+        log.warning(
+            f"Multiple .READY files found in {ready_path}: {ready_files}. "
+            "Returning the first one."
+        )
+    try:
+        res = ready_files.sort(key=lambda x: datetime.strptime(x.name.split(".")[0], "%Y%m%d%H"))[0]
+    except Exception as e:
+        res = None
+    return res
 
 def get_geoserver_ready_file(base_path: Path, area: str) -> Optional[Path]:
     ready_path = base_path.joinpath(area)
@@ -199,7 +209,11 @@ def get_geoserver_ready_file(base_path: Path, area: str) -> Optional[Path]:
         return None
 
     log.info(f".READY files found: {ready_files}")
-    return ready_files[0]
+    try:
+        res = ready_files.sort(key=lambda x: datetime.strptime(x.name.split(".")[0], "%Y%m%d%H"))[0]
+    except Exception as e:
+        res = None
+    return res
 
 
 def check_platform_availability(platform: str) -> bool:
