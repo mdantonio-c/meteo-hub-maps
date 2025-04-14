@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple, TypedDict
 from restapi.config import DATA_PATH
 from restapi.env import Env
 from restapi.utilities.logs import log
-import datetime
+from datetime import datetime
 
 RUNS = ["00", "12"]
 RESOLUTIONS = ["lm2.2", "lm5", "WRF_OL", "WRF_DA_ITA", "icon"]
