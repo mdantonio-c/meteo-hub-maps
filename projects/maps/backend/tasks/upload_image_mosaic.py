@@ -29,6 +29,7 @@ sld_dir_mapping = {
 # GEOSERVER_URL = "http://localhost:8081/geoserver"
 GEOSERVER_USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
 GEOSERVER_PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
+GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 WORKSPACE = "meteohub"
 RENAMED_FILES = "copies"
 BASE_PATH = "/meteo"
@@ -42,8 +43,9 @@ def update_geoserver_image_mosaic(
     GEOSERVER_URL: str,
     run: str,
     date: str = datetime.now().strftime("%Y-%m-%d"),
-    sld_directory: Optional[str] = None,
+    sld_directory: Optional[str] = "/SLDs",
 ) -> None:
+    update_styles(sld_directory)
     TIFF_DIR = f"{BASE_PATH}/Windy-{run}-ICON_2I_all2km.web/Italia"
     date_edit = datetime.strptime(date, "%Y%m%d").strftime("%Y-%m-%d")
     for folder in os.listdir(TIFF_DIR):
@@ -60,7 +62,66 @@ def update_geoserver_image_mosaic(
             bind_sld(folder, GEOSERVER_URL)
             enable_time_dimension(folder, GEOSERVER_URL)
     create_ready_file(TIFF_DIR, run, date)
+    
+def update_styles(sld_directory: Optional[str] = None) -> None:
+    if sld_directory:
+        print(f"📂 Processing SLD directory: {sld_directory}")
+        for folder in os.listdir(sld_directory):
+            create_or_update_sld(folder, sld_directory)
 
+def create_or_update_sld(folder: str, sld_directory: str) -> None:
+    style_name = folder.rsplit('.')[0]
+    sld_path = os.path.join(sld_directory, folder)
+    if not os.path.exists(sld_path):
+        print(f"❌ SLD directory does not exist: {sld_path}")
+        return
+
+    # Check if SLD file exists
+    sld_file = sld_path
+    if not os.path.exists(sld_file):
+        print(f"❌ SLD file does not exist: {sld_file}")
+        return
+
+    with open(sld_file, 'rb') as sld_file:
+        sld_content = sld_file.read()
+        
+    url = f"{GEOSERVER_URL}/rest/styles/{style_name}"
+    headers = {
+        "Content-Type": "application/vnd.ogc.sld+xml"
+    }
+    response = requests.put(url, headers=headers, data=sld_content, auth=(GEOSERVER_USERNAME, GEOSERVER_PASSWORD))
+    if response.status_code in [200, 201]:
+        print("Style updated successfully.")
+    else:
+        print(f"Failed to update style. Status code: {response.status_code}")
+        print(response.text)
+        upload_sld(
+            GEOSERVER_URL,
+            sld=sld_content,
+            layer_name=style_name,
+            USERNAME=GEOSERVER_USERNAME,
+            PASSWORD=GEOSERVER_PASSWORD,
+        )
+        
+def upload_sld(GEOSERVER_URL, sld, layer_name, USERNAME, PASSWORD):
+    """Upload the SLD to GeoServer."""
+    style_name = f"{WORKSPACE}:{layer_name}"
+    url = f"{GEOSERVER_URL}/rest/styles"
+    headers = {"Content-Type": "application/vnd.ogc.sld+xml"}
+    params = {"name": layer_name}
+
+    response = requests.post(url, auth=(USERNAME, PASSWORD), headers=headers, params=params, data=sld)
+
+    print(f"Response Code: {response.status_code}")
+    print(f"Response Text: {response.text}")
+
+    if response.status_code == 201:
+        print(f"SLD for layer {layer_name} uploaded successfully.")
+    else:
+        print(f"Failed to upload SLD for {layer_name}: {response.text}")
+
+    return style_name
+    
 def create_ready_file(base_path, run: str, date: str) -> None:
     """Create a ready file to indicate that the process is complete."""
     data_path = base_path

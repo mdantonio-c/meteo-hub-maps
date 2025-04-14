@@ -21,6 +21,7 @@ services:
     volumes:
       - ${GEOTIFF_DIR}:/meteo
       - ${DATA_DIR}/geoserver_data:/geoserver_data
+      - ${DATA_DIR}/../projects/maps/builds/geoserver/SLDs:/SLDs
   celerybeat:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
