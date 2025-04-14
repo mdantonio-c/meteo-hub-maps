@@ -212,6 +212,7 @@ def get_geoserver_ready_file(base_path: Path, area: str) -> Optional[Path]:
     try:
         res = ready_files.sort(key=lambda x: datetime.strptime(x.name.split(".")[0], "%Y%m%d%H"))[0]
     except Exception as e:
+        log.warning(f"Error sorting .READY files: {e}")
         res = None
     return res
 
