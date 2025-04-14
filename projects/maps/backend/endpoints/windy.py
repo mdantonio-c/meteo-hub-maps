@@ -81,7 +81,7 @@ class WindyEndpoint(EndpointResource):
 
         if not ready_file:
             raise NotFound("No .READY file found")
-
+        log.info(f"Ready file: {ready_file}")
         if not foldername:
             response = {
                 "dataset": dataset,
