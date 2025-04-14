@@ -208,7 +208,8 @@ def get_geoserver_ready_file(base_path: Path, area: str) -> Optional[Path]:
     if not ready_files:
         return None
 
-    log.info(f".READY files found: {ready_files[0].__dict__}")
+    log.info(f".READY files found: {ready_files[0].name}")
+    log.info(f".READY files found: {ready_files[0].path}")
     try:
         res = ready_files.sort(key=lambda x: datetime.strptime(x.name.split(".")[0], "%Y%m%d%H"))[0]
     except Exception as e:
