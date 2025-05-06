@@ -47,8 +47,13 @@ def check_latest_data_and_trigger_geoserver_import(
         latest_ready_date = latest_ready_file.split(".")[0]
         
         if os.path.exists(celery_checked_path):
-            log.info(f"Skipping {latest_ready_file} as it has already been checked")
-            return
+            # if more than 10 minutes since last check, create a new CELERY.CHECKED file
+            if (datetime.now() - datetime.fromtimestamp(os.path.getmtime(celery_checked_path))).total_seconds() > 600:
+                os.remove(celery_checked_path)
+                log.info(f"Deleted {celery_checked_path} as it was older than 10 minutes")
+            else:
+                log.info(f"Skipping {latest_ready_file} as it has already been checked within the last 10 minutes")
+                return
 
         # Create a CELERY.CHECKED file for the latest .READY file
         celery_checked_path = os.path.join(latest_ready_path, f"{latest_ready_date}.CELERY.CHECKED")
