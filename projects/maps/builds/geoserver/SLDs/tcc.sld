@@ -9,8 +9,7 @@
         <sld:Rule>
           <sld:RasterSymbolizer>
             <sld:ColorMap type="intervals">
-              <sld:ColorMapEntry color="#ecefe9" quantity="20" opacity="0"/>
-              <sld:ColorMapEntry color="#ecefe9" quantity="50"/>
+              <sld:ColorMapEntry color="#ecefe9" quantity="50" opacity="0" />
               <sld:ColorMapEntry color="#dde7dc" quantity="60"/>
               <sld:ColorMapEntry color="#cbded1" quantity="70"/>
               <sld:ColorMapEntry color="#b3d0c7" quantity="80"/>
@@ -25,4 +24,3 @@
     </sld:UserStyle>
   </sld:NamedLayer>
 </sld:StyledLayerDescriptor>
-
