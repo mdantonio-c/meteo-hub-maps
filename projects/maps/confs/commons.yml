@@ -59,6 +59,7 @@ services:
 
   geoserver:
     image: meteo-hub-geoserver:${PROJECT_VERSION}
+    restart: unless-stopped
     build:
       context: ${PROJECT_DIR}/builds/geoserver
       args:
@@ -87,6 +88,12 @@ services:
     volumes:
       - ${DATA_DIR}/geoserver_data:/opt/geoserver_data
       # - ${DATA_DIR}/geoserver/settings:/settings
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/geoserver/meteohub/wms?service=WMS&version=1.1.0&request=GetMap&layers=meteohub%3At2m-t2m&bbox=2.9875%2C33.69%2C22.012500000000003%2C48.91&width=768&height=614&srs=EPSG%3A4326&styles=&format=image%2Fjpeg"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     logging:
       driver: "json-file"
       options:
