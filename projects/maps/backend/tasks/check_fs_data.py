@@ -134,13 +134,9 @@ def check_latest_data_and_trigger_geoserver_import_seasonal(
         c = celery.get_instance()
         # For seasonal data, we'll use a different task or parameters
         c.celery_app.send_task(
-            "update_geoserver_seasonal_data",
+            "update_geoserver_seasonal_layers",
             args=(
-                GEOSERVER_URL,
                 latest_ready_date,
-                USERNAME,
-                PASSWORD,
-                seasonal_path,
             )
         )
         log.info(f"Triggered seasonal data update for {latest_ready_date}")

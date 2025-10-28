@@ -90,8 +90,6 @@ class StartMonitoring(EndpointResource):
     @check_ip_access(ALLOWED_IPS)
     def post(self):
         c = celery.get_instance()
-        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_windy"):
-            return self.response("Monitoring already started", code=202)
         # Create a periodic task to check for the latest data and trigger Geoserver import
         task = c.create_crontab_task(
             name="check_latest_data_and_trigger_geoserver_import_windy",
@@ -102,9 +100,7 @@ class StartMonitoring(EndpointResource):
             month_of_year="*",
             task="check_latest_data_and_trigger_geoserver_import_windy",
             args=[],
-        )
-        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_seasonal"):
-            return self.response("Monitoring already started", code=202)
+        )            
         task = c.create_crontab_task(
             name="check_latest_data_and_trigger_geoserver_import_seasonal",
             hour="*",
@@ -113,8 +109,8 @@ class StartMonitoring(EndpointResource):
             day_of_month="*",
             month_of_year="*",
             task="check_latest_data_and_trigger_geoserver_import_seasonal",
-            args=[],
-        )
+            args=[]
+            )
         return self.response("Monitoring started", code=202)
     
     @decorators.endpoint(

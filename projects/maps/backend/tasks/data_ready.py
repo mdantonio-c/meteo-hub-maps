@@ -1,3 +1,4 @@
+from restapi.env import Env
 from restapi.connectors.celery import CeleryExt
 from restapi.utilities.logs import log
 from typing import Optional
@@ -7,13 +8,22 @@ import re
 from datetime import datetime
 from .geoserver_utils import (
     create_ready_file_generic,
+    create_celery_checked_ready_file_generic,
     create_workspace_generic,
     upload_sld_generic,
     process_sld_files,
+    update_slds_from_local_folders,
     upload_geotiff_generic,
     publish_layer_generic,
     associate_sld_with_layer_generic
 )
+from .upload_image_mosaic import enable_time_dimension
+
+# Get GeoServer credentials for seasonal task
+GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
+USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
+PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
+
 
 sld_dir_mapping = {
     "hcc": ["cloud_hml-hcc"],
@@ -28,35 +38,25 @@ sld_dir_mapping = {
     "sf_6_12_24": ["snow6-snow", "snow12-snow", "snow24-snow"],
     "t2m": ["t2m-t2m"],
     "ws10m": ["wind-10u", "wind-10v", "wind-vmax_10m"],
-    "temp_anomaly": ["seasonal_ano_max_TM", "seasonal_ano_min_Tm"],
-    "precip_anomaly": ["seasonal_ano_P"],
-    "precip_sum": ["seasonal_sum_P"],
+    "temp_anomaly": ["seasonal-ano-max-TM", "seasonal-ano-min-Tm", "seasonal-mean-TM", "seasonal-mean-Tm"],
+    "precip_anomaly": ["seasonal-ano-P"],
+    "precip_sum": ["seasonal-sum-P"],
+}
+
+# Mapping of seasonal directories to their corresponding names in copies
+seasonal_to_copies_mapping = {
+    "ano_max_TM": "seasonal-ano-max-TM",
+    "ano_min_Tm": "seasonal-ano-min-Tm", 
+    "ano_P": "seasonal-ano-P",
+    "mean_TM": "seasonal-mean-TM",
+    "mean_Tm": "seasonal-mean-Tm",
+    "sum_P": "seasonal-sum-P",
 }
 
 COVERAGESTORE_PREFIX = "tiff_store"
 DEFAULT_STORE_NAME = "tiff_store"
 WORKSPACE = "meteohub"
 WINDY_BASE_DIRECTORY: str = "/windy"
-
-@CeleryExt.task(idempotent=True)
-def update_geoserver_layers(
-    self,
-    GEOSERVER_URL: str,
-    USERNAME: str,
-    PASSWORD: str,
-    run: str,
-    date: str = datetime.now().strftime("%Y%m%d"),
-    sld_directory: Optional[str] = None,
-) -> None:
-    log.info("Updating geoserver layers")
-    
-    # Clean up old windy stores first
-    from .geoserver_utils import cleanup_old_windy_stores
-    cleanup_old_windy_stores(GEOSERVER_URL, USERNAME, PASSWORD, date)
-    
-    # Update geoserver layers
-    process_tiff_files(WINDY_BASE_DIRECTORY, sld_directory, GEOSERVER_URL, USERNAME, PASSWORD, run)
-    create_ready_file(WINDY_BASE_DIRECTORY, run, date)
 
 def create_ready_file(base_path, run: str, date: str) -> None:
     """Create a ready file to indicate that the process is complete."""
@@ -71,6 +71,11 @@ def create_workspace(GEOSERVER_URL, USERNAME, PASSWORD):
 
 def upload_geotiff(GEOSERVER_URL, file_path, store_name, USERNAME, PASSWORD):
     """Upload a GeoTIFF file to GeoServer."""
+    # Clean the file_path by removing 'geoserver_data/' prefix if present
+    if file_path.startswith('/geoserver_data/'):
+        file_path = file_path[len('/geoserver_data/'):]
+    elif file_path.startswith('geoserver_data/'):
+        file_path = file_path[len('geoserver_data/'):]
     return upload_geotiff_generic(GEOSERVER_URL, file_path, store_name, USERNAME, PASSWORD)
 
 def sanitize_layer_name(layer_name):
@@ -105,10 +110,10 @@ def process_tiff_files(base_path, sld_directory, GEOSERVER_URL, USERNAME, PASSWO
     create_workspace(GEOSERVER_URL, USERNAME, PASSWORD)
     data_path = os.path.join(base_path, f"Windy-{run}-ICON_2I_all2km.web/Italia")
     
-    # Process SLD files using generic function
-    sld_files = process_sld_files(sld_directory)
-    for sld_name, sld_content in sld_files.items():
-        upload_sld(GEOSERVER_URL, sld_content, sld_name, USERNAME, PASSWORD)
+    # Update SLD files from local folders to GeoServer
+    sld_update_success = update_slds_from_local_folders(sld_directory, GEOSERVER_URL, USERNAME, PASSWORD)
+    if not sld_update_success:
+        log.warning("Some SLD updates failed, but continuing with processing")
     for root, _, files in os.walk(data_path):
         for file in files:
             if file.endswith(".tif"):
@@ -127,122 +132,253 @@ def process_tiff_files(base_path, sld_directory, GEOSERVER_URL, USERNAME, PASSWO
 
 
 # === SEASONAL DATA FUNCTIONS ===
-def process_seasonal_data(seasonal_path: str, geoserver_url: str, username: str, password: str, date_identifier: str, sld_directory: str = "/geoserver_data/SLDs") -> None:
-    """Process seasonal data and upload to GeoServer."""
-    log.info(f"Processing seasonal data from {seasonal_path}")
-    
-    # Create workspace
-    if not create_workspace_generic(geoserver_url, username, password):
-        log.error("Failed to create workspace for seasonal data")
-        return
-    
-    # Upload SLD files first
-    log.info("Uploading SLD files for seasonal data")
-    sld_files = process_sld_files(sld_directory)
-    for sld_name, sld_content in sld_files.items():
-        upload_sld_generic(geoserver_url, sld_content, sld_name, username, password)
+
+SEASONAL_BASE_DIRECTORY: str = "/seasonal-aim"
+
+def create_seasonal_ready_file(base_path, date_identifier: str) -> None:
+    """Create a ready file to indicate that the seasonal process is complete."""
+    create_ready_file_generic(base_path, date_identifier, "seasonal")
+
+def process_seasonal_tiff_files(base_path, sld_directory, geoserver_url, username, password, date_identifier):
+    """Iterate over seasonal TIFF files and upload them to GeoServer with temporal dimension."""
+    create_workspace(geoserver_url, username, password)
     
     # Clean up old seasonal stores first
     from .geoserver_utils import cleanup_old_seasonal_stores
     cleanup_old_seasonal_stores(geoserver_url, username, password, date_identifier)
     
-    # Process each subdirectory in seasonal data
+    
+    # Update SLD files from local folders to GeoServer
+    sld_update_success = update_slds_from_local_folders(sld_directory, geoserver_url, username, password)
+    if not sld_update_success:
+        log.warning("Some SLD updates failed, but continuing with processing")
+    
+    # Process each seasonal subdirectory
     seasonal_subdirs = ['ano_max_TM', 'ano_min_Tm', 'ano_P', 'mean_TM', 'mean_Tm', 'sum_P']
     
     for subdir in seasonal_subdirs:
-        subdir_path = os.path.join(seasonal_path, subdir)
-        if os.path.exists(subdir_path):
-            log.info(f"Processing seasonal subdirectory: {subdir}")
-            process_seasonal_subdir(subdir_path, subdir, geoserver_url, username, password)
-        else:
+        subdir_path = os.path.join(base_path, subdir)
+        if not os.path.exists(subdir_path):
             log.warning(f"Seasonal subdirectory not found: {subdir_path}")
+            continue
+            
+        log.info(f"Processing seasonal subdirectory: {subdir}")
+        
+        # Create copies directory for temporal mosaics
+        copies_base = "/geoserver_data/copies"
+        seasonal_copies_name = seasonal_to_copies_mapping.get(subdir)
+        if not seasonal_copies_name:
+            log.warning(f"No copies mapping found for seasonal directory: {subdir}")
+            continue
+            
+        copies_target = os.path.join(copies_base, seasonal_copies_name)
+        
+        # Remove old files from copies directory before copying new ones
+        import shutil
+        if os.path.exists(copies_target):
+            log.info(f"Cleaning existing copies directory: {copies_target}")
+            shutil.rmtree(copies_target)
+        
+        os.makedirs(copies_target, exist_ok=True)
+        log.info(f"Created clean copies directory: {copies_target}")
+        
+        # Copy TIFF files to copies directory for mosaic creation
+        tiff_files_copied = 0
+        for file in os.listdir(subdir_path):
+            if file.endswith(('.tif', '.tiff')):
+                source_file = os.path.join(subdir_path, file)
+                target_file = os.path.join(copies_target, file)
+                
+                try:
+                    shutil.copy2(source_file, target_file)
+                    tiff_files_copied += 1
+                    log.debug(f"Copied seasonal file: {file}")
+                except Exception as e:
+                    log.error(f"Failed to copy seasonal file {file}: {e}")
+        
+        if tiff_files_copied > 0:
+            log.info(f"Copied {tiff_files_copied} seasonal TIFF files to {seasonal_copies_name}")
+            
+            # Create temporal mosaic configuration files
+            create_seasonal_temporal_config(copies_target, seasonal_copies_name)
+            
+            # Create and publish temporal mosaic in GeoServer
+            store_name = f"mosaic_{seasonal_copies_name}"
+            layer_name = seasonal_copies_name
+            
+            # Upload as ImageMosaic (temporal) - use generic function directly to preserve path handling
+            if upload_geotiff_generic(geoserver_url, copies_target, store_name, username, password):
+                # Publish the temporal layer
+                if publish_layer_generic(geoserver_url, store_name, layer_name, username, password, coverage_name=layer_name):
+                    # Enable temporal dimension using custom function for seasonal data
+                    enable_seasonal_time_dimension(geoserver_url, store_name, layer_name, username, password)
+                    
+                    # Find and associate appropriate SLD
+                    sld_name = find_seasonal_sld_mapping(subdir)
+                    if sld_name:
+                        associate_sld_with_layer(geoserver_url, layer_name, sld_name, username, password)
+                        log.info(f"Successfully processed seasonal temporal layer: {layer_name}")
+                    else:
+                        log.warning(f"No SLD found for seasonal layer: {layer_name}")
+                else:
+                    log.error(f"Failed to publish seasonal temporal layer: {layer_name}")
+            else:
+                log.error(f"Failed to upload seasonal temporal mosaic: {store_name}")
+        else:
+            log.warning(f"No TIFF files found in seasonal directory: {subdir_path}")
+
+def create_seasonal_temporal_config(target_dir: str, layer_name: str) -> None:
+    """Create temporal mosaic configuration files for seasonal data."""
+    
+    # Create indexer.properties with temporal dimension
+#     indexer_content = f"""PropertyCollectors=TimestampFileNameExtractorSPI[timeregex](time)
+# TimeAttribute=time
+# Schema=*the_geom:Polygon,location:String,time:java.util.Date
+# Name={layer_name}
+# TypeName={layer_name}
+# Levels=1.0
+# LevelsNum=1
+# Heterogeneous=false
+# AbsolutePath=false
+# LocationAttribute=location
+# SuggestedSPI=it.geosolutions.imageioimpl.plugins.tiff.TIFFImageReaderSpi
+# CheckAuxiliaryMetadata=false
+# """
+    indexer_content = f"""PropertyCollectors=TimestampFileNameExtractorSPI[timeregex](time)
+    TimeAttribute=time
+    Schema=*the_geom:Polygon,location:String,time:java.util.Date
+"""
+    
+    indexer_path = os.path.join(target_dir, "indexer.properties")
+    try:
+        with open(indexer_path, 'w') as f:
+            f.write(indexer_content)
+        log.info(f"Created temporal indexer.properties for {layer_name}")
+    except Exception as e:
+        log.error(f"Failed to create temporal indexer.properties for {layer_name}: {e}")
+    
+    # Create timeregex.properties for seasonal date extraction
+    # Seasonal files typically have format: ano_P_20251028.tif (YYYYMMDD)
+    timeregex_content = "regex=.*([0-9]{8}).*,format=yyyyMMdd\n"
+    
+    timeregex_path = os.path.join(target_dir, "timeregex.properties")
+    try:
+        with open(timeregex_path, 'w') as f:
+            f.write(timeregex_content)
+        log.info(f"Created timeregex.properties for {layer_name}")
+    except Exception as e:
+        log.error(f"Failed to create timeregex.properties for {layer_name}: {e}")
+    
+    # Create layer properties file
+#     properties_content = f"""Name={layer_name}
+# TypeName={layer_name}
+# AbsolutePath=false
+# Caching=false
+# ExpandToRGB=false
+# LocationAttribute=location
+# TimeAttribute=time
+# """
+    
+#     properties_path = os.path.join(target_dir, f"{layer_name}.properties")
+#     try:
+#         with open(properties_path, 'w') as f:
+#             f.write(properties_content)
+#         log.info(f"Created temporal {layer_name}.properties")
+#     except Exception as e:
+#         log.error(f"Failed to create temporal {layer_name}.properties: {e}")
 
 
-def find_seasonal_sld(layer_name: str) -> Optional[str]:
-    """Find the appropriate SLD for a seasonal layer based on its name."""
-    for sld_name, sld_layers in sld_dir_mapping.items():
-        for pattern in sld_layers:
-            if pattern in layer_name:
-                log.info(f"Found SLD '{sld_name}' for layer '{layer_name}' (pattern: '{pattern}')")
-                return sld_name
-    log.info(f"No SLD found for seasonal layer: {layer_name}")
+
+def enable_seasonal_time_dimension(geoserver_url: str, store_name: str, layer_name: str, username: str, password: str) -> bool:
+    """Enable temporal dimension for seasonal layers."""
+    # The URL needs to use the store name for the coverage store and layer name for the coverage
+    url = f"{geoserver_url}/rest/workspaces/{WORKSPACE}/coveragestores/{store_name}/coverages/{layer_name}"
+    headers = {
+        "Content-Type": "application/xml",
+        "Accept": "application/xml"
+    }
+    data = f"""
+    <coverage>
+        <enabled>true</enabled>
+        <metadata>
+            <entry key="time">
+                <dimensionInfo>
+                    <enabled>true</enabled>
+                    <presentation>LIST</presentation>
+                    <units>ISO8601</units>
+                    <defaultValue>
+                        <strategy>MINIMUM</strategy>
+                    </defaultValue>
+                </dimensionInfo>
+            </entry>
+        </metadata>
+    </coverage>
+    """.strip()
+
+    response = requests.put(url, data=data, headers=headers, auth=(username, password))
+    if response.status_code not in [200, 201]:
+        log.error(f"Failed to enable time dimension for {layer_name}: {response.text}")
+        return False
+    log.info(f"Successfully enabled time dimension for seasonal layer: {layer_name}")
+    return True
+
+def find_seasonal_sld_mapping(seasonal_dir: str) -> Optional[str]:
+    """Find the appropriate SLD for a seasonal directory."""
+    seasonal_sld_mapping = {
+        "ano_max_TM": "temp_anomaly",
+        "ano_min_Tm": "temp_anomaly", 
+        "ano_P": "precip_anomaly",
+        "mean_TM": "temp_anomaly",
+        "mean_Tm": "temp_anomaly",
+        "sum_P": "precip_sum"
+    }
+    
+    sld_name = seasonal_sld_mapping.get(seasonal_dir)
+    if sld_name:
+        log.info(f"Found SLD '{sld_name}' for seasonal directory '{seasonal_dir}'")
+        return sld_name
+    
+    log.warning(f"No SLD mapping found for seasonal directory: {seasonal_dir}")
     return None
 
-
-def process_seasonal_subdir(subdir_path: str, subdir_name: str, geoserver_url: str, username: str, password: str) -> None:
-    """Process a single seasonal data subdirectory."""
-    # Find TIFF files in the subdirectory
-    tiff_files = []
-    for root, _, files in os.walk(subdir_path):
-        for file in files:
-            if file.endswith(".tif") or file.endswith(".tiff"):
-                tiff_files.append(os.path.join(root, file))
+@CeleryExt.task(idempotent=True)
+def update_slds_from_local(
+    self,
+    geoserver_url: str = GEOSERVER_URL,
+    username: str = USERNAME,
+    password: str = PASSWORD,
+    sld_base_directory: Optional[str] = "/SLDs",
+) -> None:
+    """Update GeoServer SLD styles from local folder structure."""
+    log.info("Updating GeoServer SLD styles from local folders")
     
-    if not tiff_files:
-        log.warning(f"No TIFF files found in {subdir_path}")
+    if not sld_base_directory:
+        log.error("No SLD base directory specified")
         return
     
-    log.info(f"Found {len(tiff_files)} TIFF files in {subdir_name}")
+    # Update SLD files from local folders to GeoServer
+    success = update_slds_from_local_folders(sld_base_directory, geoserver_url, username, password)
     
-    # Process each TIFF file
-    for tiff_file in tiff_files:
-        file_name = os.path.splitext(os.path.basename(tiff_file))[0]
-        # Keep store_name with prefix for internal GeoServer management
-        store_name = f"{COVERAGESTORE_PREFIX}_seasonal_{subdir_name}_{file_name}"
-        # Use clean layer name without "tiff_store_" prefix
-        layer_name = f"seasonal_{subdir_name}_{file_name}"
-        
-        # Upload GeoTIFF using generic function
-        if upload_geotiff_generic(geoserver_url, tiff_file, store_name, username, password):
-            # Publish layer with clean name (coverage name will be the clean layer_name)
-            if publish_layer_generic(geoserver_url, store_name, layer_name, username, password, coverage_name=layer_name):
-                # Find and associate appropriate SLD
-                sld_name = find_seasonal_sld(layer_name)
-                if sld_name:
-                    if associate_sld_with_layer_generic(geoserver_url, layer_name, sld_name, username, password):
-                        log.info(f"Successfully associated SLD '{sld_name}' with layer '{layer_name}'")
-                    else:
-                        log.warning(f"Failed to associate SLD '{sld_name}' with layer '{layer_name}'")
-                
-                log.info(f"Successfully processed seasonal data: {layer_name}")
-            else:
-                log.warning(f"Failed to publish layer for: {layer_name}")
-
+    if success:
+        log.info("Successfully updated all SLD styles from local folders")
+    else:
+        log.warning("Some SLD updates failed - check logs for details")
 
 @CeleryExt.task(idempotent=True)
-def update_geoserver_seasonal_data(
-    self,
-    geoserver_url: str,
-    date_identifier: str,
-    username: Optional[str] = None,
-    password: Optional[str] = None,
-    seasonal_path: str = "/data/seasonal-aim",
+def update_geoserver_seasonal_layers(
+    self = None,
+    date: str = datetime.now().strftime("%Y%m%d"),
+    geoserver_url: str = GEOSERVER_URL,
+    username: str = USERNAME,
+    password: str = PASSWORD,
+    sld_directory: Optional[str] = "/SLDs/seasonal",
 ) -> None:
-    """
-    Update GeoServer with seasonal data.
-    """
-    log.info(f"Starting seasonal data update for {date_identifier}")
+    """Update GeoServer with seasonal layers following the same pattern as windy layers."""
+    log.info("Updating GeoServer seasonal layers with temporal dimension")
     
-    # Get credentials from environment if not provided
-    if username is None:
-        username = os.getenv("GEOSERVER_ADMIN_USER")
-    if password is None:
-        password = os.getenv("GEOSERVER_ADMIN_PASSWORD")
     
-    if not username or not password:
-        log.error("GeoServer credentials not provided")
-        return
+    # Process seasonal TIFF files with temporal dimension
+    process_seasonal_tiff_files(SEASONAL_BASE_DIRECTORY, sld_directory, geoserver_url, username, password, date)
     
-    try:
-        # Process seasonal data with SLD directory
-        sld_directory = "/SLDs/seasonal"  # Path inside container
-        process_seasonal_data(seasonal_path, geoserver_url, username, password, date_identifier, sld_directory)
-        
-        # Create ready file
-        create_ready_file_generic(seasonal_path, date_identifier, "seasonal")
-        
-        log.info(f"Seasonal data update completed for {date_identifier}")
-        
-    except Exception as e:
-        log.error(f"Error updating seasonal data: {e}")
-        raise
+    # Create final ready file
+    create_seasonal_ready_file(SEASONAL_BASE_DIRECTORY, date)

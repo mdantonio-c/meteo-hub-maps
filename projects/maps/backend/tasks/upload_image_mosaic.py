@@ -64,7 +64,6 @@ def update_geoserver_image_mosaic(
                 print(f"📂 Processing folder: {folder}")
                 process_and_rename_tiffs(date_edit, run, folder, TIFF_DIR)
             if ensure_tiff_files_exist(folder, TIFF_DIR):
-                # delete_coverage_store()
                 create_image_mosaic_store(folder, GEOSERVER_URL)
             publish_layer(folder, GEOSERVER_URL)
             bind_sld(folder, GEOSERVER_URL)
@@ -190,34 +189,28 @@ def process_and_rename_tiffs(base_date_str, start_hour, folder, TIFF_DIR):
 
 # === UTILS ===
 def create_image_mosaic_store(folder, GEOSERVER_URL):
-    url = f"{GEOSERVER_URL}/rest/workspaces/{WORKSPACE}/coveragestores"
-    headers = {"Content-Type": "text/xml"}
-    data = f"""
-    <coverageStore>
-        <name>{folder}</name>
-        <type>ImageMosaic</type>
-        <enabled>true</enabled>
-        <workspace>{WORKSPACE}</workspace>
-        <url>file:{os.path.join(GEOSERVER_DATA_DIR, folder)}</url>
-    </coverageStore>
-    """.strip()
-
-    r = requests.post(url, data=data, headers=headers,
-                      auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD))
-    # If store already exists (HTTP 409), try updating it
-    if r.status_code in [409, 500]:
-        print("⚠️ Coverage store already exists. Trying to update...")
-        update_url = f"{GEOSERVER_URL}/rest/workspaces/{WORKSPACE}/coveragestores/{folder}"
-        r = requests.put(update_url, data=data, headers=headers,
-                         auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD))
-        if r.status_code in [200, 201]:
-            print("✅ Updated existing coverage store.")
-            return True
-        else:
-            print("❌ Failed to update existing coverage store:", r.text)
-            return False
-    if r.status_code not in [200, 201]:
-        print("❌ Failed to create coverage store:",r.status_code,  r.text)
+    """Create or refresh an ImageMosaic store with improved handling."""
+    from .geoserver_utils import upload_geotiff_generic
+    
+    # Use the directory path for the mosaic
+    mosaic_path = os.path.join(GEOSERVER_DATA_DIR, folder)
+    
+    # Use the improved generic function that handles ImageMosaic updates properly
+    success = upload_geotiff_generic(
+        geoserver_url=GEOSERVER_URL,
+        file_path=mosaic_path,
+        store_name=folder,
+        username=GEOSERVER_USERNAME,
+        password=GEOSERVER_PASSWORD,
+        workspace=WORKSPACE
+    )
+    
+    if success:
+        print(f"✅ Successfully created/updated ImageMosaic store: {folder}")
+        return True
+    else:
+        print(f"❌ Failed to create/update ImageMosaic store: {folder}")
+        return False
         return False
     print("✅ Created coverage store.")
     return True
@@ -319,19 +312,3 @@ def ensure_tiff_files_exist(folder, TIFF_DIR):
         return False
     print(f"📁 Found {len(tiff_files)} TIFF files.")
     return True
-
-# # === MAIN ===
-# if __name__ == "__main__":
-#     for folder in os.listdir(TIFF_DIR):
-#         folder_path = os.path.join(TIFF_DIR, folder)
-#         if os.path.isdir(folder_path):
-#             flat_sld_dirs = [item for sublist in sld_dir_mapping.values() for item in sublist]
-#             if folder in flat_sld_dirs:
-#                 print(f"📂 Processing folder: {folder}")
-#                 process_and_rename_tiffs("2025-04-09", 12, folder)
-#             if ensure_tiff_files_exist(folder):
-#                 # delete_coverage_store()
-#                 create_image_mosaic_store(folder)
-#             publish_layer(folder)
-#             bind_sld(folder)
-#             enable_time_dimension(folder)
