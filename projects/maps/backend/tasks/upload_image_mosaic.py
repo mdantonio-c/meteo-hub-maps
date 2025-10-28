@@ -104,16 +104,16 @@ def create_or_update_sld(folder: str, sld_directory: str) -> None:
         print(f"Failed to update style. Status code: {response.status_code}")
         print(response.text)
         upload_sld(
-            GEOSERVER_URL,
-            sld=sld_content,
+            geoserver_url=GEOSERVER_URL,
+            sld_content=sld_content,
             layer_name=style_name,
-            USERNAME=GEOSERVER_USERNAME,
-            PASSWORD=GEOSERVER_PASSWORD,
+            username=GEOSERVER_USERNAME,
+            password=GEOSERVER_PASSWORD,
         )
         
-def upload_sld(GEOSERVER_URL, sld, layer_name, USERNAME, PASSWORD):
-    """Upload the SLD to GeoServer."""
-    return upload_sld_generic(GEOSERVER_URL, sld, layer_name, USERNAME, PASSWORD)
+def upload_sld(geoserver_url, sld_content, layer_name, username, password):
+    """Unified function to upload the SLD to GeoServer."""
+    return upload_sld_generic(geoserver_url, sld_content, layer_name, username, password)
     
 def create_ready_file(base_path, run: str, date: str) -> None:
     """Create a ready file to indicate that the process is complete."""
