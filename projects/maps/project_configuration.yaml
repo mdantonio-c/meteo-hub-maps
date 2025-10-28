@@ -19,5 +19,6 @@ variables:
     SET_MAX_REQUESTS_PER_SECOND_API: 999999
     PLATFORM: G100
     DATA_PATH: /meteo
-    GEOTIFF_DIR: ${DATA_DIR}/maps
+    WINDY_GEOTIFF_DIR: ${DATA_DIR}/maps
+    SEASONAL_GEOTIFF_DIR: ${DATA_DIR}/seasonal-aim
     ALLOWED_IPS: {}

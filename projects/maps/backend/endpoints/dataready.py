@@ -90,17 +90,29 @@ class StartMonitoring(EndpointResource):
     @check_ip_access(ALLOWED_IPS)
     def post(self):
         c = celery.get_instance()
-        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import"):
+        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_windy"):
             return self.response("Monitoring already started", code=202)
         # Create a periodic task to check for the latest data and trigger Geoserver import
         task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_geoserver_import",
+            name="check_latest_data_and_trigger_geoserver_import_windy",
             hour="*",
             minute="*",
             day_of_week="*",
             day_of_month="*",
             month_of_year="*",
-            task="check_latest_data_and_trigger_geoserver_import",
+            task="check_latest_data_and_trigger_geoserver_import_windy",
+            args=[],
+        )
+        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_seasonal"):
+            return self.response("Monitoring already started", code=202)
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import_seasonal",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import_seasonal",
             args=[],
         )
         return self.response("Monitoring started", code=202)
@@ -113,9 +125,12 @@ class StartMonitoring(EndpointResource):
     @check_ip_access(ALLOWED_IPS)
     def delete(self):
         c = celery.get_instance()
-        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import"):
-            res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import")
-            if res:
-                return self.response("Monitoring has been disabled", code=202)
+        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_windy"):
+            res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_windy")
+        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_seasonal"):
+            res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_seasonal")
+            log.info(f"Deleted periodic task: {res}")
+        if res:
+            return self.response("Monitoring has been disabled", code=202)
         # Create a periodic task to check for the latest data and trigger Geoserver import
         return self.response("Monitoring is not active", code=202)

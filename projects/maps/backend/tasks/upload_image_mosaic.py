@@ -9,6 +9,12 @@ from datetime import datetime
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
 import shutil
+from .geoserver_utils import (
+    create_ready_file_generic,
+    create_workspace_generic,
+    upload_sld_generic,
+    process_sld_files
+)
 
 sld_dir_mapping = {
     "hcc": ["cloud_hml-hcc"],
@@ -33,7 +39,7 @@ GEOSERVER_PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 WORKSPACE = "meteohub"
 RENAMED_FILES = "copies"
-BASE_PATH = "/meteo"
+BASE_PATH = "/windy"
 # TIFF_DIR = f"{BASE_PATH}/Windy-12-ICON_2I_all2km.web/Italia"  # Local path containing .tiff files
 GEOSERVER_HOST_PATH = f"/geoserver_data/{RENAMED_FILES}"
 GEOSERVER_DATA_DIR = f"geoserver_data/{RENAMED_FILES}/"  # Path where GeoServer can access TIFFs
@@ -44,8 +50,9 @@ def update_geoserver_image_mosaic(
     GEOSERVER_URL: str,
     run: str,
     date: str = datetime.now().strftime("%Y-%m-%d"),
-    sld_directory: Optional[str] = "/SLDs",
+    sld_directory: str = "/SLDs",
 ) -> None:
+    sld_directory = os.path.join(sld_directory, "windy")
     update_styles(sld_directory)
     TIFF_DIR = f"{BASE_PATH}/Windy-{run}-ICON_2I_all2km.web/Italia"
     date_edit = datetime.strptime(date, "%Y%m%d").strftime("%Y-%m-%d")
@@ -74,17 +81,17 @@ def create_or_update_sld(folder: str, sld_directory: str) -> None:
     style_name = folder.rsplit('.')[0]
     sld_path = os.path.join(sld_directory, folder)
     if not os.path.exists(sld_path):
-        print(f"❌ SLD directory does not exist: {sld_path}")
+        print(f"❌ SLD path does not exist: {sld_path}")
         return
 
-    # Check if SLD file exists
+    # Check if SLD file exists and is a file (not directory)
     sld_file = sld_path
-    if not os.path.exists(sld_file):
-        print(f"❌ SLD file does not exist: {sld_file}")
+    if not os.path.isfile(sld_file):
+        print(f"❌ SLD file does not exist or is not a file: {sld_file}")
         return
 
-    with open(sld_file, 'rb') as sld_file:
-        sld_content = sld_file.read()
+    with open(sld_file, 'rb') as f:
+        sld_content = f.read()
         
     url = f"{GEOSERVER_URL}/rest/styles/{style_name}"
     headers = {
@@ -106,30 +113,12 @@ def create_or_update_sld(folder: str, sld_directory: str) -> None:
         
 def upload_sld(GEOSERVER_URL, sld, layer_name, USERNAME, PASSWORD):
     """Upload the SLD to GeoServer."""
-    style_name = f"{WORKSPACE}:{layer_name}"
-    url = f"{GEOSERVER_URL}/rest/styles"
-    headers = {"Content-Type": "application/vnd.ogc.sld+xml"}
-    params = {"name": layer_name}
-
-    response = requests.post(url, auth=(USERNAME, PASSWORD), headers=headers, params=params, data=sld)
-
-    print(f"Response Code: {response.status_code}")
-    print(f"Response Text: {response.text}")
-
-    if response.status_code == 201:
-        print(f"SLD for layer {layer_name} uploaded successfully.")
-    else:
-        print(f"Failed to upload SLD for {layer_name}: {response.text}")
-
-    return style_name
+    return upload_sld_generic(GEOSERVER_URL, sld, layer_name, USERNAME, PASSWORD)
     
 def create_ready_file(base_path, run: str, date: str) -> None:
     """Create a ready file to indicate that the process is complete."""
-    data_path = base_path
-    ready_file_path = os.path.join(data_path, f"{date}{run}.GEOSERVER.READY")
-    with open(ready_file_path, "w") as f:
-        f.write(f"Run: {run}\nDate: {date}\n")
-    log.info(f"Ready file created at {ready_file_path}")    
+    identifier = f"{date}{run}"
+    create_ready_file_generic(base_path, identifier, "windy")    
 
 def write_mosaic_config_files(output_dir):
     indexer_content = """PropertyCollectors=TimestampFileNameExtractorSPI[timeregex](time)

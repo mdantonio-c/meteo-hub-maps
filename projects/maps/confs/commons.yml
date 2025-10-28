@@ -10,7 +10,8 @@ services:
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
     volumes:
-      - ${DATA_DIR}/maps:/meteo
+      - ${DATA_DIR}/maps:/windy
+      - ${DATA_DIR}/seasonal-aim:/seasonal-aim
   celery:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
@@ -19,7 +20,8 @@ services:
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
     volumes:
-      - ${GEOTIFF_DIR}:/meteo
+      - ${WINDY_GEOTIFF_DIR}:/windy
+      - ${SEASONAL_GEOTIFF_DIR}:/seasonal-aim
       - ${DATA_DIR}/geoserver_data:/geoserver_data
       - ${DATA_DIR}/../projects/maps/builds/geoserver/SLDs:/SLDs
   celerybeat:
