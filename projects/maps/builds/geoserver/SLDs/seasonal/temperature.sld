@@ -9,25 +9,45 @@
         <sld:Rule>
           <sld:RasterSymbolizer>
             <sld:ColorMap type="intervals">
-              <sld:ColorMapEntry color="#dbf4fb" quantity="5"/>
-              <sld:ColorMapEntry color="#8CE0F8" quantity="10"/>
-              <sld:ColorMapEntry color="#2BC7F3" quantity="20"/>
-              <sld:ColorMapEntry color="#71A2D6" quantity="30"/>
-              <sld:ColorMapEntry color="#4182C8" quantity="40"/>
-              <sld:ColorMapEntry color="#1B4674" quantity="50"/>
-              <sld:ColorMapEntry color="#0F2743" quantity="60"/>
-              <sld:ColorMapEntry color="#F9F262" quantity="80"/>
-              <sld:ColorMapEntry color="#F6EB13" quantity="100"/>
-              <sld:ColorMapEntry color="#EF782E" quantity="120"/>
-              <sld:ColorMapEntry color="#E22208" quantity="140"/>
-              <sld:ColorMapEntry color="#B11A06" quantity="160"/>
-              <sld:ColorMapEntry color="#8B1204" quantity="180"/>
-              <sld:ColorMapEntry color="#5B0C03" quantity="200"/>
-              <sld:ColorMapEntry color="#950E91" quantity="250"/>
-              <sld:ColorMapEntry color="#EE44E8" quantity="300"/>
-              <sld:ColorMapEntry color="#EA1FE3" quantity="400"/>
-              <sld:ColorMapEntry color="#B1AAB1" quantity="500"/>
-              <sld:ColorMapEntry color="#8D838D" quantity="1000"/>
+              <sld:ColorMapEntry color="#64007F" quantity="-30"/>
+              <sld:ColorMapEntry color="#78048D" quantity="-28"/>
+              <sld:ColorMapEntry color="#870898" quantity="-26"/>
+              <sld:ColorMapEntry color="#B414B9" quantity="-24"/>
+              <sld:ColorMapEntry color="#D41DD1" quantity="-22"/>
+              <sld:ColorMapEntry color="#F627EB" quantity="-20"/>
+              <sld:ColorMapEntry color="#57007F" quantity="-18"/>
+              <sld:ColorMapEntry color="#3E007F" quantity="-16"/>
+              <sld:ColorMapEntry color="#00287F" quantity="-14"/>
+              <sld:ColorMapEntry color="#003C7F" quantity="-12"/>
+              <sld:ColorMapEntry color="#00467F" quantity="-10"/>
+              <sld:ColorMapEntry color="#00528F" quantity="-8"/>
+              <sld:ColorMapEntry color="#0062AF" quantity="-6"/>
+              <sld:ColorMapEntry color="#0082EF" quantity="-4"/>
+              <sld:ColorMapEntry color="#259AFF" quantity="-2"/>
+              <sld:ColorMapEntry color="#5BB4FF" quantity="0"/>
+              <sld:ColorMapEntry color="#BBFFE2" quantity="2"/>
+              <sld:ColorMapEntry color="#9FEEC8" quantity="4"/>
+              <sld:ColorMapEntry color="#87D3AB" quantity="6"/>
+              <sld:ColorMapEntry color="#62AF88" quantity="8"/>
+              <sld:ColorMapEntry color="#07A127" quantity="10"/>
+              <sld:ColorMapEntry color="#21BB0E" quantity="12"/>
+              <sld:ColorMapEntry color="#52CA0B" quantity="14"/>
+              <sld:ColorMapEntry color="#9CE106" quantity="16"/>
+              <sld:ColorMapEntry color="#CEF003" quantity="18"/>
+              <sld:ColorMapEntry color="#F3FB01" quantity="20"/>
+              <sld:ColorMapEntry color="#F4D90B" quantity="22"/>
+              <sld:ColorMapEntry color="#F4BD0B" quantity="24"/>
+              <sld:ColorMapEntry color="#F4880B" quantity="26"/>
+              <sld:ColorMapEntry color="#F46D0B" quantity="28"/>
+              <sld:ColorMapEntry color="#E83709" quantity="30"/>
+              <sld:ColorMapEntry color="#C41A0A" quantity="32"/>
+              <sld:ColorMapEntry color="#AF0F14" quantity="34"/>
+              <sld:ColorMapEntry color="#7C0000" quantity="36"/>
+              <sld:ColorMapEntry color="#640000" quantity="38"/>
+              <sld:ColorMapEntry color="#B46464" quantity="40"/>
+              <sld:ColorMapEntry color="#F0A0A0" quantity="42"/>
+              <sld:ColorMapEntry color="#FFB4B4" quantity="44"/>
+              <sld:ColorMapEntry color="#FFDCDC" quantity="46"/>
             </sld:ColorMap>
             <sld:ContrastEnhancement/>
           </sld:RasterSymbolizer>
