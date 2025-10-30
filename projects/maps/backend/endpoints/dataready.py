@@ -121,6 +121,7 @@ class StartMonitoring(EndpointResource):
     @check_ip_access(ALLOWED_IPS)
     def delete(self):
         c = celery.get_instance()
+        res = None
         if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_windy"):
             res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_windy")
         if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_seasonal"):
