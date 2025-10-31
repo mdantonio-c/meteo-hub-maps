@@ -15,7 +15,8 @@ from .geoserver_utils import (
     update_slds_from_local_folders,
     upload_geotiff_generic,
     publish_layer_generic,
-    associate_sld_with_layer_generic
+    associate_sld_with_layer_generic,
+    check_style_exists
 )
 from .upload_image_mosaic import enable_time_dimension
 
@@ -148,11 +149,13 @@ def process_seasonal_tiff_files(base_path, sld_directory, geoserver_url, usernam
     from .geoserver_utils import cleanup_old_seasonal_stores
     cleanup_old_seasonal_stores(geoserver_url, username, password, date_identifier)
     
-    
-    # Update SLD files from local folders to GeoServer
+    # Update SLD files from local folders to GeoServer BEFORE processing layers
+    log.info(f"Updating seasonal SLD files from directory: {sld_directory}")
     sld_update_success = update_slds_from_local_folders(sld_directory, geoserver_url, username, password)
     if not sld_update_success:
         log.warning("Some SLD updates failed, but continuing with processing")
+    else:
+        log.info("Successfully updated all seasonal SLD files")
     
     # Process each seasonal subdirectory
     seasonal_subdirs = ['ano_max_TM', 'ano_min_Tm', 'ano_P', 'mean_TM', 'mean_Tm', 'sum_P']
@@ -217,16 +220,29 @@ def process_seasonal_tiff_files(base_path, sld_directory, geoserver_url, usernam
                     # Find and associate appropriate SLD
                     sld_name = find_seasonal_sld_mapping(subdir)
                     if sld_name:
-                        associate_sld_with_layer(geoserver_url, layer_name, sld_name, username, password)
-                        log.info(f"Successfully processed seasonal temporal layer: {layer_name}")
+                        log.info(f"Found SLD mapping: '{subdir}' -> '{sld_name}' for layer '{layer_name}'")
+                        
+                        # Check if the SLD style exists in GeoServer
+                        style_exists = check_style_exists(geoserver_url, sld_name, username, password)
+                        if style_exists:
+                            log.info(f"SLD style '{sld_name}' exists in GeoServer, proceeding with association")
+                            sld_success = associate_sld_with_layer(geoserver_url, layer_name, sld_name, username, password)
+                            if sld_success:
+                                log.info(f"Successfully processed seasonal temporal layer: {layer_name} with SLD: {sld_name}")
+                            else:
+                                log.error(f"Failed to associate SLD '{sld_name}' with layer '{layer_name}'")
+                        else:
+                            log.error(f"SLD style '{sld_name}' does not exist in GeoServer - check SLD upload process")
                     else:
-                        log.warning(f"No SLD found for seasonal layer: {layer_name}")
+                        log.warning(f"No SLD mapping found for seasonal directory: {subdir}, layer: {layer_name}")
                 else:
                     log.error(f"Failed to publish seasonal temporal layer: {layer_name}")
             else:
                 log.error(f"Failed to upload seasonal temporal mosaic: {store_name}")
         else:
             log.warning(f"No TIFF files found in seasonal directory: {subdir_path}")
+    
+    log.info(f"Completed processing all seasonal subdirectories for date: {date_identifier}")
 
 def create_seasonal_temporal_config(target_dir: str, layer_name: str) -> None:
     """Create temporal mosaic configuration files for seasonal data."""
@@ -329,8 +345,8 @@ def find_seasonal_sld_mapping(seasonal_dir: str) -> Optional[str]:
         "ano_max_TM": "temp_anomaly",
         "ano_min_Tm": "temp_anomaly", 
         "ano_P": "precip_anomaly",
-        "mean_TM": "temp_anomaly",
-        "mean_Tm": "temp_anomaly",
+        "mean_TM": "temperature",
+        "mean_Tm": "temperature",
         "sum_P": "precip_sum"
     }
     
@@ -351,7 +367,7 @@ def update_slds_from_local(
     sld_base_directory: Optional[str] = "/SLDs",
 ) -> None:
     """Update GeoServer SLD styles from local folder structure."""
-    log.info("Updating GeoServer SLD styles from local folders")
+    log.info(f"Updating GeoServer SLD styles from local folders: {sld_base_directory}")
     
     if not sld_base_directory:
         log.error("No SLD base directory specified")
@@ -372,11 +388,37 @@ def update_geoserver_seasonal_layers(
     geoserver_url: str = GEOSERVER_URL,
     username: str = USERNAME,
     password: str = PASSWORD,
-    sld_directory: Optional[str] = "/SLDs/seasonal",
+    sld_directory: Optional[str] = None,
 ) -> None:
     """Update GeoServer with seasonal layers following the same pattern as windy layers."""
-    log.info("Updating GeoServer seasonal layers with temporal dimension")
+    log.info(f"Updating GeoServer seasonal layers with temporal dimension for date: {date}")
     
+    # Set default SLD directory if not provided
+    if not sld_directory:
+        # Try to find the SLD directory in the typical locations
+        possible_paths = [
+            "/SLDs/seasonal",
+            "/projects/maps/builds/geoserver/SLDs/seasonal",
+            os.path.join(os.getcwd(), "projects/maps/builds/geoserver/SLDs/seasonal")
+        ]
+        
+        sld_directory = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                sld_directory = path
+                break
+                
+        if not sld_directory:
+            sld_directory = "/SLDs/seasonal"  # Use default as fallback
+        
+    log.info(f"Using SLD directory: {sld_directory}")
+    
+    # Verify SLD directory exists and list contents
+    if os.path.exists(sld_directory):
+        sld_files = [f for f in os.listdir(sld_directory) if f.endswith('.sld')]
+        log.info(f"Found {len(sld_files)} SLD files in {sld_directory}: {sld_files}")
+    else:
+        log.warning(f"SLD directory does not exist: {sld_directory}")
     
     # Process seasonal TIFF files with temporal dimension
     process_seasonal_tiff_files(SEASONAL_BASE_DIRECTORY, sld_directory, geoserver_url, username, password, date)

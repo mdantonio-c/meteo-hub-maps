@@ -52,14 +52,13 @@ def create_workspace_generic(geoserver_url: str, username: str, password: str, w
         return False
 
 
-def upload_sld_generic(geoserver_url: str, sld_content: str, layer_name: str, username: str, password: str) -> str:
-    """Upload the SLD to GeoServer."""
-    style_name = f"{WORKSPACE}:{layer_name}"
+def upload_sld_generic(geoserver_url: str, sld_content: str, layer_name: str, username: str, password: str) -> bool:
+    """Upload the SLD to GeoServer. Returns True if successful, False otherwise."""
     
     # Skip upload for default GeoServer styles and invalid content
     if not sld_content or not sld_content.strip():
         log.warning(f"Skipping upload of empty SLD for layer {layer_name}")
-        return style_name
+        return False
     
     # Skip default GeoServer styles that might cause conflicts
     default_styles = ["default_line", "default_point", "default_polygon", "default_generic", 
@@ -67,7 +66,7 @@ def upload_sld_generic(geoserver_url: str, sld_content: str, layer_name: str, us
                      "default_line2", "pophatch"]
     if layer_name in default_styles:
         log.info(f"Skipping upload of default GeoServer style: {layer_name}")
-        return style_name
+        return True  # Return True since this is intentionally skipped
     
     url = f"{geoserver_url}/rest/styles"
     headers = {"Content-Type": "application/vnd.ogc.sld+xml"}
@@ -78,6 +77,7 @@ def upload_sld_generic(geoserver_url: str, sld_content: str, layer_name: str, us
         
         if response.status_code == 201:
             log.info(f"SLD for layer {layer_name} created successfully.")
+            return True
         elif response.status_code == 409 or (response.status_code >= 400 and "already exists" in response.text):
             log.info(f"SLD for layer {layer_name} already exists. Updating it.")
             # Update existing SLD
@@ -86,15 +86,17 @@ def upload_sld_generic(geoserver_url: str, sld_content: str, layer_name: str, us
             
             if response.status_code == 200:
                 log.info(f"SLD for layer {layer_name} updated successfully.")
+                return True
             else:
                 log.error(f"Failed to update SLD for {layer_name}: {response.status_code} - {response.text}")
+                return False
         else:
             log.error(f"Failed to upload SLD for {layer_name}: {response.status_code} - {response.text}")
+            return False
             
     except Exception as e:
         log.error(f"Exception during SLD upload for {layer_name}: {e}")
-
-    return style_name
+        return False
 
 
 def process_sld_files(sld_directory: str) -> dict:
@@ -141,6 +143,10 @@ def update_slds_from_local_folders(sld_base_directory: str, geoserver_url: str, 
     
     # Walk through all subdirectories looking for SLD files
     for root, dirs, files in os.walk(sld_base_directory):
+        sld_files_in_dir = [f for f in files if f.endswith(".sld")]
+        if sld_files_in_dir:
+            log.info(f"Found {len(sld_files_in_dir)} SLD files in directory: {root}")
+            
         for file in files:
             if file.endswith(".sld"):
                 sld_path = os.path.join(root, file)
@@ -151,7 +157,7 @@ def update_slds_from_local_folders(sld_base_directory: str, geoserver_url: str, 
                     file_stat = os.stat(sld_path)
                     file_mtime = file_stat.st_mtime
                     
-                    log.info(f"Processing SLD file: {sld_path}")
+                    log.info(f"Processing SLD file: {sld_name} from {sld_path}")
                     
                     # Read SLD content
                     with open(sld_path, "r", encoding='utf-8') as sld_file:
@@ -160,6 +166,8 @@ def update_slds_from_local_folders(sld_base_directory: str, geoserver_url: str, 
                     if not sld_content:
                         log.warning(f"SLD file is empty, skipping: {sld_path}")
                         continue
+                    
+                    log.debug(f"SLD content length for {sld_name}: {len(sld_content)} characters")
                     
                     # Upload/update the SLD to GeoServer
                     success = upload_sld_generic(geoserver_url, sld_content, sld_name, username, password)
@@ -550,6 +558,19 @@ def update_mosaic_coverage_name(geoserver_url: str, store_name: str, native_cove
         # If update fails, the coverage still exists with the native name, which is functional
         log.info(f"Coverage {native_coverage_name} is available with its original name.")
         return True
+
+
+def check_style_exists(geoserver_url: str, style_name: str, username: str, password: str, workspace: str = WORKSPACE) -> bool:
+    """Check if a style exists in GeoServer."""
+    url = f"{geoserver_url}/rest/styles/{style_name}"
+    response = requests.get(url, auth=(username, password))
+    
+    if response.status_code == 200:
+        log.debug(f"Style '{style_name}' exists in GeoServer")
+        return True
+    else:
+        log.debug(f"Style '{style_name}' does not exist in GeoServer: {response.status_code}")
+        return False
 
 
 def associate_sld_with_layer_generic(geoserver_url: str, layer_name: str, style_name: str, username: str, password: str, workspace: str = WORKSPACE) -> bool:
