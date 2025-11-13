@@ -14,24 +14,22 @@
         <sld:Rule>
           <sld:RasterSymbolizer>
             <sld:ColorMap type="intervals">
-
               <sld:ColorMapEntry color="#c667e0" quantity="-10"/>
-              <sld:ColorMapEntry color="#9b41b4" quantity="-3"/>
-              <sld:ColorMapEntry color="#541a8a" quantity="-2.8"/>
-              <sld:ColorMapEntry color="#231a8a" quantity="-2.6"/>
-              <sld:ColorMapEntry color="#002c61" quantity="-2.4"/>
-              <sld:ColorMapEntry color="#003e8a" quantity="-2.2"/>
-              <sld:ColorMapEntry color="#0955b3" quantity="-2"/>
-              <sld:ColorMapEntry color="#005485" quantity="-1.8"/>
-              <sld:ColorMapEntry color="#006fb0" quantity="-1.6"/>
-              <sld:ColorMapEntry color="#0089d9" quantity="-1.4"/>
-              <sld:ColorMapEntry color="#00a2ff" quantity="-1.2"/>
-              <sld:ColorMapEntry color="#3bb7ff" quantity="-1"/>
-              <sld:ColorMapEntry color="#6bc9ff" quantity="-0.8"/>
-              <sld:ColorMapEntry color="#99daff" quantity="-0.6"/>
-              <sld:ColorMapEntry color="#b5e4ff" quantity="-0.4"/>
-              <sld:ColorMapEntry color="#ffffff" quantity="-0.2"/>
-
+              <sld:ColorMapEntry color="#c667e0" quantity="-3"/>
+              <sld:ColorMapEntry color="#9b41b4" quantity="-2.8"/>
+              <sld:ColorMapEntry color="#541a8a" quantity="-2.6"/>
+              <sld:ColorMapEntry color="#231a8a" quantity="-2.4"/>
+              <sld:ColorMapEntry color="#002c61" quantity="-2.2"/>
+              <sld:ColorMapEntry color="#003e8a" quantity="-2"/>
+              <sld:ColorMapEntry color="#0955b3" quantity="-1.8"/>
+              <sld:ColorMapEntry color="#005485" quantity="-1.6"/>
+              <sld:ColorMapEntry color="#006fb0" quantity="-1.4"/>
+              <sld:ColorMapEntry color="#0089d9" quantity="-1.2"/>
+              <sld:ColorMapEntry color="#00a2ff" quantity="-1"/>
+              <sld:ColorMapEntry color="#3bb7ff" quantity="-0.8"/>
+              <sld:ColorMapEntry color="#6bc9ff" quantity="-0.6"/>
+              <sld:ColorMapEntry color="#99daff" quantity="-0.4"/>
+              <sld:ColorMapEntry color="#b5e4ff" quantity="-0.2"/>
               <sld:ColorMapEntry color="#ffffff" quantity="0.2"/>
               <sld:ColorMapEntry color="#ffe3e3" quantity="0.4"/>
               <sld:ColorMapEntry color="#ffc4c4" quantity="0.6"/>
