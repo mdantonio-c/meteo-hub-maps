@@ -342,8 +342,18 @@ def reset_imagemosaic_index(geoserver_url: str, store_name: str, username: str, 
 def upload_geotiff_generic(geoserver_url: str, file_path: str, store_name: str, username: str, password: str, workspace: str = WORKSPACE) -> bool:
     """Upload a GeoTIFF file or directory (for mosaics) to GeoServer."""
     
-    # Check if file_path is a directory (for mosaics) or a file
-    if os.path.isdir(file_path):
+    # Ensure the path exists and convert to absolute path if needed
+    # Check both the given path and the absolute version with /geoserver_data prefix
+    actual_path = file_path
+    if not os.path.exists(file_path):
+        # Try with absolute /geoserver_data prefix
+        if not file_path.startswith('/'):
+            alt_path = f"/{file_path}"
+            if os.path.exists(alt_path):
+                actual_path = alt_path
+    
+    # Check if actual_path is a directory (for mosaics) or a file
+    if os.path.isdir(actual_path):
         # Handle ImageMosaic stores
         if check_coverage_store_exists(geoserver_url, store_name, username, password, workspace):
             # Store exists - try to refresh/update it instead of recreating
@@ -358,10 +368,10 @@ def upload_geotiff_generic(geoserver_url: str, file_path: str, store_name: str, 
                 log.warning(f"Failed to refresh ImageMosaic store {store_name}. Recreating it.")
                 if not delete_coverage_store(geoserver_url, store_name, username, password, workspace):
                     return False
-                return upload_mosaic_generic(geoserver_url, file_path, store_name, username, password, workspace)
+                return upload_mosaic_generic(geoserver_url, actual_path, store_name, username, password, workspace)
         else:
             # Store doesn't exist - create new mosaic
-            return upload_mosaic_generic(geoserver_url, file_path, store_name, username, password, workspace)
+            return upload_mosaic_generic(geoserver_url, actual_path, store_name, username, password, workspace)
     else:
         # Handle single GeoTIFF files
         if check_coverage_store_exists(geoserver_url, store_name, username, password, workspace):
@@ -374,17 +384,17 @@ def upload_geotiff_generic(geoserver_url: str, file_path: str, store_name: str, 
         headers = {"Content-Type": "image/tiff"}
 
         try:
-            with open(file_path, "rb") as file:
+            with open(actual_path, "rb") as file:
                 response = requests.put(url, data=file, auth=(username, password))
         except Exception as e:
             log.error(f"An error occurred while uploading GeoTIFF: {e}")
             return False
 
         if response.status_code in [201, 202]:
-            log.info(f"Uploaded {file_path} as {store_name}.")
+            log.info(f"Uploaded {actual_path} as {store_name}.")
             return True
         else:
-            log.error(f"Failed to upload {file_path}: {response.text}")
+            log.error(f"Failed to upload {actual_path}: {response.text}")
             return False
 
 
