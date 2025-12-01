@@ -109,14 +109,14 @@ def update_geoserver_radar_layers(
         log.info(f"Processing file: {filename}, date: {date_dt}")
         success = process_radar_file(variable, filename, date_dt, geoserver_url, username, password)
         if not success:
-            log.error(f"Failed to process {filename}")
+            log.warning(f"Failed to process {filename}")
             all_success = False
     
+    layer_name = f"radar-{variable}"
+    store_name = f"mosaic_{layer_name}"
+    copies_target_dir = os.path.join(COPIES_BASE_DIRECTORY, layer_name)
     # Batch-level cleanup after all files are processed
     if all_success and len(filenames) > 0:
-        layer_name = f"radar-{variable}"
-        store_name = f"mosaic_{layer_name}"
-        copies_target_dir = os.path.join(COPIES_BASE_DIRECTORY, layer_name)
         
         # Get all .tif files to determine time range
         all_tif_files = [f for f in os.listdir(copies_target_dir) if f.endswith('.tif')]
@@ -344,6 +344,9 @@ def process_radar_file(variable, filename, date, geoserver_url, username, passwo
         
         # Copy the new file
         try:
+            if os.path.exists(target_file):
+                log.info(f"File {filename} already exists in {copies_target_dir}. Skipping copy.")
+                return True
             shutil.copy2(source_file, target_file)
             if os.path.exists(target_file):
                 log.info(f"Successfully copied {filename} to {copies_target_dir}. Size: {os.path.getsize(target_file)} bytes")
