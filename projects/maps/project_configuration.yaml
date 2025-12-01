@@ -21,4 +21,5 @@ variables:
     DATA_PATH: /meteo
     WINDY_GEOTIFF_DIR: ${DATA_DIR}/maps
     SEASONAL_GEOTIFF_DIR: ${DATA_DIR}/seasonal-aim
+    RADAR_RETENTION_HOURS: 72
     ALLOWED_IPS: {}

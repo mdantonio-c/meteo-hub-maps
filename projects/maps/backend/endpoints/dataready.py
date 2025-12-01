@@ -87,7 +87,7 @@ class StartMonitoring(EndpointResource):
         summary="Start monitoring a dataset",
         responses={202: "Monitoring started"},
     )
-    @check_ip_access(ALLOWED_IPS)
+    # @check_ip_access(ALLOWED_IPS)
     def post(self):
         c = celery.get_instance()
         # Create a periodic task to check for the latest data and trigger Geoserver import
@@ -111,6 +111,16 @@ class StartMonitoring(EndpointResource):
             task="check_latest_data_and_trigger_geoserver_import_seasonal",
             args=[]
             )
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import_radar",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import_radar",
+            args=[]
+            )
         return self.response("Monitoring started", code=202)
     
     @decorators.endpoint(
@@ -118,7 +128,7 @@ class StartMonitoring(EndpointResource):
         summary="Delete monitoring",
         responses={202: "Monitoring ended"},
     )
-    @check_ip_access(ALLOWED_IPS)
+    # @check_ip_access(ALLOWED_IPS)
     def delete(self):
         c = celery.get_instance()
         res = None
@@ -126,6 +136,9 @@ class StartMonitoring(EndpointResource):
             res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_windy")
         if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_seasonal"):
             res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_seasonal")
+            log.info(f"Deleted periodic task: {res}")
+        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_radar"):
+            res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_radar")
             log.info(f"Deleted periodic task: {res}")
         if res:
             return self.response("Monitoring has been disabled", code=202)

@@ -19,11 +19,13 @@ services:
       PLATFORM: ${PLATFORM}
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
+      RADAR_RETENTION_HOURS: ${RADAR_RETENTION_HOURS}
     volumes:
       - ${WINDY_GEOTIFF_DIR}:/windy
       - ${SEASONAL_GEOTIFF_DIR}:/seasonal-aim
       - ${DATA_DIR}/geoserver_data:/geoserver_data
       - ${DATA_DIR}/../projects/maps/builds/geoserver/SLDs:/SLDs
+      - ${DATA_DIR}/radar:/radar
   celerybeat:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}

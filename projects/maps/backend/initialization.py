@@ -31,6 +31,17 @@ class Initializer:
             args=[],
         )
 
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import_radar",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import_radar",
+            args=[],
+        )
+
     # This method is called after normal initialization if TESTING mode is enabled
     def initialize_testing_environment(self) -> None:
         pass
