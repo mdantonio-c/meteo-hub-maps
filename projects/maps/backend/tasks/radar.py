@@ -296,15 +296,15 @@ def process_radar_file(variable, filename, date, geoserver_url, username, passwo
             return False
         
         # Copy all .tif files
-        files_copied = 0
-        for file in os.listdir(source_dir):
-            if file.endswith('.tif'):
-                source_file = os.path.join(source_dir, file)
-                target_file = os.path.join(copies_target_dir, file)
-                shutil.copy2(source_file, target_file)
-                files_copied += 1
+        # files_copied = 0
+        # for file in os.listdir(source_dir):
+        #     if file.endswith('.tif'):
+        source_file = os.path.join(source_dir, filename)
+        target_file = os.path.join(copies_target_dir, filename)
+        shutil.copy2(source_file, target_file)
+                # files_copied += 1
         
-        log.info(f"Copied {files_copied} files to {copies_target_dir}")
+        # log.info(f"Copied {files_copied} files to {copies_target_dir}")
         
         # Create temporal config
         create_radar_temporal_config(copies_target_dir, layer_name)
