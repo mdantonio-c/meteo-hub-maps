@@ -211,6 +211,117 @@ Get the last available tiled map set reference time.
 
 ---
 
+## Radar Endpoints
+
+### Get Radar Status
+
+Retrieve metadata about the last ingested radar data chunk, including time range, last update timestamp, and pending import information.
+
+**Endpoint:** `GET /api/radar/{radar_type}/status`
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Values | Description |
+|-----------|------|----------|--------|-------------|
+| `radar_type` | string | Yes | `sri`, `srt` | Type of radar data |
+
+**Response (with completed import):** `200 OK`
+
+```json
+{
+  "from": "2025-11-22T11:35:00Z",
+  "to": "2025-11-25T11:35:00Z",
+  "interval": "5m",
+  "meta": {
+    "lastUpdate": "2025-12-02T10:08:07.832427Z",
+    "pendingImport": null
+  }
+}
+```
+
+**Response (with pending import):** `200 OK`
+
+```json
+{
+  "from": "2025-11-22T11:35:00Z",
+  "to": "2025-11-25T11:35:00Z",
+  "interval": "5m",
+  "meta": {
+    "lastUpdate": "2025-12-02T10:08:07.832427Z",
+    "pendingImport": {
+      "status": "pending",
+      "file": "202511251135-202511271135.CELERY.CHECKED",
+      "from": "2025-11-25T11:35:00",
+      "to": "2025-11-27T11:35:00",
+      "detectedAt": "2025-12-02T11:00:00",
+      "estimatedFinishSeconds": "8"
+    }
+  }
+}
+```
+
+**Response (no GEOSERVER.READY, only pending):** `200 OK`
+
+```json
+{
+  "from": null,
+  "to": null,
+  "interval": "5m",
+  "meta": {
+    "lastUpdate": null,
+    "pendingImport": {
+      "status": "pending",
+      "file": "202511221135-202511251135.CELERY.CHECKED",
+      "from": "2025-11-22T11:35:00",
+      "to": "2025-11-25T11:35:00",
+      "detectedAt": "2025-12-02T10:05:00",
+      "estimatedFinishSeconds": "10"
+    }
+  }
+}
+```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `from` | string/null | Start time of the radar data range (ISO 8601 format with Z suffix), null if no data ingested yet |
+| `to` | string/null | End time of the radar data range (ISO 8601 format with Z suffix), null if no data ingested yet |
+| `interval` | string | Time interval between radar frames (always "5m" for 5 minutes) |
+| `meta.lastUpdate` | string/null | Timestamp when the data was last processed by GeoServer (ISO 8601 format with Z suffix) |
+| `meta.pendingImport` | object/null | Information about pending data import, null if no pending import |
+| `meta.pendingImport.status` | string | Import status (always "pending") |
+| `meta.pendingImport.file` | string | Name of the CELERY.CHECKED file detected |
+| `meta.pendingImport.from` | string | Start time of the pending data range (ISO 8601 format) |
+| `meta.pendingImport.to` | string | End time of the pending data range (ISO 8601 format) |
+| `meta.pendingImport.detectedAt` | string | Timestamp when the pending import was detected (ISO 8601 format) |
+| `meta.pendingImport.estimatedFinishSeconds` | string | Estimated seconds until import completion (uses logarithmic scaling: 6s for small batches, up to 14s for large batches) |
+
+**Error Responses:**
+- `400 Bad Request` - Invalid radar type (must be 'sri' or 'srt')
+- `404 Not Found` - No radar data available (no GEOSERVER.READY or CELERY.CHECKED files found)
+
+**Notes:**
+
+- The endpoint checks for `.GEOSERVER.READY` files to get the currently available data range
+- It also checks for `.CELERY.CHECKED` files to detect pending imports
+- When only a pending import exists (no GEOSERVER.READY), the response returns `null` for `from`, `to`, and `lastUpdate`
+- The `estimatedFinishSeconds` calculation uses logarithmic scaling based on the number of 5-minute intervals to process
+
+**Examples:**
+
+Get status for SRI (Surface Rain Intensity) radar:
+```bash
+curl "http://localhost:8080/api/radar/sri/status"
+```
+
+Get status for SRT (Surface Rain Total) radar:
+```bash
+curl "http://localhost:8080/api/radar/srt/status"
+```
+
+---
+
 ## Data Monitoring Endpoints
 
 ### Start Data Monitoring

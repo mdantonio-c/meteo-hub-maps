@@ -10,8 +10,9 @@ services:
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
     volumes:
-      - ${DATA_DIR}/maps:/windy
-      - ${DATA_DIR}/seasonal-aim:/seasonal-aim
+      - ${DATA_DIR}/maps:${WINDY_DATA_PATH}
+      - ${DATA_DIR}/seasonal-aim:${SEASONAL_DATA_PATH}
+      - ${DATA_DIR}/radar:${RADAR_DATA_PATH}
   celery:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
