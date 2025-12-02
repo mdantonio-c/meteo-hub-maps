@@ -180,8 +180,6 @@ Radar styles are stored in `/SLDs/radar/`:
 |------------|---------|
 | `radar-sri` | Surface rainfall intensity |
 | `radar-srt` | Surface rainfall type |
-| `radar-vmi` | Vertical maximum intensity |
-| `radar-hail` | Hail detection |
 
 ## Granule Lifecycle
 

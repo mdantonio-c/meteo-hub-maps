@@ -12,8 +12,6 @@ Radar data provides high-resolution precipitation observations with 1-minute tem
 |----------|-------------|-----------|
 | `sri` | Surface Rainfall Intensity | `radar-sri` |
 | `srt` | Surface Rainfall Type | `radar-srt` |
-| `vmi` | Vertical Maximum Intensity | `radar-vmi` |
-| `hail` | Hail Detection | `radar-hail` |
 
 ## Data Structure
 
@@ -224,8 +222,6 @@ Each radar variable has an associated SLD style:
 |----------|----------|---------|
 | sri | `radar-sri.sld` | Rainfall intensity color ramp |
 | srt | `radar-srt.sld` | Rainfall type classification |
-| vmi | `radar-vmi.sld` | Vertical intensity visualization |
-| hail | `radar-hail.sld` | Hail probability display |
 
 SLD files are stored in:
 ```
@@ -313,7 +309,7 @@ class RadarDataClient:
         Get radar image for specific time.
         
         Args:
-            variable: Radar variable (sri, srt, vmi, hail)
+            variable: Radar variable (sri, srt)
             time: datetime object
             bbox: (minx, miny, maxx, maxy)
             width: Image width
