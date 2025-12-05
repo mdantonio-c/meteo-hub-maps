@@ -356,6 +356,79 @@ curl "http://localhost:8080/api/radar/srt/status"
 
 ---
 
+## WW3 Endpoints
+
+### Get WW3 Variable Status
+
+Get the status and availability of a specific WW3 variable.
+
+**Endpoint:** `GET /api/ww3/<variable>/status`
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Values | Description |
+|-----------|------|----------|--------|-------------|
+| `variable` | string | Yes | `hs`, `t01`, `dir-dir` | WW3 variable name |
+
+**Response:** `200 OK`
+
+```json
+{
+  "reftime": "2025120300",
+  "start_offset": 0,
+  "end_offset": 72,
+  "step": 1,
+  "dataset": "ww3"
+}
+```
+
+**Error Responses:**
+- `404 Not Found` - Variable or run not found
+
+---
+
+### List WW3 Vector Files
+
+List available WW3 vector files (JSON format).
+
+**Endpoint:** `GET /api/ww3/vectors`
+
+**Response:** `200 OK`
+
+```json
+[
+  "20251203_00.json",
+  "20251203_01.json",
+  "..."
+]
+```
+
+**Error Responses:**
+- `404 Not Found` - Vectors folder not found
+
+---
+
+### Get WW3 Vector File
+
+Retrieve the content of a specific WW3 vector file.
+
+**Endpoint:** `GET /api/ww3/vectors/<filename>`
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `filename` | string | Yes | Name of the vector file (e.g., `20251203_00.json`) |
+
+**Response:** `200 OK`
+
+Returns the JSON content of the vector file.
+
+**Error Responses:**
+- `404 Not Found` - File not found
+
+---
+
 ## Data Monitoring Endpoints
 
 ### Start Data Monitoring

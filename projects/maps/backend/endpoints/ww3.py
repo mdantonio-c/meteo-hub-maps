@@ -61,72 +61,52 @@ class WW3StatusEndpoint(EndpointResource):
     labels = ["ww3"]
 
     @decorators.endpoint(
-        path="/ww3/<var>/status",
+        path="/ww3/status",
         summary="Get the status of a specific WW3 variable: hs, t01, vector",
         responses={
             200: "Status information",
             404: "Variable or run not found",
         },
     )
-    def get(self, var: str) -> Response:
-        if var not in ['hs', 't01', 'vector']:
-            raise NotFound(f"Variable {var} not found")
-        var = 'dir-dir' if var == 'vector' else var + '-' + var
-
+    def get(self) -> Response:
         # Find latest run
         ready_files = sorted(WW3_PATH.glob("*.GEOSERVER.READY"), reverse=True)
         if not ready_files:
             raise NotFound("No ready files found")
         
         latest_ready = ready_files[0]
-        # Extract date: 20251203.GEOSERVER.READY -> 20251203
-        run_date_str = latest_ready.name.split('.')[0]
         
+        # Try to read run date from file content
+        run_date = None
         try:
-            run_date = datetime.strptime(run_date_str, "%Y%m%d")
-        except ValueError:
-            raise NotFound(f"Invalid run date format in {latest_ready.name}")
+            with open(latest_ready, 'r') as f:
+                for line in f:
+                    if line.startswith("Run:"):
+                        run_date_str = line.split(":")[1].strip()
+                        run_date = datetime.strptime(run_date_str, "%Y%m%d")
+                        break
+        except Exception as e:
+            log.warning(f"Failed to read run date from {latest_ready}: {e}")
 
-        var_path = WW3_PATH / var
-        if not var_path.exists():
-             raise NotFound(f"Variable folder {var} not found")
+        # Fallback to filename parsing if content read failed
+        if not run_date:
+            try:
+                # Try old format: 20251203.GEOSERVER.READY
+                run_date_str = latest_ready.name.split('.')[0]
+                run_date = datetime.strptime(run_date_str, "%Y%m%d")
+            except ValueError:
+                raise NotFound(f"Could not determine run date from {latest_ready.name}")
 
-        files = []
-        if var == 'dir-dir':
-            for f in var_path.glob("*.json"):
-                try:
-                    dt = datetime.strptime(f.stem, "%Y%m%d_%H")
-                    if dt >= run_date:
-                        files.append(dt)
-                except ValueError:
-                    continue
-        else:
-            for f in var_path.glob("*.tif"):
-                try:
-                    dt = datetime.strptime(f.stem, "%d-%m-%Y-%H")
-                    if dt >= run_date:
-                        files.append(dt)
-                except ValueError:
-                    continue
-        
-        files = sorted(list(set(files)))
-        
         start_offset = 0
         end_offset = 0
         step = 1
-        
-        if files:
-            start_offset = int((files[0] - run_date).total_seconds() / 3600)
-            end_offset = int((files[-1] - run_date).total_seconds() / 3600)
-            if len(files) > 1:
-                step = int((files[1] - files[0]).total_seconds() / 3600)
         
         response = {
             "reftime": run_date.strftime("%Y%m%d%H"),
             "start_offset": start_offset,
             "end_offset": end_offset,
             "step": step,
-            "dataset": var
+            "dataset": "ww3"
         }
         
         return self.response(response)

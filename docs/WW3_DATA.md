@@ -18,7 +18,7 @@ The system expects the following structure under the configured `WW3_DATA_PATH` 
 ```
 /ww3/
 ├── <run_date>.READY
-├── <run_date>.GEOSERVER.READY
+├── <from_date>-<to_date>.GEOSERVER.READY
 ├── <run_date>.CELERY.CHECKED
 ├── hs/
 │   ├── <date>-<time>.tif
@@ -35,6 +35,7 @@ The system expects the following structure under the configured `WW3_DATA_PATH` 
 ```
 /ww3/
 ├── 20251203.READY
+├── 2025120300-2025120600.GEOSERVER.READY
 ├── hs/
 │   ├── 03-12-2025-00.tif
 │   ├── 03-12-2025-01.tif
@@ -53,7 +54,7 @@ The system expects the following structure under the configured `WW3_DATA_PATH` 
 - **Status Files**:
     - `.READY` - Indicates data generation is complete and ready for processing.
     - `.CELERY.CHECKED` - Marks data as checked by Celery task.
-    - `.GEOSERVER.READY` - Confirms data ingestion into GeoServer.
+    - `<from>-<to>.GEOSERVER.READY` - Confirms data ingestion into GeoServer. Contains run metadata.
 
 ## Data Ingestion Workflow
 
@@ -88,7 +89,12 @@ For `dir-dir`:
 
 ### 4. Status Tracking
 
-After successful processing, a `.GEOSERVER.READY` file is created in the root directory.
+After successful processing, a `<from>-<to>.GEOSERVER.READY` file is created in the root directory.
+The file content includes the run date:
+```
+Processed by GeoServer at <timestamp>
+Run: <run_date>
+```
 
 ## API Access
 

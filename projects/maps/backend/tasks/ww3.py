@@ -75,8 +75,35 @@ def update_geoserver_ww3_layers(self, run_date):
             except Exception as e:
                 log.warning(f"Failed to remove {f}: {e}")
 
+    # Calculate range for GEOSERVER.READY filename
+    all_timestamps = []
+    for var in variables:
+        source_dir = os.path.join(WW3_BASE_PATH, var)
+        if os.path.exists(source_dir):
+            for f in os.listdir(source_dir):
+                try:
+                    # Try dd-MM-yyyy-HH
+                    parts = f.split('.')[0].split('-')
+                    if len(parts) == 4:
+                        dt = datetime.strptime(f.split('.')[0], "%d-%m-%Y-%H")
+                        all_timestamps.append(dt)
+                    elif len(parts) == 5:
+                        dt = datetime.strptime(f.split('.')[0], "%d-%m-%Y-%H-%M")
+                        all_timestamps.append(dt)
+                except ValueError:
+                    continue
+
+    if all_timestamps:
+        min_date = min(all_timestamps)
+        max_date = max(all_timestamps)
+        from_str = min_date.strftime("%Y%m%d%H")
+        to_str = max_date.strftime("%Y%m%d%H")
+        ready_filename = f"{from_str}-{to_str}.GEOSERVER.READY"
+    else:
+        ready_filename = f"{run_date}.GEOSERVER.READY"
+
     # Create GEOSERVER.READY file
-    ready_file = os.path.join(WW3_BASE_PATH, f"{run_date}.GEOSERVER.READY")
+    ready_file = os.path.join(WW3_BASE_PATH, ready_filename)
     with open(ready_file, "w") as f:
         f.write(f"Processed by GeoServer at {datetime.now().isoformat()}\n")
         f.write(f"Run: {run_date}\n")
