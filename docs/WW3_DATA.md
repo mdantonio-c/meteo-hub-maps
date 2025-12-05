@@ -92,9 +92,31 @@ After successful processing, a `.GEOSERVER.READY` file is created in the root di
 
 ## API Access
 
-### Gradients Access
+### Status Endpoint
 
-#### List Available Gradient Files
+Get the status and availability of a specific WW3 variable.
+
+```bash
+GET /api/ww3/<variable>/status
+```
+
+**Parameters:**
+- `variable`: One of `hs`, `t01`, `dir-dir`
+
+**Response:**
+```json
+{
+  "reftime": "2025120300",
+  "start_offset": 0,
+  "end_offset": 72,
+  "step": 1,
+  "dataset": "hs"
+}
+```
+
+### Vectors Access
+
+#### List Available Vector Files
 
 ```bash
 GET /api/ww3/vectors
@@ -108,10 +130,10 @@ GET /api/ww3/vectors
 ]
 ```
 
-#### Get Specific Gradient File
+#### Get Specific Vector File
 
 ```bash
-GET /api/ww3/gradients/<filename>
+GET /api/ww3/vectors/<filename>
 ```
 
 **Response:**
