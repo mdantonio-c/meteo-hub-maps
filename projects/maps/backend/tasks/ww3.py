@@ -163,7 +163,7 @@ def create_mosaic_config(target_dir):
                       "Schema=*the_geom:Polygon,location:String,time:java.util.Date\n"
     
     # Regex for dd-MM-YYYY-hh.tif
-    timeregex_content = "regex=([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}),format=yyyy-MM-dd-HH\n"
+    timeregex_content = "regex=([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}),format=yyyy-MM-dd-HH-mm\n"
     
     with open(os.path.join(target_dir, "indexer.properties"), "w") as f:
         f.write(indexer_content)
