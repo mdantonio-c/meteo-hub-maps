@@ -69,38 +69,47 @@ class WW3StatusEndpoint(EndpointResource):
         },
     )
     def get(self) -> Response:
-        # Find latest run
-        ready_files = sorted(WW3_PATH.glob("*.GEOSERVER.READY"), reverse=True)
+        # Find latest run from .READY files
+        ready_files = sorted([f for f in WW3_PATH.glob("*.READY") if not f.name.endswith(".GEOSERVER.READY")], reverse=True)
         if not ready_files:
-            raise NotFound("No ready files found")
+            raise NotFound("No READY files found")
         
         latest_ready = ready_files[0]
+        run_date_str = latest_ready.name.split('.READY')[0]
         
-        # Try to read run date from file content
-        run_date = None
         try:
-            with open(latest_ready, 'r') as f:
-                for line in f:
-                    if line.startswith("Run:"):
-                        run_date_str = line.split(":")[1].strip()
-                        run_date = datetime.strptime(run_date_str, "%Y%m%d")
-                        break
-        except Exception as e:
-            log.warning(f"Failed to read run date from {latest_ready}: {e}")
-
-        # Fallback to filename parsing if content read failed
-        if not run_date:
-            try:
-                # Try old format: 20251203.GEOSERVER.READY
-                run_date_str = latest_ready.name.split('.')[0]
+            if len(run_date_str) == 8:
                 run_date = datetime.strptime(run_date_str, "%Y%m%d")
-            except ValueError:
-                raise NotFound(f"Could not determine run date from {latest_ready.name}")
+            elif len(run_date_str) == 10:
+                run_date = datetime.strptime(run_date_str, "%Y%m%d%H")
+            else:
+                raise ValueError("Unknown format")
+        except ValueError:
+             raise NotFound(f"Invalid date format in READY file: {latest_ready.name}")
 
         start_offset = 0
         end_offset = 0
         step = 1
         
+        # Find GEOSERVER.READY file to get offsets
+        gs_ready_files = sorted(WW3_PATH.glob("*.GEOSERVER.READY"), reverse=True)
+        
+        if gs_ready_files:
+            latest_gs_ready = gs_ready_files[0]
+            filename = latest_gs_ready.name
+            name_part = filename.split('.GEOSERVER.READY')[0]
+            
+            if '-' in name_part:
+                start_str, end_str = name_part.split('-')
+                try:
+                    start_dt = datetime.strptime(start_str, "%Y%m%d%H")
+                    end_dt = datetime.strptime(end_str, "%Y%m%d%H")
+                    
+                    start_offset = int((start_dt - run_date).total_seconds() / 3600)
+                    end_offset = int((end_dt - run_date).total_seconds() / 3600)
+                except ValueError:
+                    log.warning(f"Could not parse range from {filename}")
+
         response = {
             "reftime": run_date.strftime("%Y%m%d%H"),
             "start_offset": start_offset,
