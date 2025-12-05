@@ -9,7 +9,7 @@ from datetime import datetime
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
 import shutil
-from .geoserver_utils import (
+from maps.tasks.geoserver_utils import (
     create_ready_file_generic,
     create_workspace_generic,
     upload_sld_generic,
@@ -72,6 +72,9 @@ def update_geoserver_image_mosaic(
     
 def update_styles(sld_directory: Optional[str] = None) -> None:
     if sld_directory:
+        if not os.path.exists(sld_directory):
+            print(f"⚠️ SLD directory not found: {sld_directory}")
+            return
         print(f"📂 Processing SLD directory: {sld_directory}")
         for folder in os.listdir(sld_directory):
             create_or_update_sld(folder, sld_directory)
@@ -89,7 +92,7 @@ def create_or_update_sld(folder: str, sld_directory: str) -> None:
         print(f"❌ SLD file does not exist or is not a file: {sld_file}")
         return
 
-    with open(sld_file, 'rb') as f:
+    with open(sld_file, 'r', encoding='utf-8') as f:
         sld_content = f.read()
         
     url = f"{GEOSERVER_URL}/rest/styles/{style_name}"
@@ -190,7 +193,7 @@ def process_and_rename_tiffs(base_date_str, start_hour, folder, TIFF_DIR):
 # === UTILS ===
 def create_image_mosaic_store(folder, GEOSERVER_URL):
     """Create or refresh an ImageMosaic store with improved handling."""
-    from .geoserver_utils import upload_geotiff_generic
+    from maps.tasks.geoserver_utils import upload_geotiff_generic
     
     # Use the directory path for the mosaic
     mosaic_path = os.path.join(GEOSERVER_DATA_DIR, folder)

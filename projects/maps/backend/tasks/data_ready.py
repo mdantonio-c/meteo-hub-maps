@@ -6,7 +6,7 @@ import os
 import requests
 import re
 from datetime import datetime
-from .geoserver_utils import (
+from maps.tasks.geoserver_utils import (
     create_ready_file_generic,
     create_celery_checked_ready_file_generic,
     create_workspace_generic,
@@ -146,7 +146,7 @@ def process_seasonal_tiff_files(base_path, sld_directory, geoserver_url, usernam
     create_workspace(geoserver_url, username, password)
     
     # Clean up old seasonal stores first
-    from .geoserver_utils import cleanup_old_seasonal_stores
+    from maps.tasks.geoserver_utils import cleanup_old_seasonal_stores
     cleanup_old_seasonal_stores(geoserver_url, username, password, date_identifier)
     
     # Update SLD files from local folders to GeoServer BEFORE processing layers

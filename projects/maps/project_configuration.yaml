@@ -19,10 +19,15 @@ variables:
     SET_MAX_REQUESTS_PER_SECOND_API: 999999
     PLATFORM: G100
     DATA_PATH: /meteo
-    WINDY_GEOTIFF_DIR: ${DATA_DIR}/maps
-    SEASONAL_GEOTIFF_DIR: ${DATA_DIR}/seasonal-aim
+    HOST_WINDY_GEOTIFF_DIR: ${DATA_DIR}/maps
+    HOST_SEASONAL_GEOTIFF_DIR: ${DATA_DIR}/seasonal-aim
+    HOST_RADAR_DIR: ${DATA_DIR}/radar
+    HOST_SUB_SEASONAL_GEOTIFF_DIR: ${DATA_DIR}/sub-seasonal-aim
+    HOST_WW3_DIR: ${DATA_DIR}/ww3
     RADAR_RETENTION_HOURS: 72
     SEASONAL_DATA_PATH: /seasonal-aim
     WINDY_DATA_PATH: /windy
     RADAR_DATA_PATH: /radar
+    SUB_SEASONAL_DATA_PATH: /sub-seasonal-aim
+    WW3_DATA_PATH: /ww3
     ALLOWED_IPS: {}

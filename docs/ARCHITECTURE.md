@@ -185,6 +185,7 @@ sequenceDiagram
 │       │   │   ├── maps.py
 │       │   │   ├── windy.py
 │       │   │   ├── seasonal.py
+│       │   │   ├── sub_seasonal.py
 │       │   │   ├── tiles.py
 │       │   │   ├── dataready.py
 │       │   │   └── config.py
@@ -233,6 +234,7 @@ Located in `projects/maps/backend/endpoints/`:
 | `/api/maps/*` | `maps.py` | Forecast map images and metadata |
 | `/api/windy` | `windy.py` | Windy forecast data info |
 | `/api/seasonal/latest` | `seasonal.py` | Seasonal forecast status |
+| `/api/sub-seasonal/latest` | `sub_seasonal.py` | Sub-seasonal forecast status |
 | `/api/tiles` | `tiles.py` | Tile map metadata |
 | `/api/data/monitoring` | `dataready.py` | Start/stop monitoring tasks |
 
@@ -244,10 +246,12 @@ Located in `projects/maps/backend/tasks/`:
 |------|------|---------|
 | `check_latest_data_and_trigger_geoserver_import_windy` | `check_fs_data.py` | Monitor windy data |
 | `check_latest_data_and_trigger_geoserver_import_seasonal` | `check_fs_data.py` | Monitor seasonal data |
+| `check_latest_data_and_trigger_geoserver_import_sub_seasonal` | `check_fs_data.py` | Monitor sub-seasonal data |
 | `check_latest_data_and_trigger_geoserver_import_radar` | `check_fs_data.py` | Monitor radar data |
 | `update_geoserver_radar_layers` | `radar.py` | Ingest radar batch |
 | `update_geoserver_image_mosaic` | `upload_image_mosaic.py` | Ingest windy data |
 | `update_geoserver_seasonal_layers` | `data_ready.py` | Ingest seasonal data |
+| `update_geoserver_sub_seasonal_layers` | `sub_seasonal.py` | Ingest sub-seasonal data |
 
 ### GeoServer Utilities
 
@@ -366,6 +370,90 @@ Key metrics to monitor:
 - Internal Docker network for service communication
 - Nginx reverse proxy for external access
 - CORS headers for browser clients
+
+## Developer Guide
+
+### DataWatcher Utility
+
+The `DataWatcher` class (`projects/maps/backend/tasks/data_watcher.py`) provides a standardized way to monitor file system directories for new data and trigger processing tasks. It abstracts common patterns found in data ingestion workflows, such as:
+
+- Scanning directories for marker files (e.g., `.READY`).
+- Identifying the latest available dataset.
+- Preventing duplicate processing via debounce files (`.CELERY.CHECKED`).
+- Checking if data has already been fully processed (`.GEOSERVER.READY`).
+- Triggering Celery tasks or custom actions.
+
+#### Usage
+
+To use `DataWatcher`, instantiate it with the target paths and configuration, then call `check_and_trigger()`.
+
+**Basic Example:**
+
+```python
+from maps.tasks.data_watcher import DataWatcher
+
+def check_my_data():
+    watcher = DataWatcher(
+        paths=["/data/source1", "/data/source2"],
+        ready_suffix=".READY",
+        identifier_extractor=lambda f: f.split(".")[0]  # Extract ID from filename
+    )
+    
+    watcher.check_and_trigger(
+        task_name="my_processing_task",
+        task_args=lambda identifier, filename, path: (identifier, path)
+    )
+```
+
+**Advanced Configuration:**
+
+- **`sort_key`**: Custom function to sort files (e.g., by timestamp in filename).
+- **`debounce_seconds`**: Time to wait before re-processing a file if the debounce marker exists (default: 600s).
+- **`custom_processed_check`**: Function to override the default `.GEOSERVER.READY` check.
+- **`custom_action`**: Function to execute arbitrary code instead of triggering a Celery task directly.
+- **`skip_debounce`**: Set to `True` to disable the creation of the default `.CELERY.CHECKED` file (useful for custom debounce logic).
+
+#### Workflow
+
+1.  **Scan**: Finds all files ending with `ready_suffix` in the specified `paths`.
+2.  **Sort**: Sorts files to identify the "latest" one based on `sort_key`.
+3.  **Check Processed**: Checks if a corresponding `processed_suffix` file exists (or runs `custom_processed_check`).
+4.  **Debounce**: Checks if a `.CELERY.CHECKED` file exists and is recent. If so, skips processing.
+5.  **Trigger**:
+    - If `custom_action` is provided, executes it.
+    - Otherwise, triggers the Celery task specified by `task_name` with `task_args`.
+
+### DataWatcherStream Utility
+
+The `DataWatcherStream` class (also in `projects/maps/backend/tasks/data_watcher.py`) is a specialized subclass of `DataWatcher` designed for stream-based data sources like radar. It handles scenarios where data arrives continuously and needs to be processed in batches or ranges, rather than as discrete, independent datasets.
+
+#### Key Features
+
+- **Range-Based Checking**: Instead of checking for a single `.GEOSERVER.READY` file, it checks for range-based markers (e.g., `start-end.GEOSERVER.READY`) to determine if a timestamp falls within an already processed range.
+- **Range-Based Debouncing**: Uses range-based `.CELERY.CHECKED` files to prevent duplicate processing of time ranges.
+- **Pending File Calculation**: Automatically identifies all pending files within a retention window (e.g., last 72 hours) that haven't been processed yet.
+- **Batch Triggering**: Triggers tasks with a list of pending files and dates, rather than a single file.
+
+#### Usage
+
+```python
+from maps.tasks.data_watcher import DataWatcherStream
+
+watcher = DataWatcherStream(
+    paths="/data/radar/sri",
+    ready_suffix=".READY",
+    processed_suffix=".GEOSERVER.READY",
+    debounce_seconds=1800,
+    retention_hours=72,
+    time_format="%Y%m%d%H%M",
+    file_time_format="%d-%m-%Y-%H-%M.tif"
+)
+
+watcher.check_and_trigger(
+    task_name="update_geoserver_radar_layers",
+    var_name="sri"
+)
+```
 
 ## Future Enhancements
 

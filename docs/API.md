@@ -172,6 +172,40 @@ Retrieve information about the latest available seasonal forecast data.
 
 ---
 
+## Sub-Seasonal Endpoint
+
+### Get Latest Sub-Seasonal Data
+
+Retrieve information about the latest available sub-seasonal forecast data.
+
+**Endpoint:** `GET /api/sub-seasonal/latest`
+
+**Response:** `200 OK`
+
+```json
+{
+  "from": "2025-12-01T00:00:00",
+  "to": "2025-12-22T00:00:00",
+  "run": "20251203",
+  "meta": {
+    "lastUpdate": "2025-12-03T10:00:00",
+    "pendingImport": null
+  }
+}
+```
+
+**Response Fields:**
+- `from` - Start date of the forecast range (ISO format)
+- `to` - End date of the forecast range (ISO format)
+- `run` - Run date of the forecast (YYYYMMDD)
+- `meta.lastUpdate` - Timestamp when data was processed
+- `meta.pendingImport` - Information about ongoing ingestion (if any)
+
+**Error Responses:**
+- `404 Not Found` - Sub-seasonal data directory not found
+
+---
+
 ## Tiles Endpoint
 
 ### Get Tiles Reference Time
@@ -340,6 +374,7 @@ This creates periodic tasks for:
 - Windy data monitoring
 - Seasonal data monitoring
 - Radar data monitoring
+- Sub-seasonal data monitoring
 
 ---
 

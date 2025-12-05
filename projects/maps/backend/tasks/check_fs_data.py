@@ -1,12 +1,10 @@
 from restapi.connectors.celery import CeleryExt
 from restapi.utilities.logs import log
-from typing import Optional
 import os
-import requests
-import re
 from datetime import datetime, timedelta
 from restapi.connectors import celery
 from restapi.env import Env
+from maps.tasks.data_watcher import DataWatcher, DataWatcherStream
 
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver" # TODO: get from env
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
@@ -14,6 +12,8 @@ PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
 dataset = "icon"
 area = "Italia"
 GRANULE_RETENTION_HOURS = int(Env.get("RADAR_RETENTION_HOURS", 72))
+SUB_SEASONAL_BASE_PATH = Env.get("SUB_SEASONAL_AIM_PATH", "/sub-seasonal-aim")
+WW3_BASE_PATH = Env.get("WW3_DATA_PATH", "/ww3")
 
 @CeleryExt.task(idempotent=True)
 def check_latest_data_and_trigger_geoserver_import_windy(
@@ -23,66 +23,21 @@ def check_latest_data_and_trigger_geoserver_import_windy(
     """
     Check the latest data in the given paths.
     """
-    ready_files = []
-    log.info("Checking latest data in paths")
-    for path in paths:
-        if not os.path.exists(path):
-            log.warning(f"Path does not exist: {path}")
-            continue
-        ready_files.extend([{"path": path, "file": f} for f in os.listdir(path) if f.endswith(".READY")])
-        if not ready_files:
-            log.info(f"No .READY files found in {path}")
-            continue
+    def get_task_args(identifier, filename, path):
+        run = identifier[:8]
+        date = identifier[8:10]
+        return (GEOSERVER_URL, date, run)
 
-    # Sort files by date (assuming the filename is a date)
-    ready_files.sort(key=lambda x: datetime.strptime(x["file"].split(".")[0], "%Y%m%d%H"))
-    if len(ready_files) == 0:
-        log.info("No .READY files found in any path")
-        return
-    latest_ready_path, latest_ready_file = [ready_files[-1]["path"], ready_files[-1]["file"]]
-    geoserver_ready_path = os.path.join(latest_ready_path, latest_ready_file.split(".")[0] + ".GEOSERVER.READY")
-    celery_checked_path = os.path.join(latest_ready_path, latest_ready_file.split(".")[0] + ".CELERY.CHECKED")
-
-    if not os.path.exists(geoserver_ready_path):
-        log.info(f"No GEOSERVER.READY file found in {latest_ready_path}")
-        latest_ready_date = latest_ready_file.split(".")[0]
-        
-        if os.path.exists(celery_checked_path):
-            # if more than 10 minutes since last check, create a new CELERY.CHECKED file
-            if (datetime.now() - datetime.fromtimestamp(os.path.getmtime(celery_checked_path))).total_seconds() > 600:
-                os.remove(celery_checked_path)
-                log.info(f"Deleted {celery_checked_path} as it was older than 10 minutes")
-            else:
-                log.info(f"Skipping {latest_ready_file} as it has already been checked within the last 10 minutes")
-                return
-
-        # Create a CELERY.CHECKED file for the latest .READY file
-        celery_checked_path = os.path.join(latest_ready_path, f"{latest_ready_date}.CELERY.CHECKED")
-        os.makedirs(os.path.dirname(celery_checked_path), exist_ok=True)
-        with open(celery_checked_path, "w") as f:
-            f.write("Checked by Celery task")
-            log.info(f"Created {celery_checked_path}")
-        c = celery.get_instance()
-        run = latest_ready_file.split(".")[0][:8]
-        date = latest_ready_file.split(".")[0][8:10]
-        # c.celery_app.send_task(
-        #             "update_geoserver_layers",
-        #             args=(
-        #                 GEOSERVER_URL,
-        #                 USERNAME,
-        #                 PASSWORD,
-        #                 date,
-        #                 run,
-        #             )
-        # )
-        c.celery_app.send_task(
-                    "update_geoserver_image_mosaic",
-                    args=(
-                        GEOSERVER_URL,
-                        date,
-                        run,
-                    )
-        )
+    watcher = DataWatcher(
+        paths=paths,
+        sort_key=lambda f: datetime.strptime(f.split(".")[0], "%Y%m%d%H"),
+        identifier_extractor=lambda f: f.split(".")[0]
+    )
+    
+    watcher.check_and_trigger(
+        task_name="update_geoserver_image_mosaic",
+        task_args=get_task_args
+    )
     log.info("Finished checking latest data")
 
 
@@ -94,56 +49,14 @@ def check_latest_data_and_trigger_geoserver_import_seasonal(
     """
     Check the latest seasonal data in the given path.
     """
-    log.info("Checking latest seasonal data")
+    watcher = DataWatcher(
+        paths=seasonal_path,
+    )
     
-    if not os.path.exists(seasonal_path):
-        log.warning(f"Seasonal path does not exist: {seasonal_path}")
-        return
-    
-    # Find .READY files in the seasonal directory
-    ready_files = [f for f in os.listdir(seasonal_path) if f.endswith(".READY")]
-    
-    if not ready_files:
-        log.info(f"No .READY files found in {seasonal_path}")
-        return
-    
-    # Since there's only one READY file, take the first one
-    latest_ready_file = ready_files[0]
-    latest_ready_date = latest_ready_file.split(".")[0]
-    
-    geoserver_ready_path = os.path.join(seasonal_path, f"{latest_ready_date}.GEOSERVER.READY")
-    celery_checked_path = os.path.join(seasonal_path, f"{latest_ready_date}.CELERY.CHECKED")
-    
-    if not os.path.exists(geoserver_ready_path):
-        log.info(f"No GEOSERVER.READY file found for {latest_ready_file}")
-        
-        if os.path.exists(celery_checked_path):
-            # If more than 10 minutes since last check, create a new CELERY.CHECKED file
-            if (datetime.now() - datetime.fromtimestamp(os.path.getmtime(celery_checked_path))).total_seconds() > 600:
-                os.remove(celery_checked_path)
-                log.info(f"Deleted {celery_checked_path} as it was older than 10 minutes")
-            else:
-                log.info(f"Skipping {latest_ready_file} as it has already been checked within the last 10 minutes")
-                return
-        
-        # Create a CELERY.CHECKED file for the seasonal data
-        os.makedirs(os.path.dirname(celery_checked_path), exist_ok=True)
-        with open(celery_checked_path, "w") as f:
-            f.write("Checked by Celery task")
-            log.info(f"Created {celery_checked_path}")
-        
-        c = celery.get_instance()
-        # For seasonal data, we'll use a different task or parameters
-        c.celery_app.send_task(
-            "update_geoserver_seasonal_layers",
-            args=(
-                latest_ready_date,
-            )
-        )
-        log.info(f"Triggered seasonal data update for {latest_ready_date}")
-    else:
-        log.info(f"GEOSERVER.READY already exists for {latest_ready_file}")
-    
+    watcher.check_and_trigger(
+        task_name="update_geoserver_seasonal_layers",
+        task_args=lambda identifier, f, p: (identifier,)
+    )
     log.info("Finished checking seasonal data")
 
 
@@ -173,115 +86,190 @@ def check_latest_data_and_trigger_geoserver_import_radar(
     variables = ["sri", "srt"]
     
     for var in variables:
-        end_dt = None
         log.info(f"Checking variable: {var}")
         var_path = os.path.join(radar_path, var)
         if not os.path.exists(var_path):
             log.warning(f"Radar variable path does not exist: {var_path}")
             continue
-            
-        # Find .READY files
-        ready_files = [f for f in os.listdir(var_path) if f.endswith(".READY") and not f.endswith(".GEOSERVER.READY")]
-        
-        if not ready_files:
-            log.info(f"No .READY files found in {var_path}")
-            continue
-            
-        # Sort by date/time and get latest
-        ready_files.sort()
-        latest_ready_file = ready_files[-1]
-        latest_ready_date = latest_ready_file.split(".")[0]
-        
-        # Parse the latest READY timestamp
-        try:
-            current_ready_dt = datetime.strptime(latest_ready_date, "%Y%m%d%H%M")
-        except ValueError:
-            log.error(f"Could not parse timestamp from READY file: {latest_ready_file}")
-            continue
-        
-        # Find all date-range .GEOSERVER.READY files to determine last processed timestamp
-        geoserver_ready_files = [f for f in os.listdir(var_path) if f.endswith(".GEOSERVER.READY")]
-        
-        if geoserver_ready_files:
-            # Parse date range files (format: YYYYMMDDHHMM-YYYYMMDDHHMM.GEOSERVER.READY)
-            for gf in geoserver_ready_files:
-                try:
-                    date_range = gf.split(".")[0]
-                    if "-" in date_range:
-                        # Date range format
-                        from_date, to_date = date_range.split("-")
-                        end_dt = datetime.strptime(to_date, "%Y%m%d%H%M")
-                    else:
-                        # Old single date format (backward compatibility)
-                        end_dt = datetime.strptime(date_range, "%Y%m%d%H%M")
-                    
-                except ValueError:
-                    log.warning(f"Could not parse GEOSERVER.READY file: {gf}")
-        
-        log.info(f"New data found for {var}: {latest_ready_file}")
-        
-        # Check CELERY.CHECKED debounce logic
-        celery_checked_path = os.path.join(var_path, f"{latest_ready_date}.CELERY.CHECKED")
-        if os.path.exists(celery_checked_path):
-            if (datetime.now() - datetime.fromtimestamp(os.path.getmtime(celery_checked_path))).total_seconds() > 1800:
-                os.remove(celery_checked_path)
-                log.info(f"Deleted {celery_checked_path} as it was older than 30 minutes")
-            else:
-                log.info(f"Skipping {latest_ready_file} as it has already been checked within the last 30 minutes")
-                continue
-        
-        # Determine time range to process
-        start_dt = current_ready_dt - timedelta(hours=GRANULE_RETENTION_HOURS)
-        
-        # Collect all pending files in the time range
-        pending_filenames = []
-        pending_dates = []
-        log.info(f"Processing {var} from {start_dt} to {current_ready_dt} {type(end_dt)} {end_dt is not None}")
-        if end_dt is not None and current_ready_dt <= end_dt:
-            continue 
-        temp_dt = start_dt
-        while temp_dt <= current_ready_dt:
-            # Generate expected filename (format: DD-MM-YYYY-HH-MM.tif)
-            expected_filename = temp_dt.strftime("%d-%m-%Y-%H-%M.tif")
-            expected_path = os.path.join(var_path, 'files', expected_filename)
-            
-            if os.path.exists(expected_path):
-                pending_filenames.append(expected_filename)
-                pending_dates.append(temp_dt)
-                log.debug(f"Found pending file: {expected_filename}")
-            
-            temp_dt += timedelta(minutes=1)
-        
-        if not pending_filenames:
-            log.info(f"No pending files found for {var}")
-            continue
-        
-        log.info(f"Found {len(pending_filenames)} pending file(s) for {var}")
-        
-        # Create CELERY.CHECKED file with date range
-        min_date = min(pending_dates)
-        max_date = max(pending_dates)
 
-        date_range_str = f"{min_date.strftime('%Y%m%d%H%M')}-{max_date.strftime('%Y%m%d%H%M')}"
-        celery_checked_path = os.path.join(var_path, f"{date_range_str}.CELERY.CHECKED")
-        
-        os.makedirs(os.path.dirname(celery_checked_path), exist_ok=True)
-        with open(celery_checked_path, "w") as f:
-            f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
-            f.write(f"Files: {len(pending_filenames)}\n")
-        log.info(f"Created {celery_checked_path}")
-        log.info(f"Pending files: {pending_filenames}")
-        log.info(f"Pending dates: {pending_dates}")
-        # Send batch to Celery task
-        c = celery.get_instance()
-        c.celery_app.send_task(
-            "update_geoserver_radar_layers",
-            args=(
-                var,
-                pending_filenames,  # List of filenames
-                pending_dates,      # List of datetime objects
-            )
+        watcher = DataWatcherStream(
+            paths=var_path,
+            ready_suffix=".READY",
+            processed_suffix=".GEOSERVER.READY",
+            debounce_seconds=1800, # 30 minutes for radar
+            retention_hours=GRANULE_RETENTION_HOURS,
+            sort_key=lambda f: f, # Default sort is fine (YYYYMMDDHHMM.READY)
+            identifier_extractor=lambda f: f.split(".")[0]
         )
-        log.info(f"Triggered batch radar data update for {var} with {len(pending_filenames)} file(s)")
+
+        watcher.check_and_trigger(
+            task_name="update_geoserver_radar_layers",
+            var_name=var
+        )
             
     log.info("Finished checking radar data")
+
+
+@CeleryExt.task(idempotent=True)
+def check_latest_data_and_trigger_geoserver_import_sub_seasonal(
+    self,
+    sub_seasonal_path: str = SUB_SEASONAL_BASE_PATH,
+) -> None:
+    """
+    Check the latest sub-seasonal data in the given path.
+    """
+    log.info("Checking latest sub-seasonal data")
+    
+    def custom_action(identifier, latest_file, path):
+        run_date = identifier
+        
+        # Calculate range from files in t2m/quintile_1
+        # Get a random variable folder instead of hardcoding t2m
+        var_dirs = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d)) and d not in ['.', '..']]
+        if not var_dirs:
+            log.warning(f"No variable directories found in {path}")
+            return
+        
+        sample_var = var_dirs[0]  # Use first available variable folder
+        var_path = os.path.join(path, sample_var)
+        
+        child_dirs = [d for d in os.listdir(var_path) if os.path.isdir(os.path.join(var_path, d)) and d not in ['.', '..']]
+        if not child_dirs:
+            log.warning(f"No child directories found in {var_path}")
+            return
+        
+        sample_child = child_dirs[0]  # Use first available child folder
+        sample_dir = os.path.join(var_path, sample_child)
+        if not os.path.exists(sample_dir):
+            log.warning(f"Sample directory {sample_dir} not found for run {run_date}")
+            return
+
+        files = [f for f in os.listdir(sample_dir) if f.endswith(".tiff") or f.endswith(".tif")]
+        if not files:
+            log.warning(f"No files found in {sample_dir}")
+            return
+            
+        dates = []
+        for f in files:
+            try:
+                d_str = f.split(".")[0]
+                dates.append(datetime.strptime(d_str, "%Y-%m-%d"))
+            except ValueError:
+                continue
+        
+        if not dates:
+            log.warning("No valid dates found in files")
+            return
+            
+        min_date = min(dates)
+        max_date = max(dates)
+        range_str = f"{min_date.strftime('%Y%m%d')}-{max_date.strftime('%Y%m%d')}"
+        
+        # Check if processed
+        geoserver_ready_file = os.path.join(path, f"{range_str}.GEOSERVER.READY")
+        if os.path.exists(geoserver_ready_file):
+            # Check if the run date inside matches the current run date
+            try:
+                with open(geoserver_ready_file, "r") as f:
+                    content = f.read()
+                    if f"Run: {run_date}" in content:
+                        log.info(f"Range {range_str} already processed for run {run_date}")
+                        return
+                    else:
+                        log.info(f"Range {range_str} exists but for a different run. Re-processing.")
+            except Exception as e:
+                log.warning(f"Failed to read {geoserver_ready_file}: {e}")
+                # If we can't read it, assume we need to re-process or at least check pending
+        
+        # Check if pending (debounce)
+        checked_file = os.path.join(path, f"{range_str}.CELERY.CHECKED")
+        if os.path.exists(checked_file):
+            log.info(f"Range {range_str} already checked (pending)")
+            return
+            
+        # Create CELERY.CHECKED
+        with open(checked_file, "w") as f:
+            f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
+            f.write(f"Run: {run_date}\n")
+            f.write(f"Range: {range_str}\n")
+        log.info(f"Created {checked_file}")
+        
+        # Trigger task
+        c = celery.get_instance()
+        c.celery_app.send_task(
+            "update_geoserver_sub_seasonal_layers",
+            args=(run_date, range_str)
+        )
+        log.info(f"Triggered update_geoserver_sub_seasonal_layers for {run_date} range {range_str}")
+
+    watcher = DataWatcher(
+        paths=sub_seasonal_path,
+        ready_suffix=".READY",
+        processed_suffix=".GEOSERVER.READY"
+    )
+    
+    watcher.check_and_trigger(
+        custom_action=custom_action,
+        skip_debounce=True
+    )
+    log.info("Finished checking sub-seasonal data")
+
+
+@CeleryExt.task(idempotent=True)
+def check_latest_data_and_trigger_geoserver_import_ww3(
+    self,
+    ww3_path: str = WW3_BASE_PATH,
+) -> None:
+    """
+    Check the latest ww3 data in the given path.
+    """
+    log.info("Checking latest ww3 data")
+    
+    def custom_action(identifier, latest_file, path):
+        run_date = identifier
+        
+        # Check if processed
+        geoserver_ready_file = os.path.join(path, f"{run_date}.GEOSERVER.READY")
+        if os.path.exists(geoserver_ready_file):
+            try:
+                with open(geoserver_ready_file, "r") as f:
+                    content = f.read()
+                    if f"Run: {run_date}" in content:
+                        log.info(f"Run {run_date} already processed")
+                        return
+                    else:
+                        log.info(f"Run {run_date} exists but for different date. Re-processing.")
+            except Exception as e:
+                log.warning(f"Failed to read {geoserver_ready_file}: {e}")
+        
+        # Check if pending (debounce)
+        checked_file = os.path.join(path, f"{run_date}.CELERY.CHECKED")
+        if os.path.exists(checked_file):
+            log.info(f"Run {run_date} already checked (pending)")
+            return
+            
+        # Create CELERY.CHECKED
+        with open(checked_file, "w") as f:
+            f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
+            f.write(f"Run: {run_date}\n")
+        log.info(f"Created {checked_file}")
+        
+        # Trigger task
+        c = celery.get_instance()
+        c.celery_app.send_task(
+            "update_geoserver_ww3_layers",
+            args=(run_date,)
+        )
+        log.info(f"Triggered update_geoserver_ww3_layers for {run_date}")
+
+    watcher = DataWatcher(
+        paths=ww3_path,
+        ready_suffix=".READY",
+        processed_suffix=".GEOSERVER.READY"
+    )
+    
+    watcher.check_and_trigger(
+        custom_action=custom_action,
+        skip_debounce=True
+    )
+    log.info("Finished checking ww3 data")

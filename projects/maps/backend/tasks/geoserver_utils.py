@@ -452,11 +452,17 @@ def publish_layer_generic(geoserver_url: str, store_name: str, layer_name: str, 
     if store_name.startswith("mosaic_"):
         import time
         # Wait a moment for GeoServer to process the mosaic
-        time.sleep(2)
+        time.sleep(5)
         
         # List available coverages in the mosaic store
         list_url = f"{geoserver_url}/rest/workspaces/{workspace}/coveragestores/{store_name}/coverages"
-        list_response = requests.get(list_url, auth=(username, password))
+        
+        # Retry logic for listing coverages
+        for _ in range(3):
+            list_response = requests.get(list_url, auth=(username, password))
+            if list_response.status_code == 200:
+                break
+            time.sleep(2)
         
         if list_response.status_code == 200:
             import xml.etree.ElementTree as ET

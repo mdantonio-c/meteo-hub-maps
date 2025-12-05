@@ -121,6 +121,26 @@ class StartMonitoring(EndpointResource):
             task="check_latest_data_and_trigger_geoserver_import_radar",
             args=[]
             )
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import_sub_seasonal",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import_sub_seasonal",
+            args=[],
+        )
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import_ww3",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import_ww3",
+            args=[],
+        )
         return self.response("Monitoring started", code=202)
     
     @decorators.endpoint(
@@ -139,6 +159,12 @@ class StartMonitoring(EndpointResource):
             log.info(f"Deleted periodic task: {res}")
         if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_radar"):
             res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_radar")
+            log.info(f"Deleted periodic task: {res}")
+        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_sub_seasonal"):
+            res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_sub_seasonal")
+            log.info(f"Deleted periodic task: {res}")
+        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_ww3"):
+            res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_ww3")
             log.info(f"Deleted periodic task: {res}")
         if res:
             return self.response("Monitoring has been disabled", code=202)

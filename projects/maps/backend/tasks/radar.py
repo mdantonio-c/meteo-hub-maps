@@ -6,7 +6,7 @@ import os
 import shutil
 import requests
 from datetime import datetime
-from .geoserver_utils import (
+from maps.tasks.geoserver_utils import (
     create_ready_file_generic,
     create_workspace_generic,
     update_slds_from_local_folders,
