@@ -9,6 +9,10 @@ services:
       ALLOWED_IPS: ${ALLOWED_IPS}
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
+      WW3_DATA_PATH: ${WW3_DATA_PATH}
+      SEASONAL_DATA_PATH: ${SEASONAL_DATA_PATH}
+      RADAR_DATA_PATH: ${RADAR_DATA_PATH}
+      SUB_SEASONAL_DATA_PATH: ${SUB_SEASONAL_DATA_PATH}
     volumes:
       - ${HOST_WINDY_GEOTIFF_DIR}:${WINDY_DATA_PATH}
       - ${HOST_SEASONAL_GEOTIFF_DIR}:${SEASONAL_DATA_PATH}
@@ -23,6 +27,10 @@ services:
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
       RADAR_RETENTION_HOURS: ${RADAR_RETENTION_HOURS}
+      WW3_DATA_PATH: ${WW3_DATA_PATH}
+      SEASONAL_DATA_PATH: ${SEASONAL_DATA_PATH}
+      RADAR_DATA_PATH: ${RADAR_DATA_PATH}
+      SUB_SEASONAL_DATA_PATH: ${SUB_SEASONAL_DATA_PATH}
     volumes:
       - ${HOST_WINDY_GEOTIFF_DIR}:/windy
       - ${HOST_SEASONAL_GEOTIFF_DIR}:${SEASONAL_DATA_PATH}
@@ -92,7 +100,8 @@ services:
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
       RECREATE_DATADIR: ${GEOSERVER_RECREATE_DATADIR}
-      JAVA_OPTS: "-Xms512m -Xmx1024m -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true"
+      # JAVA_OPTS: "-Xms512m -Xmx1024m -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true"
+      JAVA_OPTS: "-Xms512m -Xmx1024m -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true -DGEOSERVER_CSRF_WHITELIST=meteohub-maps.hpc.cineca.it"
       # JAVA_OPTS: "-Xms512m -Xmx1024m -DNETCDF_DATA_DIR=/opt/geoserver_data"
     volumes:
       - ${DATA_DIR}/geoserver_data:/opt/geoserver_data
