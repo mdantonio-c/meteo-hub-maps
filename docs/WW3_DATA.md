@@ -7,16 +7,16 @@ This document describes the ww3 file data ingestion, storage, and access mechani
 The ww3 import system monitors a central data directory for new model runs and processes three specific variables:
 - **hs**: Significant wave height (GeoServer Layer)
 - **t01**: Mean wave period (GeoServer Layer)
-- **gradients**: Gradient vectors (JSON files exposed via API)
+- **dir-dir**: Gradient vectors (JSON files exposed via API)
 
 ## Data Structure
 
 ### File System Organization
 
-The system expects the following structure under the configured `WW3_DATA_PATH` (default: `/data/ww3`):
+The system expects the following structure under the configured `WW3_DATA_PATH` (default: `/ww3`):
 
 ```
-/data/ww3/
+/ww3/
 ├── <run_date>.READY
 ├── <run_date>.GEOSERVER.READY
 ├── <run_date>.CELERY.CHECKED
@@ -26,14 +26,14 @@ The system expects the following structure under the configured `WW3_DATA_PATH` 
 ├── t01/
 │   ├── <date>-<time>.tif
 │   └── ...
-└── gradients/
+└── dir-dir/
     ├── <filename>.json
     └── ...
 ```
 
 **Example:**
 ```
-/data/ww3/
+/ww3/
 ├── 20251203.READY
 ├── hs/
 │   ├── 03-12-2025-00.tif
@@ -42,7 +42,7 @@ The system expects the following structure under the configured `WW3_DATA_PATH` 
 ├── t01/
 │   ├── 03-12-2025-00.tif
 │   └── ...
-└── gradients/
+└── dir-dir/
     ├── 20251203_00.json
     └── ...
 ```
@@ -83,7 +83,7 @@ For `hs` and `t01` folders:
 3.  Creates/Updates GeoServer ImageMosaic store.
 4.  Enables time dimension.
 
-For `gradients`:
+For `dir-dir`:
 - Files are left in place and served via API.
 
 ### 4. Status Tracking
@@ -97,7 +97,7 @@ After successful processing, a `.GEOSERVER.READY` file is created in the root di
 #### List Available Gradient Files
 
 ```bash
-GET /api/ww3/gradients
+GET /api/ww3/vectors
 ```
 
 **Response:**
@@ -136,9 +136,9 @@ http://geoserver:8080/geoserver/meteohub/wms?
   ...
 ```
 
-## Configuration
+### Configuration
 
 ### Environment Variables
 
-- `WW3_DATA_PATH`: Path to the WW3 data root (default: `/data/ww3`).
+- `WW3_DATA_PATH`: Path to the WW3 data root (default: `/ww3`).
 

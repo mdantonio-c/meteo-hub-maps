@@ -26,14 +26,14 @@ def update_geoserver_ww3_layers(self, run_date):
     
     create_workspace_generic(GEOSERVER_URL, USERNAME, PASSWORD, WORKSPACE)
     
-    # Identify variables from directories, excluding 'gradients'
+    # Identify variables from directories, excluding 'dir-dir'
     if not os.path.exists(WW3_BASE_PATH):
         log.warning(f"WW3 base path not found: {WW3_BASE_PATH}")
         return
 
     variables = [
         d for d in os.listdir(WW3_BASE_PATH) 
-        if os.path.isdir(os.path.join(WW3_BASE_PATH, d)) and d != 'gradients'
+        if os.path.isdir(os.path.join(WW3_BASE_PATH, d)) and d != 'dir-dir'
     ]
     
     # Handle SLDs

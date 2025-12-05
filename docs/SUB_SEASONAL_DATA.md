@@ -11,7 +11,7 @@ Sub-seasonal forecast data provides medium-range meteorological predictions (typ
 ### File System Organization
 
 ```
-/data/sub-seasonal-aim/
+/sub-seasonal-aim/
 ├── <YYYYMMDD>.READY
 ├── <YYYYMMDD>-<YYYYMMDD>.CELERY.CHECKED
 ├── <YYYYMMDD>-<YYYYMMDD>.GEOSERVER.READY
@@ -32,7 +32,7 @@ Sub-seasonal forecast data provides medium-range meteorological predictions (typ
 
 **Example:**
 ```
-/data/sub-seasonal-aim/
+/sub-seasonal-aim/
 ├── 20251203.READY
 ├── 20251201-20251222.GEOSERVER.READY
 ├── t2m/
@@ -58,14 +58,14 @@ The Celery task `check_latest_data_and_trigger_geoserver_import_sub_seasonal` mo
 
 ```python
 # Default path
-sub_seasonal_path = "/data/sub-seasonal-aim"
+sub_seasonal_path = "/sub-seasonal-aim"
 ```
 
 **Monitoring Schedule:** Every minute
 
 ### 2. Detection Process
 
-1. Scan for `.READY` files in `/data/sub-seasonal-aim`
+1. Scan for `.READY` files in `/sub-seasonal-aim`
 2. Identify the run date from the filename (e.g., `20251203`)
 3. Calculate the data range (Start-End) by inspecting files in `t2m/terzile_1`
 4. Check if `<Start>-<End>.GEOSERVER.READY` exists (skip if present)

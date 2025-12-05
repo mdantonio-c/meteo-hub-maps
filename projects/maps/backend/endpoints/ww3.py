@@ -13,19 +13,19 @@ class WW3Endpoint(EndpointResource):
     labels = ["ww3"]
 
     @decorators.endpoint(
-        path="/ww3/gradients",
-        summary="List available WW3 gradient files",
+        path="/ww3/vectors",
+        summary="List available WW3 vectors files",
         responses={
             200: "List of files successfully retrieved",
-            404: "Gradients folder not found",
+            404: "Vectors folder not found",
         },
     )
     def get(self) -> Response:
-        gradients_path = WW3_PATH / "gradients"
-        if not gradients_path.exists():
-            raise NotFound(f"WW3 gradients path {gradients_path} does not exist")
+        vectors_path = WW3_PATH / "dir-dir"
+        if not vectors_path.exists():
+            raise NotFound(f"WW3 vectors path {vectors_path} does not exist")
 
-        files = [f.name for f in gradients_path.iterdir() if f.is_file()]
+        files = [f.name for f in vectors_path.iterdir() if f.is_file()]
         files.sort()
         
         return self.response(files)
@@ -42,7 +42,7 @@ class WW3FileEndpoint(EndpointResource):
         },
     )
     def get(self, filename: str) -> Response:
-        gradients_path = WW3_PATH / "gradients"
+        gradients_path = WW3_PATH / "dir-dir"
         file_path = gradients_path / filename
         
         if not file_path.exists():
