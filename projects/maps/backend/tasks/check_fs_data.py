@@ -229,19 +229,11 @@ def check_latest_data_and_trigger_geoserver_import_ww3(
         run_date = identifier
         
         # Check if processed
-        geoserver_ready_file = os.path.join(path, f"{run_date}.GEOSERVER.READY")
-        if os.path.exists(geoserver_ready_file):
-            try:
-                with open(geoserver_ready_file, "r") as f:
-                    content = f.read()
-                    if f"Run: {run_date}" in content:
-                        log.info(f"Run {run_date} already processed")
-                        return
-                    else:
-                        log.info(f"Run {run_date} exists but for different date. Re-processing.")
-            except Exception as e:
-                log.warning(f"Failed to read {geoserver_ready_file}: {e}")
-        
+        # If there's any GEOSERVER.READY file, return and we're okay
+        if any(f.endswith(".GEOSERVER.READY") for f in os.listdir(path)):
+            log.info(f"GEOSERVER.READY file found in {path}, assuming run {run_date} is processed")
+            return
+
         # Check if pending (debounce)
         checked_file = os.path.join(path, f"{run_date}.CELERY.CHECKED")
         if os.path.exists(checked_file):
