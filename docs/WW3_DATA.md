@@ -100,14 +100,11 @@ Run: <run_date>
 
 ### Status Endpoint
 
-Get the status and availability of a specific WW3 variable.
+Get the status and availability of the WW3 dataset.
 
 ```bash
-GET /api/ww3/<variable>/status
+GET /api/ww3/status
 ```
-
-**Parameters:**
-- `variable`: One of `hs`, `t01`, `dir-dir`
 
 **Response:**
 ```json
@@ -116,7 +113,7 @@ GET /api/ww3/<variable>/status
   "start_offset": 0,
   "end_offset": 72,
   "step": 1,
-  "dataset": "hs"
+  "dataset": "ww3"
 }
 ```
 

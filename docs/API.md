@@ -358,17 +358,11 @@ curl "http://localhost:8080/api/radar/srt/status"
 
 ## WW3 Endpoints
 
-### Get WW3 Variable Status
+### Get WW3 Status
 
-Get the status and availability of a specific WW3 variable.
+Get the status and availability of the WW3 dataset.
 
-**Endpoint:** `GET /api/ww3/<variable>/status`
-
-**Path Parameters:**
-
-| Parameter | Type | Required | Values | Description |
-|-----------|------|----------|--------|-------------|
-| `variable` | string | Yes | `hs`, `t01`, `dir-dir` | WW3 variable name |
+**Endpoint:** `GET /api/ww3/status`
 
 **Response:** `200 OK`
 
@@ -383,7 +377,7 @@ Get the status and availability of a specific WW3 variable.
 ```
 
 **Error Responses:**
-- `404 Not Found` - Variable or run not found
+- `404 Not Found` - Run not found
 
 ---
 
