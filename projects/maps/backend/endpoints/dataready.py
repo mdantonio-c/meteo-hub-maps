@@ -39,7 +39,7 @@ class DataReady(EndpointResource):
         responses={202: "Notification received"},
 
     )
-    @check_ip_access(ALLOWED_IPS)
+    #@check_ip_access(ALLOWED_IPS)
     def post(
         self, run, date, model, **kwargs
     ) -> Response:
@@ -87,7 +87,8 @@ class StartMonitoring(EndpointResource):
         summary="Start monitoring a dataset",
         responses={202: "Monitoring started"},
     )
-    # @check_ip_access(ALLOWED_IPS)
+
+    #@check_ip_access(ALLOWED_IPS)
     def post(self):
         c = celery.get_instance()
         # Create a periodic task to check for the latest data and trigger Geoserver import
@@ -148,7 +149,7 @@ class StartMonitoring(EndpointResource):
         summary="Delete monitoring",
         responses={202: "Monitoring ended"},
     )
-    # @check_ip_access(ALLOWED_IPS)
+    #@check_ip_access(ALLOWED_IPS)
     def delete(self):
         c = celery.get_instance()
         res = None
