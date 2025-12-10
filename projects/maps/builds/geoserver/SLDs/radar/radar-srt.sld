@@ -14,15 +14,17 @@
         <sld:Rule>
           <sld:RasterSymbolizer>
             <sld:ColorMap type="intervals">
-              <sld:ColorMapEntry color="#c7ecff" quantity="0.1"/>
-              <sld:ColorMapEntry color="#acfce6" quantity="1"/>
-              <sld:ColorMapEntry color="#2af5bb" quantity="5"/>
-              <sld:ColorMapEntry color="#64ff61" quantity="10"/>
-              <sld:ColorMapEntry color="#8ce614" quantity="20"/>
-              <sld:ColorMapEntry color="#fff700" quantity="30"/>
-              <sld:ColorMapEntry color="#f76300" quantity="50"/>
-              <sld:ColorMapEntry color="#ff1929" quantity="75"/>
-              <sld:ColorMapEntry color="#fc0591" quantity="100"/>
+                <sld:ColorMapEntry color="#a6a0a0" opacity="0.3" quantity="0.1"/>
+              <sld:ColorMapEntry color="#a3f5e3" quantity="1"/>
+              <sld:ColorMapEntry color="#1ae4b7" quantity="2"/>
+              <sld:ColorMapEntry color="#2dbf00" quantity="5"/>
+		       <sld:ColorMapEntry color="#baeb09" quantity="10"/>
+              <sld:ColorMapEntry color="#ebe300" quantity="15"/>
+              <sld:ColorMapEntry color="#febf00" quantity="20"/>
+              <sld:ColorMapEntry color="#f56200" quantity="30"/>
+              <sld:ColorMapEntry color="#ff3e3b" quantity="50"/>
+              <sld:ColorMapEntry color="#ff0000" quantity="75"/>
+              <sld:ColorMapEntry color="#fc0599" quantity="100"/>
               <sld:ColorMapEntry color="#f75dfc" quantity="500"/>
             </sld:ColorMap>
             <sld:ContrastEnhancement/>
