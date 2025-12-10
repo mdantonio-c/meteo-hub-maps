@@ -58,7 +58,7 @@ class WindyEndpoint(EndpointResource):
             latest_x = None
 
             for r in ["00", "12"]:
-                base_path = get_base_path("windy", DEFAULT_PLATFORM, "PROD", r, dataset)
+                base_path = get_base_path("windy", '', '', r, dataset)
                 # x = get_ready_file(base_path, area)
                 x = get_geoserver_ready_file(base_path, area)
                 # add walrus here

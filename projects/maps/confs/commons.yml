@@ -18,7 +18,7 @@ services:
       - ${HOST_SEASONAL_GEOTIFF_DIR}:${SEASONAL_DATA_PATH}
       - ${HOST_RADAR_DIR}:${RADAR_DATA_PATH}
       - ${HOST_SUB_SEASONAL_GEOTIFF_DIR}:${SUB_SEASONAL_DATA_PATH}
-      - ${HOST_WW3_DIR}:${WW3_DATA_PATH}
+      - ${HOST_WW3_DIR}:/ww3
   celery:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
@@ -38,7 +38,7 @@ services:
       - ${DATA_DIR}/../projects/maps/builds/geoserver/SLDs:/SLDs
       - ${HOST_RADAR_DIR}:${RADAR_DATA_PATH}
       - ${HOST_SUB_SEASONAL_GEOTIFF_DIR}:${SUB_SEASONAL_DATA_PATH}
-      - ${HOST_WW3_DIR}:${WW3_DATA_PATH}
+      - ${HOST_WW3_DIR}:/ww3
   celerybeat:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
