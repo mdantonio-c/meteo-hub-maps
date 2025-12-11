@@ -3,9 +3,11 @@ from restapi.exceptions import NotFound
 from restapi.rest.definition import EndpointResource, Response
 from restapi.services.download import Downloader
 from restapi.env import Env
+from pathlib import Path
 import os
 import glob
 from datetime import datetime
+import json
 
 SEASONAL_PATH = Env.get("SEASONAL_DATA_PATH", "/seasonal-aim")
 BOXPLOT_FOLDER_NAME = "boxplot"
@@ -110,8 +112,8 @@ class SeasonalFileEndpoint(EndpointResource):
         
         folder_path = os.path.join(SEASONAL_PATH, BOXPLOT_FOLDER_NAME)
         file_path = os.path.join(folder_path, filename)
-
-        if not os.path.exists(file_path):
+        if not os.path.isfile(file_path):
             raise NotFound("File not found")
-            
-        return Downloader.send_file_content(filename, folder_path, 'application/octet-stream')
+        with open(file_path, 'r') as f:
+            content = json.load(f)
+        return self.response(content)
