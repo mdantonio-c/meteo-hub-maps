@@ -170,6 +170,43 @@ Retrieve information about the latest available seasonal forecast data.
 **Error Responses:**
 - `404 Not Found` - Seasonal data directory not found
 
+### List Seasonal Boxplot Files
+
+List all files in the seasonal boxplot folder.
+
+**Endpoint:** `GET /api/seasonal/json`
+
+**Response:** `200 OK`
+
+```json
+[
+  "file1.json",
+  "file2.json"
+]
+```
+
+**Error Responses:**
+- `404 Not Found` - Boxplot folder not found
+
+### Get Seasonal Boxplot File
+
+Retrieve a specific file from the seasonal boxplot folder.
+
+**Endpoint:** `GET /api/seasonal/json/<filename>`
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `filename` | string | Yes | Name of the file to retrieve |
+
+**Response:** `200 OK`
+
+Returns the file content.
+
+**Error Responses:**
+- `404 Not Found` - File not found
+
 ---
 
 ## Sub-Seasonal Endpoint

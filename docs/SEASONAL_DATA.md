@@ -111,6 +111,31 @@ GET /api/seasonal/latest
 - `ingestion.last` - Date of last processed dataset (YYYY-MM-DD format)
 - `ingestion.status` - Current ingestion status (`ingested`, `ingesting`, or `null`)
 
+### Boxplot Data Access
+
+#### List Boxplot Files
+
+```bash
+GET /api/seasonal/json
+```
+
+**Response:**
+```json
+[
+  "boxplot_data_1.json",
+  "boxplot_data_2.json"
+]
+```
+
+#### Get Specific Boxplot File
+
+```bash
+GET /api/seasonal/json/<filename>
+```
+
+**Response:**
+Returns the content of the requested JSON file.
+
 ## Use Cases
 
 ### Check Data Availability
