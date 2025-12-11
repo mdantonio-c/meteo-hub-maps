@@ -15,9 +15,9 @@ services:
       SUB_SEASONAL_DATA_PATH: ${SUB_SEASONAL_DATA_PATH}
     volumes:
       - ${HOST_WINDY_GEOTIFF_DIR}:${WINDY_DATA_PATH}
-      - ${HOST_SEASONAL_GEOTIFF_DIR}:${SEASONAL_DATA_PATH}
+      - ${HOST_SEASONAL_GEOTIFF_DIR}:/seasonal-aim
       - ${HOST_RADAR_DIR}:${RADAR_DATA_PATH}
-      - ${HOST_SUB_SEASONAL_GEOTIFF_DIR}:/seasonal-aim
+      - ${HOST_SUB_SEASONAL_GEOTIFF_DIR}:${SUB_SEASONAL_DATA_PATH}
       - ${HOST_WW3_DIR}:/ww3
   celery:
     build: ${PROJECT_DIR}/builds/backend
