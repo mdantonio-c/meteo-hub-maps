@@ -9,12 +9,12 @@
           <RasterSymbolizer>
             <Opacity>1.0</Opacity>
             <ColorMap type="intervals">
-              <ColorMapEntry color="#FFFFFF" quantity="35" opacity="0"/>
+              <ColorMapEntry color="#FFFFFF" quantity="33" opacity="0"/>
               <ColorMapEntry color="#ffe0cc" quantity="50"/>
               <ColorMapEntry color="#ffb380" quantity="65"/>
               <ColorMapEntry color="#ff8c40" quantity="80"/>
               <ColorMapEntry color="#de5d07" quantity="90"/>
-              <ColorMapEntry color="#994d00" quantity="100"/>
+              <ColorMapEntry color="#994d00" quantity="101"/>
             </ColorMap>
           </RasterSymbolizer>
         </Rule>

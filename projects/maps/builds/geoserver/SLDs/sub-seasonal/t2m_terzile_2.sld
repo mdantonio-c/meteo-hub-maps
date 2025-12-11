@@ -12,7 +12,7 @@
               <ColorMapEntry color="#FFFFFF" quantity="33" opacity="0"/>
               <ColorMapEntry color="#cfcfcf" quantity="50"/>
               <ColorMapEntry color="#e6e6e6" quantity="65"/>
-              <ColorMapEntry color="#ffffff" quantity="100"/>
+              <ColorMapEntry color="#ffffff" quantity="101"/>
             </ColorMap>
           </RasterSymbolizer>
         </Rule>

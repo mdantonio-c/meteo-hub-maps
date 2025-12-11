@@ -14,7 +14,7 @@
               <ColorMapEntry color="#99ccff" quantity="65"/>
               <ColorMapEntry color="#57abff" quantity="80"/>
               <ColorMapEntry color="#0b70d6" quantity="90"/>
-              <ColorMapEntry color="#004487" quantity="100"/>
+              <ColorMapEntry color="#004487" quantity="101"/>
             </ColorMap>
           </RasterSymbolizer>
         </Rule>

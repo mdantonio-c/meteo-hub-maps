@@ -1,24 +1,21 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<StyledLayerDescriptor version="1.0.0" xsi:schemaLocation="http://www.opengis.net/sld StyledLayerDescriptor.xsd" xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <NamedLayer>
-    <Name>t2m_quintile_5</Name>
-    <UserStyle>
-      <Title>Temperature 2m - Extreme High (80th Percentile)</Title>
-      <FeatureTypeStyle>
-        <Rule>
-          <RasterSymbolizer>
-            <Opacity>1.0</Opacity>
-            <ColorMap type="intervals">
-              <ColorMapEntry color="#FFFFFF" quantity="33" opacity="0"/>
-              <ColorMapEntry color="#e4cccc" quantity="50"/>
-              <ColorMapEntry color="#c99999" quantity="65"/>
-              <ColorMapEntry color="#ad6666" quantity="80"/>
-              <ColorMapEntry color="#923333" quantity="90"/>
-              <ColorMapEntry color="#770000" quantity="100"/>
-            </ColorMap>
-          </RasterSymbolizer>
-        </Rule>
-      </FeatureTypeStyle>
-    </UserStyle>
-  </NamedLayer>
-</StyledLayerDescriptor>
+<?xml version="1.0" encoding="UTF-8"?><sld:StyledLayerDescriptor xmlns:sld="http://www.opengis.net/sld" xmlns="http://www.opengis.net/sld" xmlns:gml="http://www.opengis.net/gml" xmlns:ogc="http://www.opengis.net/ogc" version="1.0.0">
+  <sld:NamedLayer>
+    <sld:Name>t2m_quintile_5</sld:Name>
+    <sld:UserStyle>
+      <sld:Name>t2m_quintile_5</sld:Name>
+      <sld:Title>Temperature 2m - Extreme High (80th Percentile)</sld:Title>
+      <sld:FeatureTypeStyle>
+        <sld:Name>t2m_quintile_5</sld:Name>
+        <sld:Rule>
+          <sld:RasterSymbolizer>
+            <sld:ColorMap type="intervals">
+              <sld:ColorMapEntry color="#440000" quantity="0"/>
+              <sld:ColorMapEntry color="#440000" quantity="200"/>
+            </sld:ColorMap>
+            <sld:ContrastEnhancement/>
+          </sld:RasterSymbolizer>
+        </sld:Rule>
+      </sld:FeatureTypeStyle>
+    </sld:UserStyle>
+  </sld:NamedLayer>
+</sld:StyledLayerDescriptor>
