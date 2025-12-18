@@ -1,5 +1,8 @@
 version: "3.9"
-# services:
+services:
+  geoserver:
+    environment:
+      JAVA_OPTS: "-Xms512m -Xmx1024m -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true -DGEOSERVER_CSRF_WHITELIST=maps.mistralportal.it"
 #   proxy:
 #     volumes:
 #       - ${PROJECT_DIR}/confs/geoserver.service:/etc/nginx/sites-enabled/geoserver.service

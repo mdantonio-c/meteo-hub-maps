@@ -30,4 +30,5 @@ variables:
     RADAR_DATA_PATH: /radar
     SUB_SEASONAL_DATA_PATH: /sub-seasonal-aim
     WW3_DATA_PATH: /ww3
+    STATIC_MAPS_DATA_PATH: ${DATA_DIR}/maps
     ALLOWED_IPS: {}
