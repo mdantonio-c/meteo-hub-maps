@@ -8,6 +8,7 @@ from restapi.env import Env
 from restapi.utilities.logs import log
 from datetime import datetime
 
+WINDY_MULTILAYER_DATA_PATH = Path(Env.get("WINDY_MULTILAYER_DATA_PATH", "/windy"))
 RUNS = ["00", "12"]
 RESOLUTIONS = ["lm2.2", "lm5", "WRF_OL", "WRF_DA_ITA", "icon"]
 FIELDS = [
@@ -118,7 +119,50 @@ DATASETS: Dict[str, DatasetType] = {
         }
     }
 }
+@lru_cache
+def get_multilayer_maps_base_path(
+    field: str,
+    platform: str,
+    env: str,
+    run: str,
+    dataset: str,
+    weekday: Optional[str] = None,
+) -> Path:
+    # flood fields have a different path
+    if field == "percentile" or field == "probability":
+        dataset = "iff"
+        prefix = "PROB"
+    elif field == "tiles":
+        prefix = "Tiles"
+    elif field == "windy":
+        prefix = "Windy"
+    else:
+        prefix = "Magics"
 
+    # weekday is transformed into a weekday_name to be integrated in the base_path.
+    if weekday is not None:
+        weekday = int(weekday)
+        # The *.READY files of PROB-12* folders are actually inside the folders
+        # with names corresponding to weekday-1 dates.
+        if prefix == "PROB" and run == "12":
+            weekday = int(WEEKDAYS[weekday - 1])
+        weekday_name = calendar.day_name[weekday]
+        if dataset == 'icon':
+            dataset = "ICON_2I_all2km"
+        folder = f"{prefix}-{run}-{dataset}.{weekday_name}.web"
+    else:
+        if dataset == 'icon':
+            dataset = "ICON_2I_all2km"
+        folder = f"{prefix}-{run}-{dataset}.web"
+
+    base_path = WINDY_MULTILAYER_DATA_PATH.joinpath(
+        platform,
+        env,
+        folder,
+    )
+    log.debug(f"base_path: {base_path}")
+    log.info(f"base_path: {base_path}")
+    return base_path
 
 @lru_cache
 def get_base_path(
@@ -221,3 +265,6 @@ def get_geoserver_ready_file(base_path: Path, area: str) -> Optional[Path]:
 
 def check_platform_availability(platform: str) -> bool:
     return DATA_PATH.joinpath(platform).exists()
+
+def check_platform_availability_for_dynamic_maps(platform: str) -> bool:
+    return WINDY_MULTILAYER_DATA_PATH.joinpath(platform).exists()

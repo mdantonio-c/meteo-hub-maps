@@ -5,7 +5,7 @@ from maps.endpoints.config import (
     DEFAULT_PLATFORM,
     RUNS,
     DatasetType,
-    get_base_path,
+    get_multilayer_maps_base_path,
     get_ready_file,
     get_geoserver_ready_file
 )
@@ -14,7 +14,7 @@ from restapi.exceptions import NotFound
 from restapi.models import fields, validate
 from restapi.rest.definition import EndpointResource, Response
 from restapi.utilities.logs import log
-from restapi.services.download import Downloader
+from maps.utils.downloader import CustomDownloader as Downloader
 
 class WindyEndpoint(EndpointResource):
     labels = ["windy"]
@@ -58,7 +58,8 @@ class WindyEndpoint(EndpointResource):
             latest_x = None
 
             for r in ["00", "12"]:
-                base_path = get_base_path("windy", '', '', r, dataset)
+                base_path = get_multilayer_maps_base_path("windy", '', '', r, dataset)
+                log.info(base_path)
                 # x = get_ready_file(base_path, area)
                 x = get_geoserver_ready_file(base_path, area)
                 # add walrus here
@@ -73,7 +74,7 @@ class WindyEndpoint(EndpointResource):
             except ValueError:
                 log.warning("No Run is available: .READY file not found")
         else:
-            base_path = get_base_path("windy", DEFAULT_PLATFORM, "PROD", run, dataset)
+            base_path = get_multilayer_maps_base_path("windy", DEFAULT_PLATFORM, "PROD", run, dataset)
             # tmp_ready_file = get_ready_file(base_path, area)
             tmp_ready_file = get_geoserver_ready_file(base_path, area)
             if tmp_ready_file:

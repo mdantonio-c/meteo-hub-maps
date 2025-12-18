@@ -26,7 +26,7 @@ variables:
     HOST_WW3_DIR: ${DATA_DIR}/ww3
     RADAR_RETENTION_HOURS: 72
     SEASONAL_DATA_PATH: /seasonal-aim
-    WINDY_DATA_PATH: /windy
+    WINDY_DATA_PATH: /windy_multilayer
     RADAR_DATA_PATH: /radar
     SUB_SEASONAL_DATA_PATH: /sub-seasonal-aim
     WW3_DATA_PATH: /ww3
