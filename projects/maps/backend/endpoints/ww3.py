@@ -26,7 +26,10 @@ class WW3Endpoint(EndpointResource):
         if not vectors_path.exists():
             raise NotFound(f"WW3 vectors path {vectors_path} does not exist")
 
-        files = [f.name for f in vectors_path.iterdir() if f.is_file()]
+        files = []
+        for item in vectors_path.rglob("*"):
+            if item.is_file():
+                files.append(str(item.relative_to(vectors_path)))
         files.sort()
         
         return self.response(files)
@@ -35,7 +38,7 @@ class WW3FileEndpoint(EndpointResource):
     labels = ["ww3"]
     
     @decorators.endpoint(
-        path="/ww3/vectors/<filename>",
+        path="/ww3/vectors/<path:filename>",
         summary="Get a specific WW3 vector file",
         responses={
             200: "File content",
@@ -44,7 +47,11 @@ class WW3FileEndpoint(EndpointResource):
     )
     def get(self, filename: str) -> Response:
         gradients_path = WW3_PATH / "dir-dir"
-        file_path = gradients_path / filename
+        file_path = (gradients_path / filename).resolve()
+        
+        # Security check: ensure the resolved path is within gradients_path
+        if not str(file_path).startswith(str(gradients_path.resolve())):
+            raise NotFound(f"Invalid file path: {filename}")
         
         if not file_path.exists():
             raise NotFound(f"File {filename} not found")
