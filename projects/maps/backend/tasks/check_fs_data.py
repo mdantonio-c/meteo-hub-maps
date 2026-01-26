@@ -260,57 +260,57 @@ def check_latest_data_and_trigger_geoserver_import_ww3(
     
     def custom_action(identifier, latest_file, path):
         run_date = identifier
-        retry = 0
+        # retry = 0
         
-        # Check if processed
-        # If there's any GEOSERVER.READY file, return and we're okay
-        if any(f.endswith(".GEOSERVER.READY") for f in os.listdir(path)):
-            log.info(f"GEOSERVER.READY file found in {path}, assuming run {run_date} is processed")
-            return
+        # # Check if processed
+        # # If there's any GEOSERVER.READY file, return and we're okay
+        # if any(f.endswith(".GEOSERVER.READY") for f in os.listdir(path)):
+        #     log.info(f"GEOSERVER.READY file found in {path}, assuming run {run_date} is processed")
+        #     return
 
-        # Check if pending (debounce)
-        checked_file = os.path.join(path, f"{run_date}.CELERY.CHECKED")
-        if os.path.exists(checked_file):
-            # Check if pending for more than 300 seconds
-            file_mtime = os.path.getmtime(checked_file)
-            age_seconds = (datetime.now() - datetime.fromtimestamp(file_mtime)).total_seconds()
-            # Read the retry count from the file
-            try:
-                with open(checked_file, "r") as f:
-                    lines = f.readlines()
-                    for line in reversed(lines):
-                        if line.startswith("Retry:"):
-                            retry = int(line.split(":")[1].strip())
-                            break
-            except Exception as e:
-                log.warning(f"Failed to read retry count from {checked_file}: {e}")
-                retry = 0
-            if age_seconds > 300:
-                log.info(f"Run {run_date} pending for {age_seconds:.0f}s (> 300s), removing and re-triggering")
-                retry += 1
-                if retry > 1:
-                    log.error(f"Run {run_date} has been retried {retry} times, marking container as unhealthy")
-                    # Mark container as unhealthy by creating/touching the health check failure file
-                    health_check_file = "/status/health_check_failure"
-                    with open(health_check_file, "w") as hf:
-                        hf.write(f"WW3 processing stuck for run {run_date} after {retry} retries\n")
-                        hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
-                    os.remove(checked_file)
-                    return
-                os.remove(checked_file)
-            else:
-                log.info(f"Run {run_date} already checked (pending for {age_seconds:.0f}s)")
-                return
-        if os.path.exists(checked_file):
-            log.info(f"Run {run_date} already checked (pending)")
-            return
+        # # Check if pending (debounce)
+        # checked_file = os.path.join(path, f"{run_date}.CELERY.CHECKED")
+        # if os.path.exists(checked_file):
+        #     # Check if pending for more than 300 seconds
+        #     file_mtime = os.path.getmtime(checked_file)
+        #     age_seconds = (datetime.now() - datetime.fromtimestamp(file_mtime)).total_seconds()
+        #     # Read the retry count from the file
+        #     try:
+        #         with open(checked_file, "r") as f:
+        #             lines = f.readlines()
+        #             for line in reversed(lines):
+        #                 if line.startswith("Retry:"):
+        #                     retry = int(line.split(":")[1].strip())
+        #                     break
+        #     except Exception as e:
+        #         log.warning(f"Failed to read retry count from {checked_file}: {e}")
+        #         retry = 0
+        #     if age_seconds > 300:
+        #         log.info(f"Run {run_date} pending for {age_seconds:.0f}s (> 300s), removing and re-triggering")
+        #         retry += 1
+        #         if retry > 1:
+        #             log.error(f"Run {run_date} has been retried {retry} times, marking container as unhealthy")
+        #             # Mark container as unhealthy by creating/touching the health check failure file
+        #             health_check_file = "/status/health_check_failure"
+        #             with open(health_check_file, "w") as hf:
+        #                 hf.write(f"WW3 processing stuck for run {run_date} after {retry} retries\n")
+        #                 hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
+        #             os.remove(checked_file)
+        #             return
+        #         os.remove(checked_file)
+        #     else:
+        #         log.info(f"Run {run_date} already checked (pending for {age_seconds:.0f}s)")
+        #         return
+        # if os.path.exists(checked_file):
+        #     log.info(f"Run {run_date} already checked (pending)")
+        #     return
             
-        # Create CELERY.CHECKED
-        with open(checked_file, "w") as f:
-            f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
-            f.write(f"Run: {run_date}\n")
-            f.write(f"Retry: {retry}\n")
-        log.info(f"Created {checked_file}")
+        # # Create CELERY.CHECKED
+        # with open(checked_file, "w") as f:
+        #     f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
+        #     f.write(f"Run: {run_date}\n")
+        #     f.write(f"Retry: {retry}\n")
+        # log.info(f"Created {checked_file}")
         
         # Trigger task
         c = celery.get_instance()
@@ -328,6 +328,6 @@ def check_latest_data_and_trigger_geoserver_import_ww3(
     
     watcher.check_and_trigger(
         custom_action=custom_action,
-        skip_debounce=True
+        skip_debounce=False
     )
     log.info("Finished checking ww3 data")

@@ -288,12 +288,13 @@ class DataWatcherStream(DataWatcher):
         self,
         task_name: Optional[str] = None,
         var_name: Optional[str] = None,
+        skip_debounce: bool = True,
         **kwargs
     ) -> None:
         super().check_and_trigger(
             task_name=None, # We handle triggering manually in _perform_action
             custom_processed_check=self._check_processed,
             custom_action=lambda id, f, p: self._perform_action(id, f, p, task_name, var_name),
-            skip_debounce=True,
+            skip_debounce=skip_debounce,
             **kwargs
         )
