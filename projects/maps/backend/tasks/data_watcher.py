@@ -76,6 +76,13 @@ class DataWatcher:
             is_processed = custom_processed_check(identifier, latest_path)
         elif os.path.exists(processed_path):
             is_processed = True
+        else:
+            # Check if there's a date-range file, if yes, consider it processed (SHOULD be handled in custom check ideally)
+            files_with_suffix = [f for f in os.listdir(latest_path) if f.endswith(self.processed_suffix)]
+            for f in files_with_suffix:
+                if "-" in f:
+                    is_processed = True
+                    break
 
         if is_processed:
             log.info(f"{self.processed_suffix} already exists for {latest_file} (or custom check passed)")
