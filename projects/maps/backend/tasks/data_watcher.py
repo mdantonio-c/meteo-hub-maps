@@ -81,12 +81,37 @@ class DataWatcher:
             log.info(f"{self.processed_suffix} already exists for {latest_file} (or custom check passed)")
             return
 
+        retry = 0
         if not skip_debounce:
             if os.path.exists(debounce_path):
                 age = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(debounce_path))).total_seconds()
+                # Read the retry count from the file
+                try:
+                    with open(debounce_path, "r") as f:
+                        lines = f.readlines()
+                        for line in reversed(lines):
+                            if line.startswith("Retry:"):
+                                retry = int(line.split(":")[1].strip())
+                                break
+                            else :
+                                retry = 0
+                except Exception as e:
+                    log.warning(f"Failed to read retry count from {debounce_path}: {e}")
+                    retry = 0
+                
                 if age > self.debounce_seconds:
+                    log.info(f"Identifier {identifier} pending for {age:.0f}s (> 300s), removing and re-triggering")
+                    retry += 1
+                    if retry > 1:
+                        log.error(f"Identifier {identifier} has been retried {retry} times, marking container as unhealthy")
+                        # Mark container as unhealthy by creating/touching the health check failure file
+                        health_check_file = "/status/health_check_failure"
+                        with open(health_check_file, "w") as hf:
+                            hf.write(f"DataWatcher processing stuck for identifier {identifier} after {retry} retries\n")
+                            hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                        os.remove(debounce_path)
+                        return
                     os.remove(debounce_path)
-                    log.info(f"Deleted {debounce_path} as it was older than {self.debounce_seconds}s")
                 else:
                     log.info(f"Skipping {latest_file} - already checked within last {self.debounce_seconds}s")
                     return
@@ -96,6 +121,7 @@ class DataWatcher:
             with open(debounce_path, "w") as f:
                 f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
                 f.write(f"File: {latest_file}\n")
+                f.write(f"Retry: {retry}\n")
             log.info(f"Created {debounce_path}")
 
         if dry_run:
@@ -177,12 +203,35 @@ class DataWatcherStream(DataWatcher):
                     if current_ready_dt <= end_dt:
                         cf_path = os.path.join(path, cf)
                         age = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(cf_path))).total_seconds()
-                        if age > self.debounce_seconds:
+                        retry = 0
+                        # Read the retry count from the file
+                        try:
+                            with open(cf_path, "r") as f:
+                                lines = f.readlines()
+                                for line in reversed(lines):
+                                    if line.startswith("Retry:"):
+                                        retry = int(line.split(":")[1].strip())
+                                        break
+                        except Exception as e:
+                            log.warning(f"Failed to read retry count from {cf_path}: {e}")
+                            retry = 0
+                        
+                        if age > 300:
+                            log.info(f"File range {date_range} pending for {age:.0f}s (> 300s), removing and re-triggering")
+                            retry += 1
+                            if retry > 1:
+                                log.error(f"File range {date_range} has been retried {retry} times, marking container as unhealthy")
+                                # Mark container as unhealthy by creating/touching the health check failure file
+                                health_check_file = "/status/health_check_failure"
+                                with open(health_check_file, "w") as hf:
+                                    hf.write(f"DataWatcher {var_name} processing stuck for range {date_range} after {retry} retries\n")
+                                    hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                                return
                             try:
                                 os.remove(cf_path)
-                                log.info(f"Deleted old debounce file {cf}")
+                                log.info(f"Deleted stale debounce file {cf}")
                             except OSError as e:
-                                log.warning(f"Failed to delete old debounce file {cf}: {e}")
+                                log.warning(f"Failed to delete stale debounce file {cf}: {e}")
                         else:
                             log.info(f"Skipping {latest_file} - covered by {cf} (checked {age:.0f}s ago)")
                             return
@@ -220,6 +269,7 @@ class DataWatcherStream(DataWatcher):
         with open(celery_checked_path, "w") as f:
             f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
             f.write(f"Files: {len(pending_filenames)}\n")
+            f.write(f"Retry: 0\n")
         log.info(f"Created {celery_checked_path}")
 
         if task_name:

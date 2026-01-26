@@ -32,3 +32,4 @@ variables:
     WW3_DATA_PATH: /ww3
     STATIC_MAPS_DATA_PATH: ${DATA_DIR}/maps
     ALLOWED_IPS: {}
+    GEOSERVER_PROXY_BASE_URL: maps.mistralportal.it

@@ -41,6 +41,7 @@ services:
       - ${HOST_RADAR_DIR}:${RADAR_DATA_PATH}
       - ${HOST_SUB_SEASONAL_GEOTIFF_DIR}:${SUB_SEASONAL_DATA_PATH}
       - ${HOST_WW3_DIR}:/ww3
+      - ${DATA_DIR}/celery_health:/status
   celerybeat:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
@@ -103,16 +104,19 @@ services:
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
       RECREATE_DATADIR: ${GEOSERVER_RECREATE_DATADIR}
       # JAVA_OPTS: "-Xms512m -Xmx1024m -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true"
-      JAVA_OPTS: "-Xms512m -Xmx1024m -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true -DGEOSERVER_CSRF_WHITELIST=meteohub-maps.hpc.cineca.it"
+      JAVA_OPTS: "-Xms512m -Xmx1024m -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true"
       # JAVA_OPTS: "-Xms512m -Xmx1024m -DNETCDF_DATA_DIR=/opt/geoserver_data"
     volumes:
       - ${DATA_DIR}/geoserver_data:/opt/geoserver_data
       # - ${DATA_DIR}/geoserver/settings:/settings
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/geoserver/meteohub/wms?service=WMS&version=1.1.0&request=GetMap&layers=meteohub%3At2m-t2m&bbox=2.9875%2C33.69%2C22.012500000000003%2C48.91&width=768&height=614&srs=EPSG%3A4326&styles=&format=image%2Fjpeg"]
+      test: 
+        - "CMD-SHELL"
+        - "curl -f 'http://localhost:8080/geoserver/wms?service=WMS&request=GetMap&layers=meteohub:t2m-t2m&styles=&format=image/png&version=1.1.1&width=256&height=256&srs=EPSG:3857&bbox=0,5009377.085697314,2504688.5428486555,7514065.628545967' | if grep -q 'ServiceException'; then exit 1; else exit 0; fi"
       interval: 30s
+          # curl -f "$(cat $$CATALINA_HOME/conf/healthcheck_url.txt)" && \
       timeout: 10s
-      retries: 5
+      retries: 3
       start_period: 60s
     logging:
       driver: "json-file"
@@ -123,3 +127,34 @@ services:
       default:
         aliases:
           - geoserver.dockerized.io
+
+  healthwatch:
+    image: docker:cli
+    container_name: healthwatch
+    environment:
+      ACTIVATE: ${ACTIVATE_GEOSERVER}
+
+    depends_on:
+      - geoserver
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${DATA_DIR}/celery_health:/celery/status
+    command: |
+      sh -c '
+      echo "Waiting for maps-geoserver-1..."
+      until docker ps > /dev/null 2>&1; do sleep 1; done
+      sleep 30
+      while true; do
+        STATUS=$$(docker inspect --format="{{.State.Health.Status}}" maps-geoserver-1 2>/dev/null)
+        echo "Geoserver status: $$STATUS"
+        if [ "$$STATUS" = "unhealthy" ] || [ -n "$$(ls -A /celery/status 2>/dev/null)" ]; then
+          rm -f /celery/status/*
+          echo "Restarting geoserver due to unhealthy status..." >&2
+          docker stop maps-celery-1
+          docker restart maps-geoserver-1
+          sleep 120
+          docker restart maps-celery-1
+        fi
+        sleep 10
+      done
+      '

@@ -122,6 +122,7 @@ def check_latest_data_and_trigger_geoserver_import_sub_seasonal(
     
     def custom_action(identifier, latest_file, path):
         run_date = identifier
+        retry = 0
         
         # Calculate range from files in t2m/quintile_1
         # Get a random variable folder instead of hardcoding t2m
@@ -184,6 +185,37 @@ def check_latest_data_and_trigger_geoserver_import_sub_seasonal(
         # Check if pending (debounce)
         checked_file = os.path.join(path, f"{range_str}.CELERY.CHECKED")
         if os.path.exists(checked_file):
+            # Check if pending for more than 300 seconds
+            file_mtime = os.path.getmtime(checked_file)
+            age_seconds = (datetime.now() - datetime.fromtimestamp(file_mtime)).total_seconds()
+            # Read the retry count from the file
+            try:
+                with open(checked_file, "r") as f:
+                    lines = f.readlines()
+                    for line in reversed(lines):
+                        if line.startswith("Retry:"):
+                            retry = int(line.split(":")[1].strip())
+                            break
+            except Exception as e:
+                log.warning(f"Failed to read retry count from {checked_file}: {e}")
+                retry = 0
+            if age_seconds > 300:
+                log.info(f"Range {range_str} pending for {age_seconds:.0f}s (> 300s), removing and re-triggering")
+                retry += 1
+                if retry > 1:
+                    log.error(f"Range {range_str} has been retried {retry} times, marking container as unhealthy")
+                    # Mark container as unhealthy by creating/touching the health check failure file
+                    health_check_file = "/status/health_check_failure"
+                    with open(health_check_file, "w") as hf:
+                        hf.write(f"Sub-seasonal processing stuck for range {range_str} after {retry} retries\n")
+                        hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                    os.remove(checked_file)
+                    return
+                os.remove(checked_file)
+            else:
+                log.info(f"Range {range_str} already checked (pending for {age_seconds:.0f}s)")
+                return
+        if os.path.exists(checked_file):
             log.info(f"Range {range_str} already checked (pending)")
             return
             
@@ -192,6 +224,7 @@ def check_latest_data_and_trigger_geoserver_import_sub_seasonal(
             f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
             f.write(f"Run: {run_date}\n")
             f.write(f"Range: {range_str}\n")
+            f.write(f"Retry: {retry}\n")
         log.info(f"Created {checked_file}")
         
         # Trigger task
@@ -227,6 +260,7 @@ def check_latest_data_and_trigger_geoserver_import_ww3(
     
     def custom_action(identifier, latest_file, path):
         run_date = identifier
+        retry = 0
         
         # Check if processed
         # If there's any GEOSERVER.READY file, return and we're okay
@@ -237,6 +271,37 @@ def check_latest_data_and_trigger_geoserver_import_ww3(
         # Check if pending (debounce)
         checked_file = os.path.join(path, f"{run_date}.CELERY.CHECKED")
         if os.path.exists(checked_file):
+            # Check if pending for more than 300 seconds
+            file_mtime = os.path.getmtime(checked_file)
+            age_seconds = (datetime.now() - datetime.fromtimestamp(file_mtime)).total_seconds()
+            # Read the retry count from the file
+            try:
+                with open(checked_file, "r") as f:
+                    lines = f.readlines()
+                    for line in reversed(lines):
+                        if line.startswith("Retry:"):
+                            retry = int(line.split(":")[1].strip())
+                            break
+            except Exception as e:
+                log.warning(f"Failed to read retry count from {checked_file}: {e}")
+                retry = 0
+            if age_seconds > 300:
+                log.info(f"Run {run_date} pending for {age_seconds:.0f}s (> 300s), removing and re-triggering")
+                retry += 1
+                if retry > 1:
+                    log.error(f"Run {run_date} has been retried {retry} times, marking container as unhealthy")
+                    # Mark container as unhealthy by creating/touching the health check failure file
+                    health_check_file = "/status/health_check_failure"
+                    with open(health_check_file, "w") as hf:
+                        hf.write(f"WW3 processing stuck for run {run_date} after {retry} retries\n")
+                        hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                    os.remove(checked_file)
+                    return
+                os.remove(checked_file)
+            else:
+                log.info(f"Run {run_date} already checked (pending for {age_seconds:.0f}s)")
+                return
+        if os.path.exists(checked_file):
             log.info(f"Run {run_date} already checked (pending)")
             return
             
@@ -244,6 +309,7 @@ def check_latest_data_and_trigger_geoserver_import_ww3(
         with open(checked_file, "w") as f:
             f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
             f.write(f"Run: {run_date}\n")
+            f.write(f"Retry: {retry}\n")
         log.info(f"Created {checked_file}")
         
         # Trigger task
