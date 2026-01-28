@@ -6,8 +6,10 @@ from restapi.env import Env
 import os
 from datetime import datetime
 from pathlib import Path
+import json
 
 DATA_PATH = Path(Env.get("SUB_SEASONAL_AIM_PATH", "/sub-seasonal-aim"))
+JSONS_PATH = DATA_PATH / "json_weekly"
 
 class SubSeasonalEndpoint(EndpointResource):
     labels = ["sub-seasonal"]
@@ -107,3 +109,58 @@ class SubSeasonalEndpoint(EndpointResource):
         except Exception as e:
             log.error(f"Error parsing GEOSERVER.READY file: {e}")
             raise NotFound(f"Unable to parse sub-seasonal data metadata: {e}")
+
+
+class SubSeasonalJSONsEndpoint(EndpointResource):
+    labels = ["sub-seasonal"]
+
+    @decorators.endpoint(
+        path="/sub-seasonal/data/cities",
+        summary="List available sub-seasonal weekly json files",
+        responses={
+            200: "List of files successfully retrieved",
+            404: "json_weekly folder not found",
+        },
+    )
+    def get(self) -> Response:
+        if not JSONS_PATH.exists():
+            raise NotFound(f"Sub-seasonal jsons path {JSONS_PATH} does not exist")
+
+        files = []
+        for item in JSONS_PATH.rglob("*"):
+            if item.is_file() and item.suffix.lower() == ".json":
+                files.append(str(item.relative_to(JSONS_PATH)))
+        files.sort()
+
+        return self.response(files)
+
+
+class SubSeasonalJSONFileEndpoint(EndpointResource):
+    labels = ["sub-seasonal"]
+
+    @decorators.endpoint(
+        path="/sub-seasonal/data/cities/<path:filename>",
+        summary="Get a specific sub-seasonal weekly json file",
+        responses={
+            200: "File content",
+            404: "File not found",
+        },
+    )
+    def get(self, filename: str) -> Response:
+        base_path = JSONS_PATH
+        file_path = (base_path / filename).resolve()
+
+        # Security check: ensure the resolved path is within base_path
+        if not str(file_path).startswith(str(base_path.resolve())):
+            raise NotFound(f"Invalid file path: {filename}")
+
+        if not file_path.exists():
+            raise NotFound(f"File {filename} not found")
+
+        try:
+            with open(file_path, 'r') as f:
+                content = json.load(f)
+            return self.response(content)
+        except Exception as e:
+            log.error(f"Error reading sub-seasonal json file {filename}: {e}")
+            raise NotFound(f"Error reading file {filename}")
