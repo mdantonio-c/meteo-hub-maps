@@ -131,7 +131,7 @@ def check_latest_data_and_trigger_geoserver_import_sub_seasonal(
             log.warning(f"No variable directories found in {path}")
             return
         
-        sample_var = var_dirs[0]  # Use first available variable folder
+        sample_var = var_dirs[0] if var_dirs[0] != "json_weekly" else var_dirs[1]  # Use first available variable folder
         var_path = os.path.join(path, sample_var)
         
         child_dirs = [d for d in os.listdir(var_path) if os.path.isdir(os.path.join(var_path, d)) and d not in ['.', '..']]
