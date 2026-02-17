@@ -103,3 +103,60 @@ class WindyEndpoint(EndpointResource):
             return Downloader.send_file_content(filepath.name, filepath.parent, 'image/tif')
         else:
             return Downloader.send_file_streamed(filepath.name, filepath.parent, 'image/tif')
+
+class MapStaticWindyList(EndpointResource):
+    labels = ["maps"]
+
+    @decorators.endpoint(
+        path="/maps/wind-direction/list/files",
+        summary="List available static-windy tiff files.",
+        responses={200: "List of files successfully retrieved"},
+    )
+    def get(self) -> Response:
+        """List available static-windy tiff files."""
+        
+        ready_files = []
+        for r in ["00", "12"]:
+            path = get_multilayer_maps_base_path("windy", "", "", r, "icon")
+            log.info(path)
+            x = get_geoserver_ready_file(path, "Italia")
+            if x:
+                ready_files.append(x)
+
+        if not ready_files:
+            raise NotFound("No .READY file found")
+        ready_files.sort(key=lambda f: f.name[:10], reverse=True)
+        latest_path = ready_files[0].parent.joinpath("wind-direction")
+        files = sorted([f.name for f in latest_path.iterdir() if f.is_file()])
+        return self.response(files)
+
+
+class MapStaticWindyFile(EndpointResource):
+    labels = ["maps"]
+
+    @decorators.endpoint(
+        path="/maps/wind-direction/files/<filename>",
+        summary="Get a specific static-windy tiff file.",
+        responses={
+            200: "File successfully retrieved",
+            404: "File not found",
+        },
+    )
+    def get(self, filename: str) -> Response:
+        """Get a specific static-windy tiff file."""
+        ready_files = []
+        for r in ["00", "12"]:
+            path = get_multilayer_maps_base_path("windy", "", "", r, "icon")
+            log.info(path)
+            x = get_geoserver_ready_file(path, "Italia")
+            if x:
+                ready_files.append(x)
+
+        if not ready_files:
+            raise NotFound("No .READY file found")
+        ready_files.sort(key=lambda f: f.name[:10], reverse=True)
+        latest_path = ready_files[0].parent.joinpath("wind-direction")
+        filepath = latest_path.joinpath(filename)
+        if not filepath.exists() or not filepath.is_file():
+            raise NotFound(f"File {filepath} does not exist")
+        return Downloader.send_file_content(filepath.name, filepath.parent, 'image/tif')

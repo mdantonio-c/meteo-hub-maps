@@ -28,16 +28,12 @@ Meteo-Hub-Maps delivers multi-source meteorological data through a unified servi
 git clone https://gitlab.hpc.cineca.it/mistral/meteo-hub-maps.git
 cd meteo-hub-maps
 git checkout 0.6
-```
 
 ### Install RAPyDo Controller
 
 ```bash
-sudo pip3 install --upgrade git+https://github.com/rapydo/do.git@2.4
+sudo pip3 install --upgrade git+https://github.com/rapydo/do.git@3.0
 rapydo install
-```
-
-### Initialize and Start Services
 
 ```bash
 rapydo init
