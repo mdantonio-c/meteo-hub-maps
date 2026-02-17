@@ -29,7 +29,8 @@ sld_dir_mapping = {
     "sf_6_12_24": ["snow6-snow", "snow12-snow", "snow24-snow"],
     "t2m": ["t2m-t2m"],
     "ws10m": ["wind-10u", "wind-10v", "wind-vmax_10m"],
-    "isobars":["pressure-isob"]
+    "isobars": ["pressure-isob"],
+    "zerot": ["zerot-hzerocl"]
 }
 
 # === CONFIGURATION ===
@@ -52,6 +53,9 @@ def update_geoserver_image_mosaic(
     date: str = datetime.now().strftime("%Y-%m-%d"),
     sld_directory: str = "/SLDs",
 ) -> None:
+    # Ensure workspace exists before uploading
+    create_workspace_generic(GEOSERVER_URL, GEOSERVER_USERNAME, GEOSERVER_PASSWORD, WORKSPACE)
+    
     sld_directory = os.path.join(sld_directory, "windy")
     update_styles(sld_directory)
     TIFF_DIR = f"{BASE_PATH}/Windy-{run}-ICON_2I_all2km.web/Italia"
@@ -63,6 +67,8 @@ def update_geoserver_image_mosaic(
             if folder in flat_sld_dirs:
                 print(f"📂 Processing folder: {folder}")
                 process_and_rename_tiffs(date_edit, run, folder, TIFF_DIR)
+            else:
+                continue
             if ensure_tiff_files_exist(folder, TIFF_DIR):
                 create_image_mosaic_store(folder, GEOSERVER_URL)
             publish_layer(folder, GEOSERVER_URL)
