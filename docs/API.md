@@ -99,6 +99,50 @@ Returns PNG image with `Content-Type: image/png`
 
 ---
 
+## Wind Direction Endpoints
+
+### List Wind Direction Files
+
+Retrieve a list of available static wind direction GeoTIFF files for the most recent run. The service automatically identifies the latest available run (00 or 12) using `.READY` files.
+
+**Endpoint:** `GET /api/maps/wind-direction/list/files`
+
+**Response:** `200 OK`
+
+```json
+[
+  "wind_direction_00.tif",
+  "wind_direction_01.tif",
+  "..."
+]
+```
+
+**Error Responses:**
+- `404 Not Found` - No `.READY` files found for any run
+
+---
+
+### Get Wind Direction File
+
+Download a specific static wind direction GeoTIFF file from the `wind-direction` subfolder of the most recent run.
+
+**Endpoint:** `GET /api/maps/wind-direction/files/<filename>`
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `filename` | string | Name of the file to retrieve (e.g., `wind_direction_00.tif`) |
+
+**Response:** `200 OK`
+
+Returns GeoTIFF file with `Content-Type: image/tiff`
+
+**Error Responses:**
+- `404 Not Found` - File not found or no `.READY` files found
+
+---
+
 ## Windy Endpoint
 
 ### Get Windy Data Information

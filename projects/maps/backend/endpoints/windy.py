@@ -109,11 +109,15 @@ class MapStaticWindyList(EndpointResource):
 
     @decorators.endpoint(
         path="/maps/wind-direction/list/files",
-        summary="List available static-windy tiff files.",
+        summary="List available static wind direction tiff files for the latest run.",
         responses={200: "List of files successfully retrieved"},
     )
     def get(self) -> Response:
-        """List available static-windy tiff files."""
+        """
+        List available static wind direction tiff files.
+        It searches for the latest available run by checking both '00' and '12' runs
+        and identifies the most recent one using the .READY files.
+        """
         
         ready_files = []
         for r in ["00", "12"]:
@@ -136,14 +140,18 @@ class MapStaticWindyFile(EndpointResource):
 
     @decorators.endpoint(
         path="/maps/wind-direction/files/<filename>",
-        summary="Get a specific static-windy tiff file.",
+        summary="Get a specific static wind direction tiff file from the latest run.",
         responses={
             200: "File successfully retrieved",
             404: "File not found",
         },
     )
     def get(self, filename: str) -> Response:
-        """Get a specific static-windy tiff file."""
+        """
+        Get a specific static wind direction tiff file.
+        The file is retrieved from the 'wind-direction' subfolder of the latest
+        available run.
+        """
         ready_files = []
         for r in ["00", "12"]:
             path = get_multilayer_maps_base_path("windy", "", "", r, "icon")
