@@ -21,7 +21,7 @@ WW3_BASE_PATH = Env.get("WW3_DATA_PATH", "/ww3")
 COPIES_BASE_DIRECTORY = "/geoserver_data/copies"
 
 @CeleryExt.task(idempotent=True)
-def update_geoserver_ww3_layers(self, run_date):
+def (self, run_date):
     log.info(f"Starting ww3 ingestion for run {run_date}")
     
     create_workspace_generic(GEOSERVER_URL, USERNAME, PASSWORD, WORKSPACE)
