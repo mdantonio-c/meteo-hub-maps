@@ -30,7 +30,9 @@ sld_dir_mapping = {
     "t2m": ["t2m-t2m"],
     "ws10m": ["wind-10u", "wind-10v", "wind-vmax_10m"],
     "isobars": ["pressure-isob"],
-    "zerot": ["zerot-hzerocl"]
+    "zerot": ["zerot-hzerocl"],
+    "sf_tot": ["tot_snow-snow"],
+    "prec_tot": ["tot_prec-tp"]
 }
 
 # === CONFIGURATION ===

@@ -43,6 +43,9 @@ sld_dir_mapping = {
     "temperature": ["seasonal-mean-TM", "seasonal-mean-Tm"],
     "precip_anomaly": ["seasonal-ano-P"],
     "precip_sum": ["seasonal-sum-P"],
+    "zerot": ["zerot-hzerocl"],
+    "sf_tot": ["tot_snow-snow"],
+    "prec_tot": ["tot_prec-tp"]
 }
 
 # Mapping of seasonal directories to their corresponding names in copies
