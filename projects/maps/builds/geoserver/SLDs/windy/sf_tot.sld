@@ -9,7 +9,7 @@
         <sld:Rule>
           <sld:RasterSymbolizer>
             <sld:ColorMap type="intervals">
-              <sld:ColorMapEntry color="#3f5736" opacity="0" quantity="0.0000001"/>
+              <sld:ColorMapEntry color="#3f5736" opacity="0" quantity="0.5"/>
               <sld:ColorMapEntry color="#3f5736" quantity="0.5" label="1"/>
               <sld:ColorMapEntry color="#4d7e3a" quantity="1" label="2"/>
               <sld:ColorMapEntry color="#89bf73" quantity="2" label="5"/>
