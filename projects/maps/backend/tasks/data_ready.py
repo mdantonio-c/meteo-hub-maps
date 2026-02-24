@@ -40,7 +40,7 @@ sld_dir_mapping = {
     "t2m": ["t2m-t2m"],
     "ws10m": ["wind-10u", "wind-10v", "wind-vmax_10m"],
     "temp_anomaly": ["seasonal-ano-max-TM", "seasonal-ano-min-Tm"],
-    "temperature": ["seasonal-mean-TM", "seasonal-mean-Tm"],
+    "": ["seasonal-mean-TM", "seasonal-mean-Tm"],
     "precip_anomaly": ["seasonal-ano-P"],
     "precip_sum": ["seasonal-sum-P"],
     "zerot": ["zerot-hzerocl"],
@@ -348,8 +348,8 @@ def find_seasonal_sld_mapping(seasonal_dir: str) -> Optional[str]:
         "ano_max_TM": "temp_anomaly",
         "ano_min_Tm": "temp_anomaly", 
         "ano_P": "precip_anomaly",
-        "mean_TM": "temperature",
-        "mean_Tm": "temperature",
+        "mean_TM": "t2m",
+        "mean_Tm": "t2m",
         "sum_P": "precip_sum"
     }
     
