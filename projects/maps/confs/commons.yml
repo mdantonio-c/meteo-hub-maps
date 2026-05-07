@@ -83,16 +83,26 @@ services:
     volumes:
       # Mount data directories for THREDDS to serve
       - ${HOST_THREDDS_DIR}:/usr/local/tomcat/content/thredds/public
+      # Persist THREDDS caches on host storage for faster repeated UGRID requests
+      - ${DATA_DIR}/thredds_cache:/usr/local/tomcat/content/thredds/cache
+      # Override TDS/WMS runtime configuration with local tuned files
+      - ${PROJECT_DIR}/builds/thredds/threddsConfig.xml:/usr/local/tomcat/content/thredds/threddsConfig.xml:ro
+      - ${PROJECT_DIR}/builds/thredds/wmsConfig.xml:/usr/local/tomcat/content/thredds/wmsConfig.xml:ro
     environment:
       ACTIVATE: ${ACTIVATE_THREDDS}
       # TDS Content root
       TDS_CONTENT_ROOT_PATH: /usr/local/tomcat/content
       # The minimum and maximum Java heap space memory to be allocated to the TDS
+      THREDDS_XMX_SIZE: 12G
       THREDDS_XMS_SIZE: 4G
       TDS_HOST: ${PROJECT_DOMAIN}
       # See https://github.com/Unidata/tomcat-docker#configurable-tomcat-uid-and-gid
       TOMCAT_USER_ID: ${CURRENT_UID}
       TOMCAT_GROUP_ID: ${CURRENT_GID}
+      THREDDS_XMX: 12G
+      THREDDS_XMS: 4G
+      # Use G1GC for better handling of large memory heaps
+      JAVA_OPTS: -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Djava.awt.headless=true -Djava.util.prefs.systemRoot=/usr/local/tomcat/content/thredds/javaUtilPrefs
     healthcheck:
       test:
         - "CMD-SHELL"

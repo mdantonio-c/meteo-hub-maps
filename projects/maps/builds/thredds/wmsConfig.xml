@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wmsConfig>
+  <global>
+    <defaults>
+      <allowFeatureInfo>true</allowFeatureInfo>
+      <defaultColorScaleRange>0 1</defaultColorScaleRange>
+      <defaultAboveMaxColor>extend</defaultAboveMaxColor>
+      <defaultBelowMinColor>extend</defaultBelowMinColor>
+      <defaultNoDataColor>transparent</defaultNoDataColor>
+      <defaultOpacity>100</defaultOpacity>
+      <defaultPaletteName>psu-viridis</defaultPaletteName>
+      <defaultNumColorBands>250</defaultNumColorBands>
+      <logScaling>false</logScaling>
+      <intervalTime>false</intervalTime>
+    </defaults>
+    <standardNames/>
+  </global>
+  <overrides/>
+</wmsConfig>

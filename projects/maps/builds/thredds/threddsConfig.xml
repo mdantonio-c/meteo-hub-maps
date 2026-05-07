@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<threddsConfig>
+  <WMS>
+    <allow>true</allow>
+    <allowRemote>false</allowRemote>
+    <maxImageWidth>2048</maxImageWidth>
+    <maxImageHeight>2048</maxImageHeight>
+  </WMS>
+</threddsConfig>
