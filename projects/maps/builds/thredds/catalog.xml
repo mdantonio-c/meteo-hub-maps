@@ -1,39 +1,51 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<catalog name="THREDDS Server Default Catalog : You must change this to fit your server!"
+<catalog name="MeteoHub MER Water Level Data"
          xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0"
          xmlns:xlink="http://www.w3.org/1999/xlink"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0
            https://schemas.unidata.ucar.edu/thredds/InvCatalog.1.0.6.xsd">
   
-  <service name="all" base="" serviceType="compound">
-    <!-- <service name="odap" serviceType="OpenDAP" bascatalog.htmle="/thredds/dodsC/"/>
-    <service name="d4dap" serviceType="DAP4" base="/thredds/dap4/"/> -->
-    <service name="http" serviceType="HTTPServer" base="/thredds/fileServer/"/>
-    <!-- <service name="wcs" serviceType="WCS" base="/thredds/wcs/"/> -->
-    <service name="wms" serviceType="WMS" base="/thredds/wms/"/>
-    <!-- <service name="ncssGrid" serviceType="NetcdfSubset" base="/thredds/ncss/grid/"/>
-    <service name="ncssPoint" serviceType="NetcdfSubset" base="/thredds/ncss/point/"/>
-    <service name="cdmremote" serviceType="CdmRemote" base="/thredds/cdmremote/"/> -->
-  </service>
-
-  <datasetRoot path="test" location="content/testdata/" />
-
-  <!-- <dataset name="Test Grid Dataset" ID="testGrid"
-           serviceName="all"  urlPath="test/crossSeamProjection.nc" dataType="Grid"/>
-
-  <dataset name="Test Point Dataset" ID="testPoint"
-           serviceName="all" urlPath="test/H.1.1.nc" dataType="Point"/>
+  <service name="wms" serviceType="WMS" base="/thredds/wms/"/>
   
-  <dataset name="Test Station Dataset" ID="testStation"
-           serviceName="all" urlPath="test/H.2.1.1.nc" dataType="Point"/> -->
+  <datasetRoot path="mer" location="/usr/local/tomcat/content/thredds/public/MER/"/>
 
-  <datasetScan name="Test all files in a directory" ID="testDatasetScan"
-               path="testAll" location="content/testdata">
+  <dataset name="MeteoHub MER Data" ID="meteoHub-mer">
     <metadata inherited="true">
-      <serviceName>all</serviceName>
+      <documentation type="summary">
+        MeteoHub MER (Marine Environment Reanalysis) Water Level Data
+      </documentation>
+      <documentation type="rights">
+        Data from ARPAE and DPC partner agencies
+      </documentation>
     </metadata>
-  </datasetScan>
 
-  <!-- <catalogRef xlink:title="Test Enhanced Catalog" xlink:href="enhancedCatalog.xml" name=""/> -->
+    <!-- ARPAE Water Level Data -->
+    <datasetScan name="ARPAE Water Level Data" ID="arpae-wl-scan"
+                 path="mer/water-level-arpae" location="/usr/local/tomcat/content/thredds/public/MER/water-level-arpae">
+      <metadata inherited="true">
+        <serviceName>wms</serviceName>
+        <dataType>Grid</dataType>
+        <documentation type="summary">Time series water level data from ARPAE monitoring stations</documentation>
+      </metadata>
+      <filter>
+        <include wildcard="*.nc"/>
+      </filter>
+      <sort by="name" />
+    </datasetScan>
+
+    <!-- DPC Water Level Data -->
+    <datasetScan name="DPC Water Level Data" ID="dpc-wl-scan"
+                 path="mer/water-level-dpc" location="/usr/local/tomcat/content/thredds/public/MER/water-level-dpc">
+      <metadata inherited="true">
+        <serviceName>wms</serviceName>
+        <dataType>Grid</dataType>
+        <documentation type="summary">Time series water level data from DPC monitoring stations</documentation>
+      </metadata>
+      <filter>
+        <include wildcard="*.nc"/>
+      </filter>
+      <sort by="name" />
+    </datasetScan>
+  </dataset>
 </catalog>

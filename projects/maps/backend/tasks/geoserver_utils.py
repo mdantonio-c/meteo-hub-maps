@@ -578,15 +578,22 @@ def update_mosaic_coverage_name(geoserver_url: str, store_name: str, native_cove
 
 def check_style_exists(geoserver_url: str, style_name: str, username: str, password: str, workspace: str = WORKSPACE) -> bool:
     """Check if a style exists in GeoServer."""
-    url = f"{geoserver_url}/rest/styles/{style_name}"
-    response = requests.get(url, auth=(username, password))
-    
-    if response.status_code == 200:
-        log.debug(f"Style '{style_name}' exists in GeoServer")
-        return True
-    else:
-        log.debug(f"Style '{style_name}' does not exist in GeoServer: {response.status_code}")
-        return False
+    urls_to_check = [
+        f"{geoserver_url}/rest/styles/{style_name}",
+        f"{geoserver_url}/rest/workspaces/{workspace}/styles/{style_name}",
+    ]
+
+    for url in urls_to_check:
+        response = requests.get(url, auth=(username, password))
+        if response.status_code == 200:
+            log.debug(f"Style '{style_name}' exists in GeoServer (endpoint: {url})")
+            return True
+
+    log.debug(
+        f"Style '{style_name}' does not exist in GeoServer "
+        f"(checked global and workspace='{workspace}' endpoints)"
+    )
+    return False
 
 
 def associate_sld_with_layer_generic(geoserver_url: str, layer_name: str, style_name: str, username: str, password: str, workspace: str = WORKSPACE) -> bool:

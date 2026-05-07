@@ -92,54 +92,64 @@ class StartMonitoring(EndpointResource):
     def post(self):
         c = celery.get_instance()
         # Create a periodic task to check for the latest data and trigger Geoserver import
+        # task = c.create_crontab_task(
+        #     name="check_latest_data_and_trigger_geoserver_import_windy",
+        #     hour="*",
+        #     minute="*",
+        #     day_of_week="*",
+        #     day_of_month="*",
+        #     month_of_year="*",
+        #     task="check_latest_data_and_trigger_geoserver_import_windy",
+        #     args=[],
+        # )            
+        # task = c.create_crontab_task(
+        #     name="check_latest_data_and_trigger_geoserver_import_seasonal",
+        #     hour="*",
+        #     minute="*",
+        #     day_of_week="*",
+        #     day_of_month="*",
+        #     month_of_year="*",
+        #     task="check_latest_data_and_trigger_geoserver_import_seasonal",
+        #     args=[]
+        #     )
+        # task = c.create_crontab_task(
+        #     name="check_latest_data_and_trigger_geoserver_import_radar",
+        #     hour="*",
+        #     minute="*",
+        #     day_of_week="*",
+        #     day_of_month="*",
+        #     month_of_year="*",
+        #     task="check_latest_data_and_trigger_geoserver_import_radar",
+        #     args=[]
+        #     )
+        # task = c.create_crontab_task(
+        #     name="check_latest_data_and_trigger_geoserver_import_sub_seasonal",
+        #     hour="*",
+        #     minute="*",
+        #     day_of_week="*",
+        #     day_of_month="*",
+        #     month_of_year="*",
+        #     task="check_latest_data_and_trigger_geoserver_import_sub_seasonal",
+        #     args=[],
+        # )
+        # task = c.create_crontab_task(
+        #     name="check_latest_data_and_trigger_geoserver_import_ww3",
+        #     hour="*",
+        #     minute="*",
+        #     day_of_week="*",
+        #     day_of_month="*",
+        #     month_of_year="*",
+        #     task="check_latest_data_and_trigger_geoserver_import_ww3",
+        #     args=[],
+        # )
         task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_geoserver_import_windy",
+            name="check_latest_data_and_trigger_thredds_ingestion",
             hour="*",
             minute="*",
             day_of_week="*",
             day_of_month="*",
             month_of_year="*",
-            task="check_latest_data_and_trigger_geoserver_import_windy",
-            args=[],
-        )            
-        task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_geoserver_import_seasonal",
-            hour="*",
-            minute="*",
-            day_of_week="*",
-            day_of_month="*",
-            month_of_year="*",
-            task="check_latest_data_and_trigger_geoserver_import_seasonal",
-            args=[]
-            )
-        task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_geoserver_import_radar",
-            hour="*",
-            minute="*",
-            day_of_week="*",
-            day_of_month="*",
-            month_of_year="*",
-            task="check_latest_data_and_trigger_geoserver_import_radar",
-            args=[]
-            )
-        task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_geoserver_import_sub_seasonal",
-            hour="*",
-            minute="*",
-            day_of_week="*",
-            day_of_month="*",
-            month_of_year="*",
-            task="check_latest_data_and_trigger_geoserver_import_sub_seasonal",
-            args=[],
-        )
-        task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_geoserver_import_ww3",
-            hour="*",
-            minute="*",
-            day_of_week="*",
-            day_of_month="*",
-            month_of_year="*",
-            task="check_latest_data_and_trigger_geoserver_import_ww3",
+            task="check_latest_data_and_trigger_thredds_ingestion",
             args=[],
         )
         return self.response("Monitoring started", code=202)
@@ -166,6 +176,9 @@ class StartMonitoring(EndpointResource):
             log.info(f"Deleted periodic task: {res}")
         if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_ww3"):
             res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_ww3")
+            log.info(f"Deleted periodic task: {res}")
+        if c.get_periodic_task("check_latest_data_and_trigger_thredds_ingestion"):
+            res = c.delete_periodic_task("check_latest_data_and_trigger_thredds_ingestion")
             log.info(f"Deleted periodic task: {res}")
         if res:
             return self.response("Monitoring has been disabled", code=202)

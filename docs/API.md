@@ -504,6 +504,111 @@ Returns the JSON content of the vector file.
 
 ---
 
+## THREDDS Endpoints
+
+### Get Latest THREDDS Ingested Files (All Products)
+
+Retrieve THREDDS ingestion status and latest ingested files for all supported MER products.
+
+**Endpoint:** `GET /api/thredds/latest`
+
+**Supported Product Identifiers:**
+- `arpae/water-level`
+- `dpc/water-level`
+
+**Response:** `200 OK`
+
+```json
+{
+  "products": [
+    {
+      "product": "arpae/water-level",
+      "sourcePath": "/MER/water-level-arpae",
+      "threddsPath": "/thredds_ugrid/MER/water-level-arpae",
+      "ingestion": {
+        "status": "ingested",
+        "lastSourceReady": "20260507",
+        "lastThreddsReady": "20260507",
+        "lastIngestedAt": "2026-05-07T10:00:00",
+        "latestIngestedFiles": [
+          "20260507.nc"
+        ]
+      }
+    },
+    {
+      "product": "dpc/water-level",
+      "sourcePath": "/MER/water-level-dpc",
+      "threddsPath": "/thredds_ugrid/MER/water-level-dpc",
+      "ingestion": {
+        "status": "ingesting",
+        "lastSourceReady": "20260508",
+        "lastThreddsReady": "20260507",
+        "lastIngestedAt": null,
+        "latestIngestedFiles": []
+      }
+    }
+  ]
+}
+```
+
+**Ingestion Status Values:**
+- `ingested` - The latest source `.READY` marker is already reflected by a `.THREDDS.READY` marker
+- `ingesting` - A newer source `.READY` marker exists and THREDDS ingestion is still pending
+- `null` - No source readiness markers found yet
+
+---
+
+### Get Latest THREDDS Ingested Files (Single Product)
+
+Retrieve THREDDS ingestion status and latest ingested files for one product.
+
+**Endpoint:** `GET /api/thredds/{provider}/{product}/latest`
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Values | Description |
+|-----------|------|----------|--------|-------------|
+| `provider` | string | Yes | `arpae`, `dpc` | Product provider |
+| `product` | string | Yes | `water-level` | Product name |
+
+**Response:** `200 OK`
+
+```json
+{
+  "product": "arpae/water-level",
+  "sourcePath": "/MER/water-level-arpae",
+  "threddsPath": "/thredds_ugrid/MER/water-level-arpae",
+  "ingestion": {
+    "status": "ingested",
+    "lastSourceReady": "20260507",
+    "lastThreddsReady": "20260507",
+    "lastIngestedAt": "2026-05-07T10:00:00",
+    "latestIngestedFiles": [
+      "20260507.nc"
+    ]
+  }
+}
+```
+
+**Error Responses:**
+- `404 Not Found` - Unsupported THREDDS product
+
+---
+
+### Get THREDDS Layer Status (Existing)
+
+Retrieve available layers and extracted timestamps from the THREDDS target directory.
+
+**Endpoint:** `GET /api/thredds/status`
+
+Retrieve status for one layer:
+
+**Endpoint:** `GET /api/thredds/status/{layer}`
+
+These endpoints expose generic THREDDS layer metadata and remain available for backward compatibility.
+
+---
+
 ## Data Monitoring Endpoints
 
 ### Start Data Monitoring

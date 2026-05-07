@@ -14,6 +14,8 @@ services:
       RADAR_DATA_PATH: ${RADAR_DATA_PATH}
       SUB_SEASONAL_DATA_PATH: ${SUB_SEASONAL_DATA_PATH}
       WINDY_MULTILAYER_DATA_PATH: ${WINDY_DATA_PATH}
+      MER_DATA_PATH: ${MER_DATA_PATH}
+      THREDDS_DATA_PATH: ${THREDDS_DATA_PATH}
     volumes:
       - ${HOST_WINDY_GEOTIFF_DIR}:${WINDY_DATA_PATH}
       - ${STATIC_MAPS_DATA_PATH}:${DATA_PATH}
@@ -21,6 +23,8 @@ services:
       - ${HOST_RADAR_DIR}:${RADAR_DATA_PATH}
       - ${HOST_SUB_SEASONAL_GEOTIFF_DIR}:${SUB_SEASONAL_DATA_PATH}
       - ${HOST_WW3_DIR}:/ww3
+      - ${HOST_MER_DIR}:${MER_DATA_PATH}
+      - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
   celery:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
@@ -33,6 +37,8 @@ services:
       SEASONAL_DATA_PATH: ${SEASONAL_DATA_PATH}
       RADAR_DATA_PATH: ${RADAR_DATA_PATH}
       SUB_SEASONAL_DATA_PATH: ${SUB_SEASONAL_DATA_PATH}
+      MER_DATA_PATH: ${MER_DATA_PATH}
+      THREDDS_DATA_PATH: ${THREDDS_DATA_PATH}
     volumes:
       - ${HOST_WINDY_GEOTIFF_DIR}:/windy
       - ${HOST_SEASONAL_GEOTIFF_DIR}:${SEASONAL_DATA_PATH}
@@ -41,32 +47,47 @@ services:
       - ${HOST_RADAR_DIR}:${RADAR_DATA_PATH}
       - ${HOST_SUB_SEASONAL_GEOTIFF_DIR}:${SUB_SEASONAL_DATA_PATH}
       - ${HOST_WW3_DIR}:/ww3
+      - ${HOST_MER_DIR}:${MER_DATA_PATH}
+      - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
       - ${DATA_DIR}/celery_health:/status
   celerybeat:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
-  thredds:
     # environment:
-    #   - JAVA_OPTS=-Xmx2g
-    # image: unidata/thredds-docker:5.6
+    #   PLATFORM: ${PLATFORM}
+    #   GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
+    #   GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
+    #   WW3_DATA_PATH: ${WW3_DATA_PATH}
+    #   SEASONAL_DATA_PATH: ${SEASONAL_DATA_PATH}
+    #   RADAR_DATA_PATH: ${RADAR_DATA_PATH}
+    #   SUB_SEASONAL_DATA_PATH: ${SUB_SEASONAL_DATA_PATH}
+    #   MER_DATA_PATH: ${MER_DATA_PATH}
+    #   THREDDS_DATA_PATH: ${THREDDS_DATA_PATH}
+    # volumes:
+    #   - ${HOST_WINDY_GEOTIFF_DIR}:/windy
+    #   - ${HOST_SEASONAL_GEOTIFF_DIR}:${SEASONAL_DATA_PATH}
+    #   - ${DATA_DIR}/geoserver_data:/geoserver_data
+    #   - ${DATA_DIR}/../projects/maps/builds/geoserver/SLDs:/SLDs
+    #   - ${HOST_RADAR_DIR}:${RADAR_DATA_PATH}
+    #   - ${HOST_SUB_SEASONAL_GEOTIFF_DIR}:${SUB_SEASONAL_DATA_PATH}
+    #   - ${HOST_WW3_DIR}:/ww3
+    #   - ${HOST_MER_DIR}:${MER_DATA_PATH}
+    #   - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
+    # command: celery --app restapi.connectors.celery.beat.celery_app beat --loglevel=info
+  thredds:
+    # Build custom THREDDS image with pre-configured directories at build time
     build: ${PROJECT_DIR}/builds/thredds
-    image: sdl/thredds:${RAPYDO_VERSION}
-    command: >
-      "chmod a+x ./init.sh; ./init.sh"
+    image: maps/thredds:${RAPYDO_VERSION}
     ports:
-      - "8081:8080"
+      - "8082:8080"
     volumes:
-      # - ${DATA_DIR}/tds/tomcat/logs/:/usr/local/tomcat/logs/
-      # - ${DATA_DIR}/tds/thredds/logs/:/usr/local/tomcat/content/thredds/logs/
-      # - ${DATA_DIR}/tds/tomcat/tomcat-users.xml:/usr/local/tomcat/conf/tomcat-users.xml
-      # - ${DATA_DIR}/tds/thredds/catalog:/usr/local/tomcat/content/thredds
-      - ${DATA_DIR}/maps:/usr/local/tomcat/content/thredds/public/testdata
+      # Mount data directories for THREDDS to serve
+      - ${HOST_THREDDS_DIR}:/usr/local/tomcat/content/thredds/public
     environment:
       ACTIVATE: ${ACTIVATE_THREDDS}
       # TDS Content root
       TDS_CONTENT_ROOT_PATH: /usr/local/tomcat/content
       # The minimum and maximum Java heap space memory to be allocated to the TDS
-      THREDDS_XMX_SIZE: 4G
       THREDDS_XMS_SIZE: 4G
       TDS_HOST: ${PROJECT_DOMAIN}
       # See https://github.com/Unidata/tomcat-docker#configurable-tomcat-uid-and-gid
