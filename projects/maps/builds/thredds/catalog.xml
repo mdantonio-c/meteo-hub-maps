@@ -1,12 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <catalog name="MeteoHub MER Water Level Data"
-         xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0"
-         xmlns:xlink="http://www.w3.org/1999/xlink"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0
-           https://schemas.unidata.ucar.edu/thredds/InvCatalog.1.0.6.xsd">
+         xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0">
   
+  <service name="http" serviceType="HTTPServer" base="/thredds/fileServer/"/>
+  <service name="odap" serviceType="OpenDAP" base="/thredds/dodsC/"/>
   <service name="wms" serviceType="WMS" base="/thredds/wms/"/>
+  <service name="ncml" serviceType="NCML" base="/thredds/ncml/"/>
+  
+  <!-- Compound service combining HTTP, OpenDAP, WMS, and NCML -->
+  <service name="all" base="" serviceType="Compound">
+    <service name="http" serviceType="HTTPServer" base="/thredds/fileServer/"/>
+    <service name="odap" serviceType="OpenDAP" base="/thredds/dodsC/"/>
+    <service name="wms" serviceType="WMS" base="/thredds/wms/"/>
+    <service name="ncml" serviceType="NCML" base="/thredds/ncml/"/>
+  </service>
   
   <datasetRoot path="mer" location="/usr/local/tomcat/content/thredds/public/MER/"/>
 
@@ -15,15 +22,14 @@
       <documentation type="summary">
         MeteoHub MER (Marine Environment Reanalysis) Water Level Data
       </documentation>
-      <documentation type="rights">
-        Data from ARPAE and DPC partner agencies
-      </documentation>
+      <serviceName>all</serviceName>
     </metadata>
 
     <!-- ARPAE Water Level Data -->
     <datasetScan name="ARPAE Water Level Data" ID="arpae-wl-scan"
                  path="mer/water-level-arpae" location="/usr/local/tomcat/content/thredds/public/MER/water-level-arpae">
       <metadata inherited="true">
+        <serviceName>all</serviceName>
         <dataType>Grid</dataType>
         <dataFormat>NetCDF</dataFormat>
         <documentation type="summary">Time series water level data from ARPAE monitoring stations (UGRID mesh)</documentation>
@@ -31,20 +37,36 @@
         <keyword>arpae</keyword>
         <keyword>mesh</keyword>
         <keyword>ugrid</keyword>
+        <keyword>ocean</keyword>
         <geospatialCoverage>
           <name vocabulary="DIF">Mediterranean Sea</name>
+          <northsouth>
+            <start>30</start>
+            <size>20</size>
+            <units>degrees_north</units>
+          </northsouth>
+          <eastwest>
+            <start>-6</start>
+            <size>42</size>
+            <units>degrees_east</units>
+          </eastwest>
         </geospatialCoverage>
+        <timeCoverage>
+          <start>2020-01-01T00:00:00Z</start>
+          <end>present</end>
+        </timeCoverage>
       </metadata>
       <filter>
         <include wildcard="*.nc"/>
       </filter>
-      <sort by="name" />
+      <sort by="name" decreasing="true" />
     </datasetScan>
 
     <!-- DPC Water Level Data -->
     <datasetScan name="DPC Water Level Data" ID="dpc-wl-scan"
                  path="mer/water-level-dpc" location="/usr/local/tomcat/content/thredds/public/MER/water-level-dpc">
       <metadata inherited="true">
+        <serviceName>all</serviceName>
         <dataType>Grid</dataType>
         <dataFormat>NetCDF</dataFormat>
         <documentation type="summary">Time series water level data from DPC monitoring stations (UGRID mesh)</documentation>
@@ -52,14 +74,29 @@
         <keyword>dpc</keyword>
         <keyword>mesh</keyword>
         <keyword>ugrid</keyword>
+        <keyword>ocean</keyword>
         <geospatialCoverage>
           <name vocabulary="DIF">Mediterranean Sea</name>
+          <northsouth>
+            <start>30</start>
+            <size>20</size>
+            <units>degrees_north</units>
+          </northsouth>
+          <eastwest>
+            <start>-6</start>
+            <size>42</size>
+            <units>degrees_east</units>
+          </eastwest>
         </geospatialCoverage>
+        <timeCoverage>
+          <start>2020-01-01T00:00:00Z</start>
+          <end>present</end>
+        </timeCoverage>
       </metadata>
       <filter>
         <include wildcard="*.nc"/>
       </filter>
-      <sort by="name" />
+      <sort by="name" decreasing="true" />
     </datasetScan>
   </dataset>
 </catalog>
