@@ -93,6 +93,14 @@ services:
       # See https://github.com/Unidata/tomcat-docker#configurable-tomcat-uid-and-gid
       TOMCAT_USER_ID: ${CURRENT_UID}
       TOMCAT_GROUP_ID: ${CURRENT_GID}
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "curl -fsS http://localhost:8080/thredds/catalog.html >/dev/null || exit 1"
+      interval: 30s
+      timeout: 10s
+      retries: 6
+      start_period: 180s
     networks:
       default:
         aliases:
