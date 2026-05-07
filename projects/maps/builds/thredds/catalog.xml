@@ -24,9 +24,16 @@
     <datasetScan name="ARPAE Water Level Data" ID="arpae-wl-scan"
                  path="mer/water-level-arpae" location="/usr/local/tomcat/content/thredds/public/MER/water-level-arpae">
       <metadata inherited="true">
-        <serviceName>wms</serviceName>
         <dataType>Grid</dataType>
-        <documentation type="summary">Time series water level data from ARPAE monitoring stations</documentation>
+        <dataFormat>NetCDF</dataFormat>
+        <documentation type="summary">Time series water level data from ARPAE monitoring stations (UGRID mesh)</documentation>
+        <keyword>water level</keyword>
+        <keyword>arpae</keyword>
+        <keyword>mesh</keyword>
+        <keyword>ugrid</keyword>
+        <geospatialCoverage>
+          <name vocabulary="DIF">Mediterranean Sea</name>
+        </geospatialCoverage>
       </metadata>
       <filter>
         <include wildcard="*.nc"/>
@@ -38,9 +45,16 @@
     <datasetScan name="DPC Water Level Data" ID="dpc-wl-scan"
                  path="mer/water-level-dpc" location="/usr/local/tomcat/content/thredds/public/MER/water-level-dpc">
       <metadata inherited="true">
-        <serviceName>wms</serviceName>
         <dataType>Grid</dataType>
-        <documentation type="summary">Time series water level data from DPC monitoring stations</documentation>
+        <dataFormat>NetCDF</dataFormat>
+        <documentation type="summary">Time series water level data from DPC monitoring stations (UGRID mesh)</documentation>
+        <keyword>water level</keyword>
+        <keyword>dpc</keyword>
+        <keyword>mesh</keyword>
+        <keyword>ugrid</keyword>
+        <geospatialCoverage>
+          <name vocabulary="DIF">Mediterranean Sea</name>
+        </geospatialCoverage>
       </metadata>
       <filter>
         <include wildcard="*.nc"/>
