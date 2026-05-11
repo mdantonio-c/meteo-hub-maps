@@ -92,56 +92,56 @@ class StartMonitoring(EndpointResource):
     def post(self):
         c = celery.get_instance()
         # Create a periodic task to check for the latest data and trigger Geoserver import
-        # task = c.create_crontab_task(
-        #     name="check_latest_data_and_trigger_geoserver_import_windy",
-        #     hour="*",
-        #     minute="*",
-        #     day_of_week="*",
-        #     day_of_month="*",
-        #     month_of_year="*",
-        #     task="check_latest_data_and_trigger_geoserver_import_windy",
-        #     args=[],
-        # )            
-        # task = c.create_crontab_task(
-        #     name="check_latest_data_and_trigger_geoserver_import_seasonal",
-        #     hour="*",
-        #     minute="*",
-        #     day_of_week="*",
-        #     day_of_month="*",
-        #     month_of_year="*",
-        #     task="check_latest_data_and_trigger_geoserver_import_seasonal",
-        #     args=[]
-        #     )
-        # task = c.create_crontab_task(
-        #     name="check_latest_data_and_trigger_geoserver_import_radar",
-        #     hour="*",
-        #     minute="*",
-        #     day_of_week="*",
-        #     day_of_month="*",
-        #     month_of_year="*",
-        #     task="check_latest_data_and_trigger_geoserver_import_radar",
-        #     args=[]
-        #     )
-        # task = c.create_crontab_task(
-        #     name="check_latest_data_and_trigger_geoserver_import_sub_seasonal",
-        #     hour="*",
-        #     minute="*",
-        #     day_of_week="*",
-        #     day_of_month="*",
-        #     month_of_year="*",
-        #     task="check_latest_data_and_trigger_geoserver_import_sub_seasonal",
-        #     args=[],
-        # )
-        # task = c.create_crontab_task(
-        #     name="check_latest_data_and_trigger_geoserver_import_ww3",
-        #     hour="*",
-        #     minute="*",
-        #     day_of_week="*",
-        #     day_of_month="*",
-        #     month_of_year="*",
-        #     task="check_latest_data_and_trigger_geoserver_import_ww3",
-        #     args=[],
-        # )
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import_windy",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import_windy",
+            args=[],
+        )            
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import_seasonal",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import_seasonal",
+            args=[]
+            )
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import_radar",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import_radar",
+            args=[]
+            )
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import_sub_seasonal",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import_sub_seasonal",
+            args=[],
+        )
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import_ww3",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import_ww3",
+            args=[],
+        )
         task = c.create_crontab_task(
             name="check_latest_data_and_trigger_thredds_ingestion",
             hour="*",
