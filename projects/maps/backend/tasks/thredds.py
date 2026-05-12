@@ -141,7 +141,7 @@ def _populate_mer_cache(
     work_items: list[tuple[int, str, str]] = []
     for zoom, bboxes in sorted(bboxes_by_zoom.items()):
         # Use the original date_str (YYYYMMDD) for generating 72h steps
-        zoom_dates = generate_72_hourly_steps(dates[0][:8]) if dates else []
+        zoom_dates = generate_72_hourly_steps(date_str) if dates else []
         log.info(
             f"MER cache population {source_folder}: zoom={zoom} tiles={len(bboxes)} "
             f"time_steps={len(zoom_dates)} (forced 72h)"
