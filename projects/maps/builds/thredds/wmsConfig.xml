@@ -4,6 +4,8 @@
     <defaults>
       <allowFeatureInfo>true</allowFeatureInfo>
       <defaultColorScaleRange>0 1</defaultColorScaleRange>
+      <!-- Add this line below -->
+      <autoScale>true</autoScale>
       <defaultAboveMaxColor>extend</defaultAboveMaxColor>
       <defaultBelowMinColor>extend</defaultBelowMinColor>
       <defaultNoDataColor>transparent</defaultNoDataColor>

@@ -1,7 +1,12 @@
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+import math
 from pathlib import Path
 import shutil
 import re
+from urllib.parse import parse_qs, urlparse
+
+import requests
 
 from restapi.connectors import celery
 from restapi.connectors.celery import CeleryExt
@@ -13,6 +18,170 @@ THREDDS_TARGET_PATH = Path(Env.get("THREDDS_DATA_PATH", "/thredds_ugrid"))
 MER_WATER_LEVEL_FOLDERS = ("water-level-arpae", "water-level-dpc")
 READY_FILE_PATTERN = re.compile(r"^(\d{8})\.READY$")
 THREDDS_READY_FILE_PATTERN = re.compile(r"^(\d{8})\.THREDDS\.READY$")
+EPSG_3857_WORLD_WIDTH = 40075016.68557849
+
+MER_WMS_MANIFEST_PATH = Env.get("MER_WMS_MANIFEST_PATH", "/MER/marine-wms-getmap-manifest.txt")
+MER_WMS_BASE_URL = Env.get("MER_WMS_BASE_URL", "https://meteohub-maps.hpc.cineca.it/thredds/wms/mer")
+MER_WMS_LAYER = Env.get("MER_WMS_LAYER", "water_level")
+MER_WMS_STYLE = Env.get("MER_WMS_STYLE", "raster/x-Sst")
+MER_WMS_NUM_COLOR_BANDS = Env.get("MER_WMS_NUM_COLOR_BANDS", "20")
+MER_WMS_ABOVE_MAX_COLOR = Env.get("MER_WMS_ABOVE_MAX_COLOR", "extend")
+MER_WMS_BELOW_MIN_COLOR = Env.get("MER_WMS_BELOW_MIN_COLOR", "extend")
+MER_WMS_FILENAME_TEMPLATE = Env.get("MER_WMS_FILENAME_TEMPLATE", "{date}.nc")
+MER_WMS_COLOR_SCALE_RANGE = Env.get("MER_WMS_COLOR_SCALE_RANGE", "-1.23,1.94")
+MER_WMS_COLOR_SCALE_RANGE_ARPAE = Env.get("MER_WMS_COLOR_SCALE_RANGE_ARPAE", MER_WMS_COLOR_SCALE_RANGE)
+MER_WMS_COLOR_SCALE_RANGE_DPC = Env.get("MER_WMS_COLOR_SCALE_RANGE_DPC", MER_WMS_COLOR_SCALE_RANGE)
+MER_WMS_TIME_OFFSETS_HOURS = Env.get("MER_WMS_TIME_OFFSETS_HOURS", "-24")
+MER_WMS_REQUEST_TIMEOUT_SECONDS = float(Env.get("MER_WMS_REQUEST_TIMEOUT_SECONDS", 20.0))
+
+
+def _resolve_manifest_path() -> Path:
+    manifest_path = Path(MER_WMS_MANIFEST_PATH)
+    if manifest_path.is_absolute():
+        return manifest_path
+    return Path.cwd() / manifest_path
+
+
+def _parse_time_offsets_hours() -> list[int]:
+    offsets: list[int] = []
+    for part in MER_WMS_TIME_OFFSETS_HOURS.split(","):
+        value = part.strip()
+        if not value:
+            continue
+        try:
+            offsets.append(int(value))
+        except ValueError:
+            log.warning(f"Invalid MER_WMS_TIME_OFFSETS_HOURS token skipped: {value}")
+    return offsets or [0]
+
+
+def _build_time_list_from_ingested_date(date_str: str) -> list[str]:
+    base_time = datetime.strptime(date_str, "%Y%m%d").replace(tzinfo=timezone.utc)
+    times: set[str] = set()
+    for hour_offset in _parse_time_offsets_hours():
+        timestamp = base_time + timedelta(hours=hour_offset)
+        times.add(timestamp.strftime("%Y-%m-%dT%H:%M:%S.000Z"))
+    return sorted(times)
+
+
+def _zoom_from_bbox(min_x: float, max_x: float) -> int | None:
+    width = abs(max_x - min_x)
+    if width <= 0:
+        return None
+    zoom = round(math.log2(EPSG_3857_WORLD_WIDTH / width))
+    if zoom < 0 or zoom > 24:
+        return None
+    return zoom
+
+
+def _extract_zoom_bboxes_from_manifest(manifest_path: Path) -> dict[int, list[str]]:
+    grouped: dict[int, list[str]] = defaultdict(list)
+    seen: dict[int, set[str]] = defaultdict(set)
+
+    if not manifest_path.exists():
+        log.warning(f"MER WMS manifest not found: {manifest_path}")
+        return {}
+
+    with open(manifest_path, encoding="utf-8") as manifest:
+        for raw_line in manifest:
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            query = parse_qs(urlparse(line).query)
+            bbox = query.get("bbox", [None])[0]
+            if not bbox:
+                continue
+
+            parts = [item.strip() for item in bbox.split(",")]
+            if len(parts) != 4:
+                continue
+
+            try:
+                min_x, min_y, max_x, max_y = map(float, parts)
+            except ValueError:
+                continue
+
+            zoom = _zoom_from_bbox(min_x, max_x)
+            if zoom is None:
+                continue
+
+            # Normalize precision to ensure stable de-duplication.
+            bbox_norm = f"{min_x:.12f},{min_y:.12f},{max_x:.12f},{max_y:.12f}"
+            if bbox_norm in seen[zoom]:
+                continue
+
+            seen[zoom].add(bbox_norm)
+            grouped[zoom].append(f"{min_x},{min_y},{max_x},{max_y}")
+
+    return dict(sorted(grouped.items()))
+
+
+def _color_scale_range_for_product(source_folder: str) -> str:
+    if source_folder == "water-level-arpae":
+        return MER_WMS_COLOR_SCALE_RANGE_ARPAE
+    if source_folder == "water-level-dpc":
+        return MER_WMS_COLOR_SCALE_RANGE_DPC
+    return MER_WMS_COLOR_SCALE_RANGE
+
+
+def _populate_mer_cache(
+    source_folder: str,
+    filename: str,
+    dates: list[str],
+    bboxes_by_zoom: dict[int, list[str]],
+) -> None:
+    if not dates:
+        log.warning(f"No dates provided for MER cache population ({source_folder})")
+        return
+    if not bboxes_by_zoom:
+        log.warning(f"No BBOXes provided for MER cache population ({source_folder})")
+        return
+
+    color_scale_range = _color_scale_range_for_product(source_folder)
+    base_url = f"{MER_WMS_BASE_URL.rstrip('/')}/{source_folder}/{filename}"
+
+    total_tiles = 0
+    failed_tiles = 0
+    session = requests.Session()
+    for zoom, bboxes in sorted(bboxes_by_zoom.items()):
+        zoom_tiles = len(bboxes)
+        total_tiles += zoom_tiles * len(dates)
+        log.info(f"MER cache population {source_folder}: zoom={zoom} tiles={zoom_tiles}")
+
+        for date_value in dates:
+            for bbox in bboxes:
+                params = {
+                    "service": "WMS",
+                    "request": "GetMap",
+                    "layers": MER_WMS_LAYER,
+                    "styles": MER_WMS_STYLE,
+                    "format": "image/png",
+                    "transparent": "true",
+                    "version": "1.1.1",
+                    "COLORSCALERANGE": color_scale_range,
+                    "NUMCOLORBANDS": MER_WMS_NUM_COLOR_BANDS,
+                    "ABOVEMAXCOLOR": MER_WMS_ABOVE_MAX_COLOR,
+                    "BELOWMINCOLOR": MER_WMS_BELOW_MIN_COLOR,
+                    "time": date_value,
+                    "width": "256",
+                    "height": "256",
+                    "srs": "EPSG:3857",
+                    "bbox": bbox,
+                }
+                try:
+                    response = session.get(base_url, params=params, timeout=MER_WMS_REQUEST_TIMEOUT_SECONDS)
+                    response.raise_for_status()
+                except requests.RequestException as exc:
+                    failed_tiles += 1
+                    log.warning(
+                        f"MER cache request failed for {source_folder} zoom={zoom} date={date_value} bbox={bbox}: {exc}"
+                    )
+
+    log.info(
+        f"MER cache population finished for {source_folder}: "
+        f"dates={len(dates)} zoom_levels={len(bboxes_by_zoom)} total_requests={total_tiles} failures={failed_tiles}"
+    )
 
 
 def _source_mer_directories(root: Path) -> list[Path]:
@@ -180,3 +349,28 @@ def ingest_MER_ready_directory(self, source_or_ready_path: str, date_str: str | 
         marker.write(f"Deleted old netCDF files: {deleted_files}\n")
 
     log.info(f"Created {thredds_ready_file}")
+
+    # Trigger cache population for the product that was just ingested.
+    c = celery.get_instance()
+    if source_dir.name == "water-level-arpae":
+        c.celery_app.send_task("populate_mer_cache_after_arpae_ingestion", args=(date_str,))
+    elif source_dir.name == "water-level-dpc":
+        c.celery_app.send_task("populate_mer_cache_after_dpc_ingestion", args=(date_str,))
+
+
+@CeleryExt.task(idempotent=True)
+def populate_mer_cache_after_arpae_ingestion(self, date_str: str) -> None:
+    manifest_path = _resolve_manifest_path()
+    bboxes_by_zoom = _extract_zoom_bboxes_from_manifest(manifest_path)
+    dates = _build_time_list_from_ingested_date(date_str)
+    filename = MER_WMS_FILENAME_TEMPLATE.format(date=date_str, source="water-level-arpae")
+    _populate_mer_cache("water-level-arpae", filename, dates, bboxes_by_zoom)
+
+
+@CeleryExt.task(idempotent=True)
+def populate_mer_cache_after_dpc_ingestion(self, date_str: str) -> None:
+    manifest_path = _resolve_manifest_path()
+    bboxes_by_zoom = _extract_zoom_bboxes_from_manifest(manifest_path)
+    dates = _build_time_list_from_ingested_date(date_str)
+    filename = MER_WMS_FILENAME_TEMPLATE.format(date=date_str, source="water-level-dpc")
+    _populate_mer_cache("water-level-dpc", filename, dates, bboxes_by_zoom)

@@ -8,6 +8,8 @@ from maps.tasks.data_watcher import DataWatcher, DataWatcherStream
 from maps.tasks.thredds import (  # noqa: F401
     check_latest_data_and_trigger_thredds_ingestion,
     ingest_MER_ready_directory,
+    populate_mer_cache_after_arpae_ingestion,
+    populate_mer_cache_after_dpc_ingestion,
 )
 
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver" # TODO: get from env
