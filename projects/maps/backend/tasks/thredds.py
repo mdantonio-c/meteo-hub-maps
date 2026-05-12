@@ -136,7 +136,7 @@ def _populate_mer_cache(
         base_time = datetime.strptime(base_date, "%Y%m%d").replace(tzinfo=timezone.utc)
         return [
             (base_time + timedelta(hours=step)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-            for step in range(72)
+            for step in range(1)
         ]
 
     work_items: list[tuple[int, str, str]] = []
