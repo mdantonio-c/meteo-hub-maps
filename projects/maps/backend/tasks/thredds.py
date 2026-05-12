@@ -35,6 +35,7 @@ MER_WMS_REQUEST_TIMEOUT_SECONDS = float(Env.get("MER_WMS_REQUEST_TIMEOUT_SECONDS
 MER_WMS_CACHE_THREADS = int(Env.get("MER_WMS_CACHE_THREADS", 4))
 # Zoom levels for which every available time step in the NC file is requested.
 MER_WMS_ALL_TIMES_ZOOM_LEVELS = Env.get("MER_WMS_ALL_TIMES_ZOOM_LEVELS", "5,6")
+MANDATORY_ALL_TIMES_ZOOM_LEVELS = frozenset({5, 6})
 
 
 def _parse_time_offsets_hours() -> list[int]:
@@ -69,7 +70,8 @@ def _parse_all_times_zoom_levels() -> frozenset[int]:
             levels.add(int(value))
         except ValueError:
             log.warning(f"Invalid MER_WMS_ALL_TIMES_ZOOM_LEVELS token skipped: {value}")
-    return frozenset(levels)
+    # Always force zoom levels 5 and 6 to run against every available time step.
+    return frozenset(levels).union(MANDATORY_ALL_TIMES_ZOOM_LEVELS)
 
 
 def _get_wms_available_times(wms_base_url: str) -> list[str]:
