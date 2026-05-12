@@ -1,10 +1,9 @@
-from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
-import math
 from pathlib import Path
 import shutil
 import re
-from urllib.parse import parse_qs, urlparse
+import xml.etree.ElementTree as ET
 
 import requests
 
@@ -13,14 +12,14 @@ from restapi.connectors.celery import CeleryExt
 from restapi.env import Env
 from restapi.utilities.logs import log
 
+from maps.tasks.mer_wms_bboxes import BBOXES_BY_ZOOM
+
 MER_BASE_PATH = Path(Env.get("MER_DATA_PATH", "/MER"))
 THREDDS_TARGET_PATH = Path(Env.get("THREDDS_DATA_PATH", "/thredds_ugrid"))
 MER_WATER_LEVEL_FOLDERS = ("water-level-arpae", "water-level-dpc")
 READY_FILE_PATTERN = re.compile(r"^(\d{8})\.READY$")
 THREDDS_READY_FILE_PATTERN = re.compile(r"^(\d{8})\.THREDDS\.READY$")
-EPSG_3857_WORLD_WIDTH = 40075016.68557849
 
-MER_WMS_MANIFEST_PATH = Env.get("MER_WMS_MANIFEST_PATH", "/MER/marine-wms-getmap-manifest.txt")
 MER_WMS_BASE_URL = Env.get("MER_WMS_BASE_URL", "https://meteohub-maps.hpc.cineca.it/thredds/wms/mer")
 MER_WMS_LAYER = Env.get("MER_WMS_LAYER", "water_level")
 MER_WMS_STYLE = Env.get("MER_WMS_STYLE", "raster/x-Sst")
@@ -33,13 +32,9 @@ MER_WMS_COLOR_SCALE_RANGE_ARPAE = Env.get("MER_WMS_COLOR_SCALE_RANGE_ARPAE", MER
 MER_WMS_COLOR_SCALE_RANGE_DPC = Env.get("MER_WMS_COLOR_SCALE_RANGE_DPC", MER_WMS_COLOR_SCALE_RANGE)
 MER_WMS_TIME_OFFSETS_HOURS = Env.get("MER_WMS_TIME_OFFSETS_HOURS", "-24")
 MER_WMS_REQUEST_TIMEOUT_SECONDS = float(Env.get("MER_WMS_REQUEST_TIMEOUT_SECONDS", 20.0))
-
-
-def _resolve_manifest_path() -> Path:
-    manifest_path = Path(MER_WMS_MANIFEST_PATH)
-    if manifest_path.is_absolute():
-        return manifest_path
-    return Path.cwd() / manifest_path
+MER_WMS_CACHE_THREADS = int(Env.get("MER_WMS_CACHE_THREADS", 4))
+# Zoom levels for which every available time step in the NC file is requested.
+MER_WMS_ALL_TIMES_ZOOM_LEVELS = Env.get("MER_WMS_ALL_TIMES_ZOOM_LEVELS", "5,6")
 
 
 def _parse_time_offsets_hours() -> list[int]:
@@ -64,57 +59,49 @@ def _build_time_list_from_ingested_date(date_str: str) -> list[str]:
     return sorted(times)
 
 
-def _zoom_from_bbox(min_x: float, max_x: float) -> int | None:
-    width = abs(max_x - min_x)
-    if width <= 0:
-        return None
-    zoom = round(math.log2(EPSG_3857_WORLD_WIDTH / width))
-    if zoom < 0 or zoom > 24:
-        return None
-    return zoom
+def _parse_all_times_zoom_levels() -> frozenset[int]:
+    levels: set[int] = set()
+    for part in MER_WMS_ALL_TIMES_ZOOM_LEVELS.split(","):
+        value = part.strip()
+        if not value:
+            continue
+        try:
+            levels.add(int(value))
+        except ValueError:
+            log.warning(f"Invalid MER_WMS_ALL_TIMES_ZOOM_LEVELS token skipped: {value}")
+    return frozenset(levels)
 
 
-def _extract_zoom_bboxes_from_manifest(manifest_path: Path) -> dict[int, list[str]]:
-    grouped: dict[int, list[str]] = defaultdict(list)
-    seen: dict[int, set[str]] = defaultdict(set)
+def _get_wms_available_times(wms_base_url: str) -> list[str]:
+    """Query WMS GetCapabilities and return all time values for the layer."""
+    params = {"service": "WMS", "version": "1.1.1", "request": "GetCapabilities"}
+    try:
+        response = requests.get(wms_base_url, params=params, timeout=MER_WMS_REQUEST_TIMEOUT_SECONDS)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        log.warning(f"GetCapabilities request failed for {wms_base_url}: {exc}")
+        return []
 
-    if not manifest_path.exists():
-        log.warning(f"MER WMS manifest not found: {manifest_path}")
-        return {}
+    try:
+        root = ET.fromstring(response.content)
+    except ET.ParseError as exc:
+        log.warning(f"Failed to parse GetCapabilities XML from {wms_base_url}: {exc}")
+        return []
 
-    with open(manifest_path, encoding="utf-8") as manifest:
-        for raw_line in manifest:
-            line = raw_line.strip()
-            if not line:
-                continue
+    # WMS 1.1.1: <Layer><Dimension name="time">val1,val2,...</Dimension></Layer>
+    # Namespaces vary; search broadly.
+    times: list[str] = []
+    for dim in root.iter():
+        local = dim.tag.split("}")[-1] if "}" in dim.tag else dim.tag
+        if local == "Dimension" and dim.get("name", "").lower() == "time" and dim.text:
+            times = [t.strip() for t in dim.text.split(",") if t.strip()]
+            break
 
-            query = parse_qs(urlparse(line).query)
-            bbox = query.get("bbox", [None])[0]
-            if not bbox:
-                continue
-
-            parts = [item.strip() for item in bbox.split(",")]
-            if len(parts) != 4:
-                continue
-
-            try:
-                min_x, min_y, max_x, max_y = map(float, parts)
-            except ValueError:
-                continue
-
-            zoom = _zoom_from_bbox(min_x, max_x)
-            if zoom is None:
-                continue
-
-            # Normalize precision to ensure stable de-duplication.
-            bbox_norm = f"{min_x:.12f},{min_y:.12f},{max_x:.12f},{max_y:.12f}"
-            if bbox_norm in seen[zoom]:
-                continue
-
-            seen[zoom].add(bbox_norm)
-            grouped[zoom].append(f"{min_x},{min_y},{max_x},{max_y}")
-
-    return dict(sorted(grouped.items()))
+    if not times:
+        log.warning(f"No time dimension found in GetCapabilities response from {wms_base_url}")
+    else:
+        log.info(f"GetCapabilities returned {len(times)} time steps from {wms_base_url}")
+    return times
 
 
 def _color_scale_range_for_product(source_folder: str) -> str:
@@ -129,58 +116,90 @@ def _populate_mer_cache(
     source_folder: str,
     filename: str,
     dates: list[str],
-    bboxes_by_zoom: dict[int, list[str]],
 ) -> None:
     if not dates:
         log.warning(f"No dates provided for MER cache population ({source_folder})")
         return
-    if not bboxes_by_zoom:
-        log.warning(f"No BBOXes provided for MER cache population ({source_folder})")
-        return
 
     color_scale_range = _color_scale_range_for_product(source_folder)
     base_url = f"{MER_WMS_BASE_URL.rstrip('/')}/{source_folder}/{filename}"
+    bboxes_by_zoom: dict[int, list[tuple[float, float, float, float]]] = BBOXES_BY_ZOOM
+    all_times_zooms = _parse_all_times_zoom_levels()
 
-    total_tiles = 0
-    failed_tiles = 0
-    session = requests.Session()
+    # Fetch full time list from capabilities only if at least one zoom level needs it.
+    all_available_times: list[str] | None = None
+    if any(z in all_times_zooms for z in bboxes_by_zoom):
+        all_available_times = _get_wms_available_times(base_url)
+        if not all_available_times:
+            log.warning(
+                f"Could not retrieve available times for {source_folder}/{filename}; "
+                "falling back to ingestion-relative dates for all zoom levels."
+            )
+
+    # Build the flat list of (zoom, date, bbox) work items across all zoom levels.
+    # Zoom levels in MER_WMS_ALL_TIMES_ZOOM_LEVELS use every available time step;
+    # all other zoom levels use only the ingestion-relative dates.
+    work_items: list[tuple[int, str, str]] = []
     for zoom, bboxes in sorted(bboxes_by_zoom.items()):
-        zoom_tiles = len(bboxes)
-        total_tiles += zoom_tiles * len(dates)
-        log.info(f"MER cache population {source_folder}: zoom={zoom} tiles={zoom_tiles}")
+        if zoom in all_times_zooms and all_available_times:
+            zoom_dates = all_available_times
+            log.info(
+                f"MER cache population {source_folder}: zoom={zoom} tiles={len(bboxes)} "
+                f"time_steps={len(zoom_dates)} (all available)"
+            )
+        else:
+            zoom_dates = dates
+            log.info(
+                f"MER cache population {source_folder}: zoom={zoom} tiles={len(bboxes)} "
+                f"time_steps={len(zoom_dates)} (ingestion-relative)"
+            )
+        for date_value in zoom_dates:
+            for min_x, min_y, max_x, max_y in bboxes:
+                work_items.append((zoom, date_value, f"{min_x},{min_y},{max_x},{max_y}"))
 
-        for date_value in dates:
-            for bbox in bboxes:
-                params = {
-                    "service": "WMS",
-                    "request": "GetMap",
-                    "layers": MER_WMS_LAYER,
-                    "styles": MER_WMS_STYLE,
-                    "format": "image/png",
-                    "transparent": "true",
-                    "version": "1.1.1",
-                    "COLORSCALERANGE": color_scale_range,
-                    "NUMCOLORBANDS": MER_WMS_NUM_COLOR_BANDS,
-                    "ABOVEMAXCOLOR": MER_WMS_ABOVE_MAX_COLOR,
-                    "BELOWMINCOLOR": MER_WMS_BELOW_MIN_COLOR,
-                    "time": date_value,
-                    "width": "256",
-                    "height": "256",
-                    "srs": "EPSG:3857",
-                    "bbox": bbox,
-                }
-                try:
-                    response = session.get(base_url, params=params, timeout=MER_WMS_REQUEST_TIMEOUT_SECONDS)
-                    response.raise_for_status()
-                except requests.RequestException as exc:
-                    failed_tiles += 1
-                    log.warning(
-                        f"MER cache request failed for {source_folder} zoom={zoom} date={date_value} bbox={bbox}: {exc}"
-                    )
+    def _fetch(item: tuple[int, str, str]) -> tuple[int, str, str, Exception | None]:
+        zoom, date_value, bbox = item
+        params = {
+            "service": "WMS",
+            "request": "GetMap",
+            "layers": MER_WMS_LAYER,
+            "styles": MER_WMS_STYLE,
+            "format": "image/png",
+            "transparent": "true",
+            "version": "1.1.1",
+            "COLORSCALERANGE": color_scale_range,
+            "NUMCOLORBANDS": MER_WMS_NUM_COLOR_BANDS,
+            "ABOVEMAXCOLOR": MER_WMS_ABOVE_MAX_COLOR,
+            "BELOWMINCOLOR": MER_WMS_BELOW_MIN_COLOR,
+            "time": date_value,
+            "width": "256",
+            "height": "256",
+            "srs": "EPSG:3857",
+            "bbox": bbox,
+        }
+        try:
+            response = requests.get(base_url, params=params, timeout=MER_WMS_REQUEST_TIMEOUT_SECONDS)
+            response.raise_for_status()
+            return zoom, date_value, bbox, None
+        except requests.RequestException as exc:
+            return zoom, date_value, bbox, exc
+
+    failed_tiles = 0
+    with ThreadPoolExecutor(max_workers=MER_WMS_CACHE_THREADS) as pool:
+        futures = {pool.submit(_fetch, item): item for item in work_items}
+        for future in as_completed(futures):
+            zoom, date_value, bbox, exc = future.result()
+            if exc is not None:
+                failed_tiles += 1
+                log.warning(
+                    f"MER cache request failed for {source_folder} zoom={zoom} "
+                    f"date={date_value} bbox={bbox}: {exc}"
+                )
 
     log.info(
         f"MER cache population finished for {source_folder}: "
-        f"dates={len(dates)} zoom_levels={len(bboxes_by_zoom)} total_requests={total_tiles} failures={failed_tiles}"
+        f"dates={len(dates)} zoom_levels={len(bboxes_by_zoom)} "
+        f"total_requests={len(work_items)} failures={failed_tiles}"
     )
 
 
@@ -360,17 +379,13 @@ def ingest_MER_ready_directory(self, source_or_ready_path: str, date_str: str | 
 
 @CeleryExt.task(idempotent=True)
 def populate_mer_cache_after_arpae_ingestion(self, date_str: str) -> None:
-    manifest_path = _resolve_manifest_path()
-    bboxes_by_zoom = _extract_zoom_bboxes_from_manifest(manifest_path)
     dates = _build_time_list_from_ingested_date(date_str)
     filename = MER_WMS_FILENAME_TEMPLATE.format(date=date_str, source="water-level-arpae")
-    _populate_mer_cache("water-level-arpae", filename, dates, bboxes_by_zoom)
+    _populate_mer_cache("water-level-arpae", filename, dates)
 
 
 @CeleryExt.task(idempotent=True)
 def populate_mer_cache_after_dpc_ingestion(self, date_str: str) -> None:
-    manifest_path = _resolve_manifest_path()
-    bboxes_by_zoom = _extract_zoom_bboxes_from_manifest(manifest_path)
     dates = _build_time_list_from_ingested_date(date_str)
     filename = MER_WMS_FILENAME_TEMPLATE.format(date=date_str, source="water-level-dpc")
-    _populate_mer_cache("water-level-dpc", filename, dates, bboxes_by_zoom)
+    _populate_mer_cache("water-level-dpc", filename, dates)
