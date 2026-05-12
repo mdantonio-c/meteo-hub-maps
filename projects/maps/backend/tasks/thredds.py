@@ -118,6 +118,7 @@ def _populate_mer_cache(
     source_folder: str,
     filename: str,
     dates: list[str],
+    date_str: str,
 ) -> None:
     if not dates:
         log.warning(f"No dates provided for MER cache population ({source_folder})")
@@ -374,11 +375,11 @@ def ingest_MER_ready_directory(self, source_or_ready_path: str, date_str: str | 
 def populate_mer_cache_after_arpae_ingestion(self, date_str: str) -> None:
     dates = _build_time_list_from_ingested_date(date_str)
     filename = MER_WMS_FILENAME_TEMPLATE.format(date=date_str, source="water-level-arpae")
-    _populate_mer_cache("water-level-arpae", filename, dates)
+    _populate_mer_cache("water-level-arpae", filename, dates, date_str)
 
 
 @CeleryExt.task(idempotent=True)
 def populate_mer_cache_after_dpc_ingestion(self, date_str: str) -> None:
     dates = _build_time_list_from_ingested_date(date_str)
     filename = MER_WMS_FILENAME_TEMPLATE.format(date=date_str, source="water-level-dpc")
-    _populate_mer_cache("water-level-dpc", filename, dates)
+    _populate_mer_cache("water-level-dpc", filename, dates, date_str)
