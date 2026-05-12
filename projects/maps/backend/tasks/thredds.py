@@ -34,8 +34,8 @@ MER_WMS_TIME_OFFSETS_HOURS = Env.get("MER_WMS_TIME_OFFSETS_HOURS", "-24")
 MER_WMS_REQUEST_TIMEOUT_SECONDS = float(Env.get("MER_WMS_REQUEST_TIMEOUT_SECONDS", 20.0))
 MER_WMS_CACHE_THREADS = int(Env.get("MER_WMS_CACHE_THREADS", 6))
 # Zoom levels for which every available time step in the NC file is requested.
-MER_WMS_ALL_TIMES_ZOOM_LEVELS = Env.get("MER_WMS_ALL_TIMES_ZOOM_LEVELS", "5,6")
-MANDATORY_ALL_TIMES_ZOOM_LEVELS = frozenset({5, 6})
+MER_WMS_ALL_TIMES_ZOOM_LEVELS = Env.get("MER_WMS_ALL_TIMES_ZOOM_LEVELS", "5,6,7")
+MANDATORY_ALL_TIMES_ZOOM_LEVELS = frozenset({5, 6, 7})
 
 
 def _parse_time_offsets_hours() -> list[int]:
@@ -136,7 +136,7 @@ def _populate_mer_cache(
         base_time = datetime.strptime(base_date, "%Y%m%d").replace(tzinfo=timezone.utc)
         return [
             (base_time + timedelta(hours=step)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-            for step in range(1)
+            for step in range(72)
         ]
 
     work_items: list[tuple[int, str, str]] = []
