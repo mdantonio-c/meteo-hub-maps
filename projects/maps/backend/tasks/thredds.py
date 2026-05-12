@@ -128,7 +128,7 @@ def _populate_mer_cache(
     getmap_url = f"{MER_WMS_BASE_URL.rstrip('/')}/{source_folder}/{filename}"
     getcap_url = f"{MER_WMS_BASE_URL.rstrip('/')}/{source_folder}"
     bboxes_by_zoom: dict[int, list[tuple[float, float, float, float]]] = {
-        z: b for z, b in BBOXES_BY_ZOOM.items() if z in {5, 6}
+        z: b for z, b in BBOXES_BY_ZOOM.items() if z in {5, 6, 7}
     }
 
     # Always use 72 hourly steps for zooms 5, 6
