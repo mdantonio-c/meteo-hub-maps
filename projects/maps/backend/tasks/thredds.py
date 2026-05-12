@@ -34,7 +34,7 @@ MER_WMS_TIME_OFFSETS_HOURS = Env.get("MER_WMS_TIME_OFFSETS_HOURS", "-24")
 MER_WMS_REQUEST_TIMEOUT_SECONDS = float(Env.get("MER_WMS_REQUEST_TIMEOUT_SECONDS", 20.0))
 MER_WMS_CACHE_THREADS = int(Env.get("MER_WMS_CACHE_THREADS", 4))
 # Zoom levels for which every available time step in the NC file is requested.
-MER_WMS_ALL_TIMES_ZOOM_LEVELS = Env.get("MER_WMS_ALL_TIMES_ZOOM_LEVELS", "5,6")
+MER_WMS_ALL_TIMES_ZOOM_LEVELS = Env.get("MER_WMS_ALL_TIMES_ZOOM_LEVELS", "5,6,7")
 MANDATORY_ALL_TIMES_ZOOM_LEVELS = frozenset({5, 6, 7})
 
 
@@ -70,7 +70,7 @@ def _parse_all_times_zoom_levels() -> frozenset[int]:
             levels.add(int(value))
         except ValueError:
             log.warning(f"Invalid MER_WMS_ALL_TIMES_ZOOM_LEVELS token skipped: {value}")
-    # Always force zoom levels 5 and 6 to run against every available time step.
+    # Always force zoom levels 5, 6, and 7 to run against every available time step.
     return frozenset(levels).union(MANDATORY_ALL_TIMES_ZOOM_LEVELS)
 
 
@@ -124,17 +124,18 @@ def _populate_mer_cache(
         return
 
     color_scale_range = _color_scale_range_for_product(source_folder)
-    base_url = f"{MER_WMS_BASE_URL.rstrip('/')}/{source_folder}/{filename}"
+    getmap_url = f"{MER_WMS_BASE_URL.rstrip('/')}/{source_folder}/{filename}"
+    getcap_url = f"{MER_WMS_BASE_URL.rstrip('/')}/{source_folder}"
     bboxes_by_zoom: dict[int, list[tuple[float, float, float, float]]] = BBOXES_BY_ZOOM
     all_times_zooms = _parse_all_times_zoom_levels()
 
     # Fetch full time list from capabilities only if at least one zoom level needs it.
     all_available_times: list[str] | None = None
     if any(z in all_times_zooms for z in bboxes_by_zoom):
-        all_available_times = _get_wms_available_times(base_url)
+        all_available_times = _get_wms_available_times(getcap_url)
         if not all_available_times:
             log.warning(
-                f"Could not retrieve available times for {source_folder}/{filename}; "
+                f"Could not retrieve available times for {source_folder}; "
                 "falling back to ingestion-relative dates for all zoom levels."
             )
 
@@ -180,7 +181,7 @@ def _populate_mer_cache(
             "bbox": bbox,
         }
         try:
-            response = requests.get(base_url, params=params, timeout=MER_WMS_REQUEST_TIMEOUT_SECONDS)
+            response = requests.get(getmap_url, params=params, timeout=MER_WMS_REQUEST_TIMEOUT_SECONDS)
             response.raise_for_status()
             return zoom, date_value, bbox, None
         except requests.RequestException as exc:
