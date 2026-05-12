@@ -126,36 +126,25 @@ def _populate_mer_cache(
     color_scale_range = _color_scale_range_for_product(source_folder)
     getmap_url = f"{MER_WMS_BASE_URL.rstrip('/')}/{source_folder}/{filename}"
     getcap_url = f"{MER_WMS_BASE_URL.rstrip('/')}/{source_folder}"
-    bboxes_by_zoom: dict[int, list[tuple[float, float, float, float]]] = BBOXES_BY_ZOOM
-    all_times_zooms = _parse_all_times_zoom_levels()
+    bboxes_by_zoom: dict[int, list[tuple[float, float, float, float]]] = {
+        z: b for z, b in BBOXES_BY_ZOOM.items() if z in {5, 6, 7}
+    }
 
-    # Fetch full time list from capabilities only if at least one zoom level needs it.
-    all_available_times: list[str] | None = None
-    if any(z in all_times_zooms for z in bboxes_by_zoom):
-        all_available_times = _get_wms_available_times(getcap_url)
-        if not all_available_times:
-            log.warning(
-                f"Could not retrieve available times for {source_folder}; "
-                "falling back to ingestion-relative dates for all zoom levels."
-            )
+    # Always use 72 hourly steps for zooms 5, 6, 7
+    def generate_72_hourly_steps(base_date: str) -> list[str]:
+        base_time = datetime.strptime(base_date, "%Y%m%d").replace(tzinfo=timezone.utc)
+        return [
+            (base_time + timedelta(hours=step)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+            for step in range(72)
+        ]
 
-    # Build the flat list of (zoom, date, bbox) work items across all zoom levels.
-    # Zoom levels in MER_WMS_ALL_TIMES_ZOOM_LEVELS use every available time step;
-    # all other zoom levels use only the ingestion-relative dates.
     work_items: list[tuple[int, str, str]] = []
     for zoom, bboxes in sorted(bboxes_by_zoom.items()):
-        if zoom in all_times_zooms and all_available_times:
-            zoom_dates = all_available_times
-            log.info(
-                f"MER cache population {source_folder}: zoom={zoom} tiles={len(bboxes)} "
-                f"time_steps={len(zoom_dates)} (all available)"
-            )
-        else:
-            zoom_dates = dates
-            log.info(
-                f"MER cache population {source_folder}: zoom={zoom} tiles={len(bboxes)} "
-                f"time_steps={len(zoom_dates)} (ingestion-relative)"
-            )
+        zoom_dates = generate_72_hourly_steps(dates[0]) if dates else []
+        log.info(
+            f"MER cache population {source_folder}: zoom={zoom} tiles={len(bboxes)} "
+            f"time_steps={len(zoom_dates)} (forced 72h)"
+        )
         for date_value in zoom_dates:
             for min_x, min_y, max_x, max_y in bboxes:
                 work_items.append((zoom, date_value, f"{min_x},{min_y},{max_x},{max_y}"))
