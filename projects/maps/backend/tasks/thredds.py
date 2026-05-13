@@ -212,13 +212,13 @@ def _populate_mer_cache(
         )
         try:
             response = requests.get(getmap_url, params=params, timeout=MER_WMS_REQUEST_TIMEOUT_SECONDS)
-            content_type = response.headers.get("Content-Type", "")
-            response_preview = response.text[:400].replace("\n", " ").strip() if "image" not in content_type.lower() else "<binary image payload>"
-            log.info(
-                f"MER cache response {source_folder} zoom={zoom} date={date_value} "
-                f"bbox={bbox} status={response.status_code} content_type={content_type} "
-                f"url={response.url} body_preview={response_preview}"
-            )
+            # content_type = response.headers.get("Content-Type", "")
+            # response_preview = response.text[:400].replace("\n", " ").strip() if "image" not in content_type.lower() else "<binary image payload>"
+            # log.info(
+            #     f"MER cache response {source_folder} zoom={zoom} date={date_value} "
+            #     f"bbox={bbox} status={response.status_code} content_type={content_type} "
+            #     f"url={response.url} body_preview={response_preview}"
+            # )
             response.raise_for_status()
             wms_error = _extract_wms_error_message(response)
             if wms_error is not None:
