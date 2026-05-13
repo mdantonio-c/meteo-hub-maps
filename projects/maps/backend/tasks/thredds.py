@@ -114,6 +114,41 @@ def _color_scale_range_for_product(source_folder: str) -> str:
     return MER_WMS_COLOR_SCALE_RANGE
 
 
+def _extract_wms_error_message(response: requests.Response) -> str | None:
+    """Extract WMS/OGC exception text from a GetMap response payload."""
+    content_type = response.headers.get("Content-Type", "").lower()
+    body_preview = response.text[:1200].strip()
+    is_text_payload = "xml" in content_type or "text" in content_type or body_preview.startswith("<")
+    if not is_text_payload:
+        return None
+
+    try:
+        root = ET.fromstring(response.content)
+    except ET.ParseError:
+        # Some WMS servers may return plain text errors with HTTP 200.
+        lowered = body_preview.lower()
+        if "serviceexception" in lowered or "exception" in lowered or "error" in lowered:
+            return body_preview[:400]
+        return None
+
+    messages: list[str] = []
+    for elem in root.iter():
+        local = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+        if local in {"ServiceException", "ExceptionText", "Exception"} and elem.text:
+            text = elem.text.strip()
+            if text:
+                messages.append(text)
+
+    if messages:
+        return " | ".join(messages[:3])
+
+    root_local = root.tag.split("}")[-1] if "}" in root.tag else root.tag
+    if root_local in {"ServiceExceptionReport", "ExceptionReport"}:
+        return body_preview[:400] or "WMS returned an exception report"
+
+    return None
+
+
 def _populate_mer_cache(
     source_folder: str,
     filename: str,
@@ -171,9 +206,25 @@ def _populate_mer_cache(
             "srs": "EPSG:3857",
             "bbox": bbox,
         }
+        log.info(
+            f"MER cache request {source_folder} zoom={zoom} date={date_value} "
+            f"bbox={bbox} url={getmap_url} params={params}"
+        )
         try:
             response = requests.get(getmap_url, params=params, timeout=MER_WMS_REQUEST_TIMEOUT_SECONDS)
+            content_type = response.headers.get("Content-Type", "")
+            response_preview = response.text[:400].replace("\n", " ").strip() if "image" not in content_type.lower() else "<binary image payload>"
+            log.info(
+                f"MER cache response {source_folder} zoom={zoom} date={date_value} "
+                f"bbox={bbox} status={response.status_code} content_type={content_type} "
+                f"url={response.url} body_preview={response_preview}"
+            )
             response.raise_for_status()
+            wms_error = _extract_wms_error_message(response)
+            if wms_error is not None:
+                return zoom, date_value, bbox, RuntimeError(
+                    f"WMS error response with HTTP {response.status_code}: {wms_error}"
+                )
             return zoom, date_value, bbox, None
         except requests.RequestException as exc:
             return zoom, date_value, bbox, exc
