@@ -70,7 +70,7 @@ def _parse_all_times_zoom_levels() -> frozenset[int]:
             levels.add(int(value))
         except ValueError:
             log.warning(f"Invalid MER_WMS_ALL_TIMES_ZOOM_LEVELS token skipped: {value}")
-    # Always force zoom levels 5, 6, and 7 to run against every available time step.
+    # Always force zoom levels 5 and 6 to run against every available time step.
     return frozenset(levels).union(MANDATORY_ALL_TIMES_ZOOM_LEVELS)
 
 
