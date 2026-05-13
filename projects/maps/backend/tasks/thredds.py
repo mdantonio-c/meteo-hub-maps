@@ -206,10 +206,10 @@ def _populate_mer_cache(
             "srs": "EPSG:3857",
             "bbox": bbox,
         }
-        log.info(
-            f"MER cache request {source_folder} zoom={zoom} date={date_value} "
-            f"bbox={bbox} url={getmap_url} params={params}"
-        )
+        # log.info(
+        #     f"MER cache request {source_folder} zoom={zoom} date={date_value} "
+        #     f"bbox={bbox} url={getmap_url} params={params}"
+        # )
         try:
             response = requests.get(getmap_url, params=params, timeout=MER_WMS_REQUEST_TIMEOUT_SECONDS)
             # content_type = response.headers.get("Content-Type", "")
