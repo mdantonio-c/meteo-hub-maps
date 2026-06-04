@@ -71,9 +71,16 @@ The Celery task `check_latest_data_and_trigger_geoserver_import_windy` monitors 
 # Default paths monitored
 paths = [
     "/windy/Windy-00-ICON_2I_all2km.web/Italia",
-    "/windy/Windy-12-ICON_2I_all2km.web/Italia"
+    "/windy/Windy-12-ICON_2I_all2km.web/Italia",
+    "/windy/Windy-00-WRF.web/Italia"
 ]
 ```
+
+The monitored directories are configurable through environment variables:
+
+- `WINDY_INGEST_BASE_PATH` (default: `/windy`)
+- `WINDY_INGEST_AREA` (default: `Italia`)
+- `WINDY_INGEST_FOLDERS` (comma-separated folder names, default includes ICON 00/12 and WRF 00)
 
 **Monitoring Schedule:** Every minute (configurable via crontab)
 
@@ -146,6 +153,55 @@ GET /api/windy?dataset=icon&foldername=t2m&filename=t2m.2025120100.0012.tif
 ```
 
 Returns the GeoTIFF file with `Content-Type: image/tif`
+
+### Get WRF Ingestion Status (All Runs)
+
+```bash
+GET /api/WRF/status
+```
+
+Response structure is aligned with seasonal status endpoints and is returned per run:
+
+```json
+{
+  "00": {
+    "folders": ["t2m-t2m", "wind-10u"],
+    "ingestion": {
+      "last": "2026-06-04 00:00",
+      "status": "ingested"
+    }
+  },
+  "12": {
+    "folders": [],
+    "ingestion": {
+      "last": null,
+      "status": null
+    }
+  }
+}
+```
+
+### Get WRF Ingestion Status (Single Run)
+
+```bash
+GET /api/WRF/status/00
+```
+
+```json
+{
+  "folders": ["t2m-t2m", "wind-10u"],
+  "ingestion": {
+    "last": "2026-06-04 00:00",
+    "status": "ingested"
+  }
+}
+```
+
+Status values:
+
+- `ingested`: latest marker is `.GEOSERVER.READY`
+- `ingesting`: latest marker is `.CELERY.CHECKED`
+- `null`: no ingestion marker found
 
 ## GeoServer Integration
 

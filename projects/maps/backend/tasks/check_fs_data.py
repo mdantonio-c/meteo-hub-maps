@@ -1,6 +1,7 @@
 from restapi.connectors.celery import CeleryExt
 from restapi.utilities.logs import log
 import os
+import re
 from datetime import datetime, timedelta
 from restapi.connectors import celery
 from restapi.env import Env
@@ -18,19 +19,49 @@ area = "Italia"
 GRANULE_RETENTION_HOURS = int(Env.get("RADAR_RETENTION_HOURS", 72))
 SUB_SEASONAL_BASE_PATH = Env.get("SUB_SEASONAL_AIM_PATH", "/sub-seasonal-aim")
 WW3_BASE_PATH = Env.get("WW3_DATA_PATH", "/ww3")
+WINDY_INGEST_BASE_PATH = Env.get("WINDY_INGEST_BASE_PATH", "/windy")
+WINDY_INGEST_AREA = Env.get("WINDY_INGEST_AREA", "Italia")
+WINDY_INGEST_FOLDERS = [
+    folder.strip()
+    for folder in Env.get(
+        "WINDY_INGEST_FOLDERS",
+        "Windy-00-ICON_2I_all2km.web,Windy-12-ICON_2I_all2km.web,Windy-00-WRF.web",
+    ).split(",")
+    if folder.strip()
+]
+
+
+def _get_windy_ingest_paths() -> list[str]:
+    return [
+        os.path.join(WINDY_INGEST_BASE_PATH, folder, WINDY_INGEST_AREA)
+        for folder in WINDY_INGEST_FOLDERS
+    ]
+
+
+def _extract_dataset_from_path(path: str) -> str:
+    folder = os.path.basename(os.path.dirname(path))
+    match = re.match(r"^Windy-(\d{2})-(.+)\.web$", folder)
+    if match:
+        return match.group(2)
+    log.warning(f"Could not parse windy dataset from path: {path}. Falling back to ICON_2I_all2km")
+    return "ICON_2I_all2km"
 
 @CeleryExt.task(idempotent=True)
 def check_latest_data_and_trigger_geoserver_import_windy(
     self,
-    paths: list[str] = [os.path.join("/windy", f"Windy-00-ICON_2I_all2km.web/Italia"), os.path.join("/windy", f"Windy-12-ICON_2I_all2km.web/Italia")],
+    paths: list[str] | None = None,
 ) -> None:
     """
     Check the latest data in the given paths.
     """
+    if paths is None:
+        paths = _get_windy_ingest_paths()
+
     def get_task_args(identifier, filename, path):
-        run = identifier[:8]
-        date = identifier[8:10]
-        return (GEOSERVER_URL, date, run)
+        date = identifier[:8]
+        run = identifier[8:10]
+        dataset_folder = _extract_dataset_from_path(path)
+        return (GEOSERVER_URL, run, date, "/SLDs", dataset_folder)
 
     watcher = DataWatcher(
         paths=paths,

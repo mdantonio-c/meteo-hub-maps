@@ -54,13 +54,14 @@ def update_geoserver_image_mosaic(
     run: str,
     date: str = datetime.now().strftime("%Y-%m-%d"),
     sld_directory: str = "/SLDs",
+    dataset_folder: str = "ICON_2I_all2km",
 ) -> None:
     # Ensure workspace exists before uploading
     create_workspace_generic(GEOSERVER_URL, GEOSERVER_USERNAME, GEOSERVER_PASSWORD, WORKSPACE)
     
     sld_directory = os.path.join(sld_directory, "windy")
     update_styles(sld_directory)
-    TIFF_DIR = f"{BASE_PATH}/Windy-{run}-ICON_2I_all2km.web/Italia"
+    TIFF_DIR = f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/Italia"
     date_edit = datetime.strptime(date, "%Y%m%d").strftime("%Y-%m-%d")
     for folder in os.listdir(TIFF_DIR):
         folder_path = os.path.join(TIFF_DIR, folder)
@@ -71,11 +72,12 @@ def update_geoserver_image_mosaic(
                 process_and_rename_tiffs(date_edit, run, folder, TIFF_DIR)
             else:
                 continue
+            geoserver_name = f"WRF-{folder}" if dataset_folder == "WRF" else folder
             if ensure_tiff_files_exist(folder, TIFF_DIR):
-                create_image_mosaic_store(folder, GEOSERVER_URL)
-            publish_layer(folder, GEOSERVER_URL)
-            bind_sld(folder, GEOSERVER_URL)
-            enable_time_dimension(folder, GEOSERVER_URL)
+                create_image_mosaic_store(folder, geoserver_name, GEOSERVER_URL)
+            publish_layer(geoserver_name, folder, GEOSERVER_URL)
+            bind_sld(folder, geoserver_name, GEOSERVER_URL)
+            enable_time_dimension(geoserver_name, geoserver_name, GEOSERVER_URL)
     create_ready_file(TIFF_DIR, run, date)
     
 def update_styles(sld_directory: Optional[str] = None) -> None:
@@ -199,7 +201,7 @@ def process_and_rename_tiffs(base_date_str, start_hour, folder, TIFF_DIR):
             pass  # Directory not empty or still in use
 
 # === UTILS ===
-def create_image_mosaic_store(folder, GEOSERVER_URL):
+def create_image_mosaic_store(folder, store_name, GEOSERVER_URL):
     """Create or refresh an ImageMosaic store with improved handling."""
     from maps.tasks.geoserver_utils import upload_geotiff_generic
     
@@ -210,17 +212,17 @@ def create_image_mosaic_store(folder, GEOSERVER_URL):
     success = upload_geotiff_generic(
         geoserver_url=GEOSERVER_URL,
         file_path=mosaic_path,
-        store_name=folder,
+        store_name=store_name,
         username=GEOSERVER_USERNAME,
         password=GEOSERVER_PASSWORD,
         workspace=WORKSPACE
     )
     
     if success:
-        print(f"✅ Successfully created/updated ImageMosaic store: {folder}")
+        print(f"✅ Successfully created/updated ImageMosaic store: {store_name}")
         return True
     else:
-        print(f"❌ Failed to create/update ImageMosaic store: {folder}")
+        print(f"❌ Failed to create/update ImageMosaic store: {store_name}")
         return False
         return False
     print("✅ Created coverage store.")
@@ -236,15 +238,16 @@ def create_image_mosaic_store(folder, GEOSERVER_URL):
 #     else:
 #         print(f"❌ Failed to delete coverage store: {r.status_code} - {r.text}")
 
-def publish_layer(folder, GEOSERVER_URL):
-    url = f"{GEOSERVER_URL}/rest/workspaces/{WORKSPACE}/coveragestores/{folder}/coverages"
+def publish_layer(layer_name, native_coverage_name, GEOSERVER_URL):
+    url = f"{GEOSERVER_URL}/rest/workspaces/{WORKSPACE}/coveragestores/{layer_name}/coverages"
     headers = {"Content-Type": "text/xml"}
-    sanitized_layer_name = folder.strip()  # Ensure no extra spaces
+    sanitized_layer_name = layer_name.strip()  # Ensure no extra spaces
+    sanitized_native_name = native_coverage_name.strip()
     data = f"""
     <coverage>
-        <name>{folder}</name>
-        <nativeName>{folder}</nativeName>
-        <title>{folder}</title>
+        <name>{sanitized_layer_name}</name>
+        <nativeName>{sanitized_native_name}</nativeName>
+        <title>{sanitized_layer_name}</title>
         <enabled>true</enabled>
         <srs>EPSG:4326</srs>
     </coverage>
@@ -258,14 +261,14 @@ def publish_layer(folder, GEOSERVER_URL):
     print("✅ Published mosaic layer.")
     return True
 
-def bind_sld(folder, GEOSERVER_URL):
+def bind_sld(folder, layer_name, GEOSERVER_URL):
     sld = [key for key, values in sld_dir_mapping.items() if folder in values]
-    url = f"{GEOSERVER_URL}/rest/layers/{WORKSPACE}:{folder}"
+    url = f"{GEOSERVER_URL}/rest/layers/{WORKSPACE}:{layer_name}"
     if not sld:
         print(f"❌ No SLD found for folder {folder}.")
         return False
     sld = sld[0]  # Get the first matching SLD
-    print("----------" + folder + "  " + sld)
+    print("----------" + layer_name + "  " + sld)
     headers = {"Content-Type": "application/xml"}
     data = f"""
     <layer>
@@ -283,8 +286,8 @@ def bind_sld(folder, GEOSERVER_URL):
     print("✅ Time dimension enabled and style applied.")
     return True
 
-def enable_time_dimension(folder, GEOSERVER_URL):
-    url = f"{GEOSERVER_URL}/rest/workspaces/{WORKSPACE}/coveragestores/{folder}/coverages/{folder}"
+def enable_time_dimension(store_name, coverage_name, GEOSERVER_URL):
+    url = f"{GEOSERVER_URL}/rest/workspaces/{WORKSPACE}/coveragestores/{store_name}/coverages/{coverage_name}"
     headers = {
         "Content-Type": "application/xml",
         "Accept": "application/xml"

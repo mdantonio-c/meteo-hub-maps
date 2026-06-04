@@ -1,4 +1,6 @@
-from typing import List, Optional
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from maps.endpoints.config import (
     DATASETS,
@@ -9,12 +11,89 @@ from maps.endpoints.config import (
     get_ready_file,
     get_geoserver_ready_file
 )
+from restapi.env import Env
 from restapi import decorators
 from restapi.exceptions import NotFound
 from restapi.models import fields, validate
 from restapi.rest.definition import EndpointResource, Response
 from restapi.utilities.logs import log
 from maps.utils.downloader import CustomDownloader as Downloader
+
+WRF_AREA = Env.get("WINDY_INGEST_AREA", "Italia")
+WINDY_INGEST_BASE_PATH = Path(Env.get("WINDY_INGEST_BASE_PATH", "/windy"))
+
+
+def _wrf_run_candidates(run: str) -> List[Path]:
+    # Support both historical and current folder layouts used across environments.
+    return [
+        get_multilayer_maps_base_path("windy", "", "", run, "WRF").joinpath(WRF_AREA),
+        get_multilayer_maps_base_path("windy", DEFAULT_PLATFORM, "PROD", run, "WRF").joinpath(WRF_AREA),
+        WINDY_INGEST_BASE_PATH.joinpath(f"Windy-{run}-WRF.web", WRF_AREA),
+    ]
+
+
+def _resolve_wrf_run_path(run: str) -> Optional[Path]:
+    for candidate in _wrf_run_candidates(run):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _parse_wrf_run_status(run: str) -> Dict[str, Any]:
+    run_path = _resolve_wrf_run_path(run)
+    if run_path is None:
+        return {
+            "folders": [],
+            "ingestion": {
+                "last": None,
+                "status": None,
+            },
+        }
+
+    ready_files = sorted(
+        [f for f in run_path.iterdir() if f.is_file() and f.name.endswith(".READY") and not f.name.endswith(".GEOSERVER.READY")],
+        key=lambda f: f.stat().st_mtime,
+        reverse=True,
+    )
+    celery_files = sorted(
+        [f for f in run_path.iterdir() if f.is_file() and f.name.endswith(".CELERY.CHECKED")],
+        key=lambda f: f.stat().st_mtime,
+        reverse=True,
+    )
+    geoserver_files = sorted(
+        [f for f in run_path.iterdir() if f.is_file() and f.name.endswith(".GEOSERVER.READY")],
+        key=lambda f: f.stat().st_mtime,
+        reverse=True,
+    )
+
+    folders = sorted([item.name for item in run_path.iterdir() if item.is_dir()])
+    last = None
+    ingestion_status = None
+
+    if geoserver_files:
+        latest_file = geoserver_files[0].name
+        reftime = latest_file.split(".")[0]
+        try:
+            last = datetime.strptime(reftime, "%Y%m%d%H").strftime("%Y-%m-%d %H:00")
+        except ValueError:
+            last = None
+        ingestion_status = "ingested"
+    elif celery_files:
+        latest_file = celery_files[0].name
+        reftime = latest_file.split(".")[0]
+        try:
+            last = datetime.strptime(reftime, "%Y%m%d%H").strftime("%Y-%m-%d %H:00")
+        except ValueError:
+            last = None
+        ingestion_status = "ingesting"
+
+    return {
+        "folders": folders,
+        "ingestion": {
+            "last": last,
+            "status": ingestion_status,
+        },
+    }
 
 class WindyEndpoint(EndpointResource):
     labels = ["windy"]
@@ -168,3 +247,37 @@ class MapStaticWindyFile(EndpointResource):
         if not filepath.exists() or not filepath.is_file():
             raise NotFound(f"File {filepath} does not exist")
         return Downloader.send_file_content(filepath.name, filepath.parent, 'image/tif')
+
+
+class WRFIngestionStatusEndpoint(EndpointResource):
+    labels = ["windy"]
+
+    @decorators.endpoint(
+        path="/WRF/status",
+        summary="Get latest WRF ingestion status across configured runs",
+        responses={
+            200: "WRF ingestion status",
+            404: "WRF folders not found",
+        },
+    )
+    def get(self) -> Response:
+        runs_status = {r: _parse_wrf_run_status(r) for r in RUNS}
+        return self.response(runs_status)
+
+
+class WRFIngestionStatusByRunEndpoint(EndpointResource):
+    labels = ["windy"]
+
+    @decorators.endpoint(
+        path="/WRF/status/<run>",
+        summary="Get WRF ingestion status for a specific run",
+        responses={
+            200: "WRF ingestion status for run",
+            404: "Run folder not found",
+        },
+    )
+    def get(self, run: str) -> Response:
+        if run not in RUNS:
+            raise NotFound(f"Unsupported run {run}. Allowed values: {', '.join(RUNS)}")
+
+        return self.response(_parse_wrf_run_status(run))

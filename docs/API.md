@@ -184,6 +184,65 @@ Get the last available windy map set or download specific data files.
 - `400 Bad Request` - Invalid parameters
 - `404 Not Found` - Dataset or file not found
 
+### Get WRF Ingestion Status (All Runs)
+
+Retrieve WRF ingestion status using the same response structure adopted by seasonal endpoints.
+
+**Endpoint:** `GET /api/WRF/status`
+
+**Response:** `200 OK`
+
+```json
+{
+  "00": {
+    "folders": ["t2m-t2m", "wind-10u"],
+    "ingestion": {
+      "last": "2026-06-04 00:00",
+      "status": "ingested"
+    }
+  },
+  "12": {
+    "folders": [],
+    "ingestion": {
+      "last": null,
+      "status": null
+    }
+  }
+}
+```
+
+### Get WRF Ingestion Status (Single Run)
+
+Retrieve WRF ingestion status for a single run.
+
+**Endpoint:** `GET /api/WRF/status/<run>`
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Values | Description |
+|-----------|------|----------|--------|-------------|
+| `run` | string | Yes | `00`, `12` | Forecast run hour |
+
+**Response:** `200 OK`
+
+```json
+{
+  "folders": ["t2m-t2m", "wind-10u"],
+  "ingestion": {
+    "last": "2026-06-04 00:00",
+    "status": "ingested"
+  }
+}
+```
+
+**Ingestion Status Values:**
+- `ingested` - Data successfully processed by GeoServer
+- `ingesting` - Data processing in progress
+- `null` - No data available
+
+**Error Responses:**
+- `404 Not Found` - Unsupported run value
+
 ---
 
 ## Seasonal Endpoint
