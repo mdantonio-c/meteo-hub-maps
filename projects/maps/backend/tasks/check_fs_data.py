@@ -25,7 +25,7 @@ WINDY_INGEST_FOLDERS = [
     folder.strip()
     for folder in Env.get(
         "WINDY_INGEST_FOLDERS",
-        "Windy-00-ICON_2I_all2km.web,Windy-12-ICON_2I_all2km.web,Windy-00-WRF.web",
+        "Windy-00-ICON_2I_all2km.web,Windy-12-ICON_2I_all2km.web",
     ).split(",")
     if folder.strip()
 ]
