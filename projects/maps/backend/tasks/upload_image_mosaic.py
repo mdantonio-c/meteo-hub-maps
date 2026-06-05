@@ -69,13 +69,13 @@ def update_geoserver_image_mosaic(
             flat_sld_dirs = [item for sublist in sld_dir_mapping.values() for item in sublist]
             if folder in flat_sld_dirs:
                 print(f"📂 Processing folder: {folder}")
-                process_and_rename_tiffs(date_edit, run, folder, TIFF_DIR)
+                geoserver_name = f"WRF-{folder}" if dataset_folder == "WRF" else folder
+                process_and_rename_tiffs(date_edit, run, folder, TIFF_DIR, geoserver_name)
             else:
                 continue
-            geoserver_name = f"WRF-{folder}" if dataset_folder == "WRF" else folder
             if ensure_tiff_files_exist(folder, TIFF_DIR):
-                create_image_mosaic_store(folder, geoserver_name, GEOSERVER_URL)
-            publish_layer(geoserver_name, folder, GEOSERVER_URL)
+                create_image_mosaic_store(geoserver_name, GEOSERVER_URL)
+            publish_layer(geoserver_name, geoserver_name, GEOSERVER_URL)
             bind_sld(folder, geoserver_name, GEOSERVER_URL)
             enable_time_dimension(geoserver_name, geoserver_name, GEOSERVER_URL)
     create_ready_file(TIFF_DIR, run, date)
@@ -150,11 +150,12 @@ def write_mosaic_config_files(output_dir):
 
     print("📝 Wrote indexer.properties and timeregex.properties")
 
-def process_and_rename_tiffs(base_date_str, start_hour, folder, TIFF_DIR):
+def process_and_rename_tiffs(base_date_str, start_hour, folder, TIFF_DIR, output_store_name):
     print("🔄 Processing and renaming TIFFs...")
 
     base_datetime = datetime.strptime(base_date_str, "%Y-%m-%d") + timedelta(hours=int(start_hour))
-    output_dir = os.path.join(GEOSERVER_HOST_PATH, folder)
+    # Keep Windy and WRF mosaics isolated by writing to the target store/layer folder.
+    output_dir = os.path.join(GEOSERVER_HOST_PATH, output_store_name)
     os.makedirs(GEOSERVER_HOST_PATH, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
 
@@ -201,12 +202,12 @@ def process_and_rename_tiffs(base_date_str, start_hour, folder, TIFF_DIR):
             pass  # Directory not empty or still in use
 
 # === UTILS ===
-def create_image_mosaic_store(folder, store_name, GEOSERVER_URL):
+def create_image_mosaic_store(store_name, GEOSERVER_URL):
     """Create or refresh an ImageMosaic store with improved handling."""
     from maps.tasks.geoserver_utils import upload_geotiff_generic
     
     # Use the directory path for the mosaic
-    mosaic_path = os.path.join(GEOSERVER_DATA_DIR, folder)
+    mosaic_path = os.path.join(GEOSERVER_DATA_DIR, store_name)
     
     # Use the improved generic function that handles ImageMosaic updates properly
     success = upload_geotiff_generic(
