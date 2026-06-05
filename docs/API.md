@@ -184,6 +184,33 @@ Get the last available windy map set or download specific data files.
 - `400 Bad Request` - Invalid parameters
 - `404 Not Found` - Dataset or file not found
 
+### Get WRF Ingestion Status
+
+Retrieve WRF latest metadata using the same response structure used by `/api/windy`.
+
+**Endpoint:** `GET /api/WRF/status`
+
+**Response:** `200 OK`
+
+```json
+{
+  "dataset": "wrf",
+  "area": "Italia",
+  "start_offset": 0,
+  "end_offset": 72,
+  "step": 1,
+  "boundaries": {
+    "SW": [33.69, 2.9875],
+    "NE": [48.91, 22.0125]
+  },
+  "reftime": "2026060500",
+  "platform": null
+}
+```
+
+**Error Responses:**
+- `404 Not Found` - WRF data path not found
+
 ---
 
 ## Seasonal Endpoint

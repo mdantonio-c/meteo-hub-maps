@@ -1,4 +1,6 @@
-from typing import List, Optional
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from maps.endpoints.config import (
     DATASETS,
@@ -9,12 +11,79 @@ from maps.endpoints.config import (
     get_ready_file,
     get_geoserver_ready_file
 )
+from restapi.env import Env
 from restapi import decorators
 from restapi.exceptions import NotFound
 from restapi.models import fields, validate
 from restapi.rest.definition import EndpointResource, Response
 from restapi.utilities.logs import log
 from maps.utils.downloader import CustomDownloader as Downloader
+
+WRF_AREA = Env.get("WINDY_INGEST_AREA", "Italia")
+WINDY_INGEST_BASE_PATH = Path(Env.get("WINDY_INGEST_BASE_PATH", "/windy"))
+
+
+def _wrf_run_candidates(run: str) -> List[Path]:
+    # Support both historical and current folder layouts used across environments.
+    return [
+        get_multilayer_maps_base_path("windy", "", "", run, "WRF").joinpath(WRF_AREA),
+        get_multilayer_maps_base_path("windy", DEFAULT_PLATFORM, "PROD", run, "WRF").joinpath(WRF_AREA),
+        WINDY_INGEST_BASE_PATH.joinpath(f"Windy-{run}-WRF.web", WRF_AREA),
+    ]
+
+
+def _resolve_wrf_run_path(run: str) -> Optional[Path]:
+    for candidate in _wrf_run_candidates(run):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _parse_wrf_latest_reftime() -> Optional[str]:
+    latest_marker: Optional[Path] = None
+    resolved_paths = 0
+
+    for run in RUNS:
+        run_path = _resolve_wrf_run_path(run)
+        if run_path is None:
+            continue
+        resolved_paths += 1
+
+        geoserver_files = sorted(
+            [f for f in run_path.iterdir() if f.is_file() and f.name.endswith(".GEOSERVER.READY")],
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+        celery_files = sorted(
+            [f for f in run_path.iterdir() if f.is_file() and f.name.endswith(".CELERY.CHECKED")],
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+
+        marker_file: Optional[Path] = None
+        if geoserver_files:
+            marker_file = geoserver_files[0]
+        elif celery_files:
+            marker_file = celery_files[0]
+
+        if marker_file is None:
+            continue
+
+        if latest_marker is None or marker_file.stat().st_mtime > latest_marker.stat().st_mtime:
+            latest_marker = marker_file
+
+    if resolved_paths == 0:
+        raise NotFound("WRF data paths not found")
+
+    reftime = None
+    if latest_marker is not None:
+        reftime_str = latest_marker.name.split(".")[0]
+        try:
+            reftime = datetime.strptime(reftime_str, "%Y%m%d%H").strftime("%Y%m%d%H")
+        except ValueError:
+            reftime = None
+
+    return reftime
 
 class WindyEndpoint(EndpointResource):
     labels = ["windy"]
@@ -168,3 +237,37 @@ class MapStaticWindyFile(EndpointResource):
         if not filepath.exists() or not filepath.is_file():
             raise NotFound(f"File {filepath} does not exist")
         return Downloader.send_file_content(filepath.name, filepath.parent, 'image/tif')
+
+
+class WRFIngestionStatusEndpoint(EndpointResource):
+    labels = ["windy"]
+
+    @decorators.endpoint(
+        path="/WRF/status",
+        summary="Get latest WRF metadata in windy response format",
+        responses={
+            200: "WRF metadata successfully retrieved",
+            404: "WRF folders not found",
+        },
+    )
+    def get(self) -> Response:
+        reftime = _parse_wrf_latest_reftime()
+        if not reftime:
+            raise NotFound("No WRF ingestion marker found")
+
+        info: Optional[DatasetType] = DATASETS.get("icon")
+        if not info:
+            raise NotFound("Dataset icon is not available")
+
+        return self.response(
+            {
+                "dataset": "wrf",
+                "area": WRF_AREA,
+                "start_offset": info["start_offset"],
+                "end_offset": info["end_offset"],
+                "step": info["step"],
+                "boundaries": info["boundaries"],
+                "reftime": reftime,
+                "platform": None,
+            }
+        )
