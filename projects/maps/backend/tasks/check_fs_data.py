@@ -29,12 +29,27 @@ WINDY_INGEST_FOLDERS = [
     ).split(",")
     if folder.strip()
 ]
+WINDY_WRF_INGEST_FOLDERS = [
+    folder.strip()
+    for folder in Env.get(
+        "WINDY_WRF_INGEST_FOLDERS",
+        "Windy-00-WRF.web",
+    ).split(",")
+    if folder.strip()
+]
 
 
 def _get_windy_ingest_paths() -> list[str]:
     return [
         os.path.join(WINDY_INGEST_BASE_PATH, folder, WINDY_INGEST_AREA)
         for folder in WINDY_INGEST_FOLDERS
+    ]
+
+
+def _get_windy_wrf_ingest_paths() -> list[str]:
+    return [
+        os.path.join(WINDY_INGEST_BASE_PATH, folder, WINDY_INGEST_AREA)
+        for folder in WINDY_WRF_INGEST_FOLDERS
     ]
 
 
@@ -45,6 +60,10 @@ def _extract_dataset_from_path(path: str) -> str:
         return match.group(2)
     log.warning(f"Could not parse windy dataset from path: {path}. Falling back to ICON_2I_all2km")
     return "ICON_2I_all2km"
+
+
+def _is_wrf_path(path: str) -> bool:
+    return _extract_dataset_from_path(path).upper() == "WRF"
 
 @CeleryExt.task(idempotent=True)
 def check_latest_data_and_trigger_geoserver_import_windy(
@@ -57,23 +76,50 @@ def check_latest_data_and_trigger_geoserver_import_windy(
     if paths is None:
         paths = _get_windy_ingest_paths()
 
+    wrf_paths = [p for p in paths if _is_wrf_path(p)]
+    non_wrf_paths = [p for p in paths if not _is_wrf_path(p)]
+
+    # Ensure WRF is checked in a dedicated pass, even when it is not listed in WINDY_INGEST_FOLDERS.
+    configured_wrf_paths = _get_windy_wrf_ingest_paths()
+    for wrf_path in configured_wrf_paths:
+        if wrf_path not in wrf_paths:
+            wrf_paths.append(wrf_path)
+
     def get_task_args(identifier, filename, path):
         date = identifier[:8]
         run = identifier[8:10]
         dataset_folder = _extract_dataset_from_path(path)
         return (GEOSERVER_URL, run, date, "/SLDs", dataset_folder)
 
-    watcher = DataWatcher(
-        paths=paths,
-        sort_key=lambda f: datetime.strptime(f.split(".")[0], "%Y%m%d%H"),
-        identifier_extractor=lambda f: f.split(".")[0]
-    )
-    
-    watcher.check_and_trigger(
-        task_name="update_geoserver_image_mosaic",
-        task_args=get_task_args
-    )
-    log.info("Finished checking latest data")
+    if non_wrf_paths:
+        watcher = DataWatcher(
+            paths=non_wrf_paths,
+            sort_key=lambda f: datetime.strptime(f.split(".")[0], "%Y%m%d%H"),
+            identifier_extractor=lambda f: f.split(".")[0],
+        )
+
+        watcher.check_and_trigger(
+            task_name="update_geoserver_image_mosaic",
+            task_args=get_task_args,
+        )
+    else:
+        log.info("No non-WRF windy ingest paths configured")
+
+    if wrf_paths:
+        wrf_watcher = DataWatcher(
+            paths=wrf_paths,
+            sort_key=lambda f: datetime.strptime(f.split(".")[0], "%Y%m%d%H"),
+            identifier_extractor=lambda f: f.split(".")[0],
+        )
+
+        wrf_watcher.check_and_trigger(
+            task_name="update_geoserver_image_mosaic",
+            task_args=get_task_args,
+        )
+    else:
+        log.info("No WRF windy ingest paths configured")
+
+    log.info("Finished checking latest windy data")
 
 
 @CeleryExt.task(idempotent=True)
