@@ -1,9 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from maps.endpoints.config import (
     DATASETS,
@@ -11,10 +8,8 @@ from maps.endpoints.config import (
     RUNS,
     DatasetType,
     get_multilayer_maps_base_path,
-    get_ready_file,
     get_geoserver_ready_file
 )
-from restapi.env import Env
 from restapi.env import Env
 from restapi import decorators
 from restapi.exceptions import NotFound
@@ -88,6 +83,52 @@ def _parse_wrf_latest_reftime() -> Optional[str]:
             reftime = None
 
     return reftime
+
+
+def _get_latest_wrf_marker_and_path(run: Optional[str] = None) -> Tuple[Path, Path]:
+    latest_marker: Optional[Path] = None
+    latest_path: Optional[Path] = None
+    resolved_paths = 0
+    runs_to_scan = [run] if run else RUNS
+
+    for candidate_run in runs_to_scan:
+        run_path = _resolve_wrf_run_path(candidate_run)
+        if run_path is None:
+            continue
+        resolved_paths += 1
+
+        marker_files = [
+            f
+            for f in run_path.iterdir()
+            if f.is_file() and (f.name.endswith(".GEOSERVER.READY") or f.name.endswith(".CELERY.CHECKED"))
+        ]
+
+        if not marker_files:
+            continue
+
+        marker = max(marker_files, key=lambda f: f.stat().st_mtime)
+        if latest_marker is None or marker.stat().st_mtime > latest_marker.stat().st_mtime:
+            latest_marker = marker
+            latest_path = run_path
+
+    if resolved_paths == 0:
+        raise NotFound("WRF data paths not found")
+
+    if latest_marker is None or latest_path is None:
+        raise NotFound("No WRF ingestion marker found")
+
+    return latest_marker, latest_path
+
+
+def _get_wrf_latest_context(run: Optional[str] = None) -> Tuple[str, Path]:
+    marker, run_path = _get_latest_wrf_marker_and_path(run=run)
+    reftime_str = marker.name.split(".")[0]
+    try:
+        reftime = datetime.strptime(reftime_str, "%Y%m%d%H").strftime("%Y%m%d%H")
+    except ValueError as exc:
+        raise NotFound("Invalid WRF ingestion marker format") from exc
+
+    return reftime, run_path
 
 class WindyEndpoint(EndpointResource):
     labels = ["windy"]
@@ -275,3 +316,87 @@ class WRFIngestionStatusEndpoint(EndpointResource):
                 "platform": None,
             }
         )
+
+
+class WRFEndpoint(EndpointResource):
+    labels = ["windy"]
+
+    @decorators.use_kwargs(
+        {
+            "dataset": fields.Str(required=False, load_default="wrf", validate=validate.OneOf(["wrf"])),
+            "run": fields.Str(validate=validate.OneOf(RUNS)),
+            "foldername": fields.Str(required=False),
+            "filename": fields.Str(required=False),
+            "stream": fields.Bool(required=False, load_default=False),
+        },
+        location="query",
+    )
+    @decorators.endpoint(
+        path="/WRF",
+        summary="Get latest WRF metadata or download a specific WRF tiff file.",
+        responses={
+            200: "WRF data successfully retrieved",
+            400: "Invalid parameters",
+            404: "WRF data does not exist",
+        },
+    )
+    def get(
+        self,
+        dataset: str = "wrf",
+        run: Optional[str] = None,
+        foldername: Optional[str] = None,
+        filename: Optional[str] = None,
+        stream: bool = False,
+    ) -> Response:
+        reftime, run_path = _get_wrf_latest_context(run=run)
+
+        info: Optional[DatasetType] = DATASETS.get("wrf")
+        if not info:
+            raise NotFound("Dataset wrf is not available")
+
+        if not foldername:
+            return self.response(
+                {
+                    "dataset": "wrf",
+                    "area": WRF_AREA,
+                    "start_offset": info["start_offset"],
+                    "end_offset": info["end_offset"],
+                    "step": info["step"],
+                    "boundaries": info["boundaries"],
+                    "reftime": reftime,
+                    "platform": None,
+                }
+            )
+
+        if not filename:
+            raise NotFound("filename query parameter is required when foldername is provided")
+
+        filepath = run_path.joinpath(foldername).joinpath(filename)
+        if not filepath.exists() or not filepath.is_file():
+            raise NotFound(f"File {filepath} does not exist")
+
+        if not stream:
+            return Downloader.send_file_content(filepath.name, filepath.parent, "image/tif")
+
+        return Downloader.send_file_streamed(filepath.name, filepath.parent, "image/tif")
+
+
+class WRFMapStaticWindyFile(EndpointResource):
+    labels = ["maps"]
+
+    @decorators.endpoint(
+        path="/WRF/maps/wind-direction/files/<filename>",
+        summary="Get a specific static wind direction tiff file from the latest WRF run.",
+        responses={
+            200: "File successfully retrieved",
+            404: "File not found",
+        },
+    )
+    def get(self, filename: str) -> Response:
+        _, run_path = _get_wrf_latest_context()
+        filepath = run_path.joinpath("wind-direction").joinpath(filename)
+
+        if not filepath.exists() or not filepath.is_file():
+            raise NotFound(f"File {filepath} does not exist")
+
+        return Downloader.send_file_content(filepath.name, filepath.parent, "image/tif")

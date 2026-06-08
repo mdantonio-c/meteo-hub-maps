@@ -117,6 +117,22 @@ DATASETS: Dict[str, DatasetType] = {
                 22.0125
             ),
         }
+    },
+    "wrf": {
+        "area": "Italia",
+        "start_offset": 0,
+        "end_offset": 72,
+        "step": 1,
+        "boundaries": {
+            "SW": (
+                33.69,
+                2.9875,
+            ),
+            "NE": (
+                48.91,
+                22.0125
+            ),
+        }
     }
 }
 @lru_cache
