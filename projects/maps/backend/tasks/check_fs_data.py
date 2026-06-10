@@ -33,7 +33,7 @@ WINDY_WRF_INGEST_FOLDERS = [
     folder.strip()
     for folder in Env.get(
         "WINDY_WRF_INGEST_FOLDERS",
-        "Windy-00-WRF.web",
+        "Windy-00-WRF.web,Windy-12-WRF.web",
     ).split(",")
     if folder.strip()
 ]

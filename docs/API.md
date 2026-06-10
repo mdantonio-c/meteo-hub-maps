@@ -107,6 +107,8 @@ Retrieve a list of available static wind direction GeoTIFF files for the most re
 
 **Endpoint:** `GET /api/maps/wind-direction/list/files`
 
+**Legacy compatibility endpoint:** `GET /api/windy/maps/wind-direction/list/files`
+
 **Response:** `200 OK`
 
 ```json
@@ -127,6 +129,8 @@ Retrieve a list of available static wind direction GeoTIFF files for the most re
 Download a specific static wind direction GeoTIFF file from the `wind-direction` subfolder of the most recent run.
 
 **Endpoint:** `GET /api/maps/wind-direction/files/<filename>`
+
+**Legacy compatibility endpoint:** `GET /api/windy/maps/wind-direction/files/<filename>`
 
 **Path Parameters:**
 

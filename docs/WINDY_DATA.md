@@ -72,9 +72,8 @@ The Celery task `check_latest_data_and_trigger_geoserver_import_windy` monitors 
 paths = [
     "/windy/Windy-00-ICON_2I_all2km.web/Italia",
     "/windy/Windy-12-ICON_2I_all2km.web/Italia",
-    "/windy/Windy-00-WRF.web/Italia"
-    "/windy/Windy-12-ICON_2I_all2km.web/Italia",
-    "/windy/Windy-00-WRF.web/Italia"
+  "/windy/Windy-00-WRF.web/Italia",
+  "/windy/Windy-12-WRF.web/Italia"
 ]
 ```
 
@@ -82,13 +81,8 @@ The monitored directories are configurable through environment variables:
 
 - `WINDY_INGEST_BASE_PATH` (default: `/windy`)
 - `WINDY_INGEST_AREA` (default: `Italia`)
-- `WINDY_INGEST_FOLDERS` (comma-separated folder names, default includes ICON 00/12 and WRF 00)
-
-The monitored directories are configurable through environment variables:
-
-- `WINDY_INGEST_BASE_PATH` (default: `/windy`)
-- `WINDY_INGEST_AREA` (default: `Italia`)
-- `WINDY_INGEST_FOLDERS` (comma-separated folder names, default includes ICON 00/12 and WRF 00)
+- `WINDY_INGEST_FOLDERS` (comma-separated folder names for non-WRF datasets, default includes ICON 00/12)
+- `WINDY_WRF_INGEST_FOLDERS` (comma-separated folder names for WRF datasets, default includes WRF 00/12)
 
 **Monitoring Schedule:** Every minute (configurable via crontab)
 

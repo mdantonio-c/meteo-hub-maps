@@ -218,6 +218,30 @@ class WindyEndpoint(EndpointResource):
         else:
             return Downloader.send_file_streamed(filepath.name, filepath.parent, 'image/tif')
 
+
+def _get_latest_wind_direction_path() -> Path:
+    ready_files = []
+    for r in ["00", "12"]:
+        path = get_multilayer_maps_base_path("windy", "", "", r, "icon")
+        log.info(path)
+        x = get_geoserver_ready_file(path, "Italia")
+        if x:
+            ready_files.append(x)
+
+    if not ready_files:
+        raise NotFound("No .READY file found")
+
+    ready_files.sort(key=lambda f: f.name[:10], reverse=True)
+    return ready_files[0].parent.joinpath("wind-direction")
+
+
+def _get_wind_direction_file_path(filename: str) -> Path:
+    latest_path = _get_latest_wind_direction_path()
+    filepath = latest_path.joinpath(filename)
+    if not filepath.exists() or not filepath.is_file():
+        raise NotFound(f"File {filepath} does not exist")
+    return filepath
+
 class MapStaticWindyList(EndpointResource):
     labels = ["maps"]
 
@@ -233,18 +257,7 @@ class MapStaticWindyList(EndpointResource):
         and identifies the most recent one using the .READY files.
         """
         
-        ready_files = []
-        for r in ["00", "12"]:
-            path = get_multilayer_maps_base_path("windy", "", "", r, "icon")
-            log.info(path)
-            x = get_geoserver_ready_file(path, "Italia")
-            if x:
-                ready_files.append(x)
-
-        if not ready_files:
-            raise NotFound("No .READY file found")
-        ready_files.sort(key=lambda f: f.name[:10], reverse=True)
-        latest_path = ready_files[0].parent.joinpath("wind-direction")
+        latest_path = _get_latest_wind_direction_path()
         files = sorted([f.name for f in latest_path.iterdir() if f.is_file()])
         return self.response(files)
 
@@ -266,21 +279,37 @@ class MapStaticWindyFile(EndpointResource):
         The file is retrieved from the 'wind-direction' subfolder of the latest
         available run.
         """
-        ready_files = []
-        for r in ["00", "12"]:
-            path = get_multilayer_maps_base_path("windy", "", "", r, "icon")
-            log.info(path)
-            x = get_geoserver_ready_file(path, "Italia")
-            if x:
-                ready_files.append(x)
+        filepath = _get_wind_direction_file_path(filename)
+        return Downloader.send_file_content(filepath.name, filepath.parent, 'image/tif')
 
-        if not ready_files:
-            raise NotFound("No .READY file found")
-        ready_files.sort(key=lambda f: f.name[:10], reverse=True)
-        latest_path = ready_files[0].parent.joinpath("wind-direction")
-        filepath = latest_path.joinpath(filename)
-        if not filepath.exists() or not filepath.is_file():
-            raise NotFound(f"File {filepath} does not exist")
+
+class LegacyMapStaticWindyList(EndpointResource):
+    labels = ["windy"]
+
+    @decorators.endpoint(
+        path="/windy/maps/wind-direction/list/files",
+        summary="[Legacy compatibility] List available static wind direction tiff files for the latest run.",
+        responses={200: "List of files successfully retrieved"},
+    )
+    def get(self) -> Response:
+        latest_path = _get_latest_wind_direction_path()
+        files = sorted([f.name for f in latest_path.iterdir() if f.is_file()])
+        return self.response(files)
+
+
+class LegacyMapStaticWindyFile(EndpointResource):
+    labels = ["windy"]
+
+    @decorators.endpoint(
+        path="/windy/maps/wind-direction/files/<filename>",
+        summary="[Legacy compatibility] Get a specific static wind direction tiff file from the latest run.",
+        responses={
+            200: "File successfully retrieved",
+            404: "File not found",
+        },
+    )
+    def get(self, filename: str) -> Response:
+        filepath = _get_wind_direction_file_path(filename)
         return Downloader.send_file_content(filepath.name, filepath.parent, 'image/tif')
 
 
