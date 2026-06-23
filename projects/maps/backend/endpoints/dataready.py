@@ -142,16 +142,17 @@ class StartMonitoring(EndpointResource):
             task="check_latest_data_and_trigger_geoserver_import_ww3",
             args=[],
         )
-        task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_thredds_ingestion",
-            hour="*",
-            minute="*",
-            day_of_week="*",
-            day_of_month="*",
-            month_of_year="*",
-            task="check_latest_data_and_trigger_thredds_ingestion",
-            args=[],
-        )
+        # Thredds integration disabled.
+        # task = c.create_crontab_task(
+        #     name="check_latest_data_and_trigger_thredds_ingestion",
+        #     hour="*",
+        #     minute="*",
+        #     day_of_week="*",
+        #     day_of_month="*",
+        #     month_of_year="*",
+        #     task="check_latest_data_and_trigger_thredds_ingestion",
+        #     args=[],
+        # )
         return self.response("Monitoring started", code=202)
     
     @decorators.endpoint(
@@ -177,9 +178,10 @@ class StartMonitoring(EndpointResource):
         if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_ww3"):
             res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_ww3")
             log.info(f"Deleted periodic task: {res}")
-        if c.get_periodic_task("check_latest_data_and_trigger_thredds_ingestion"):
-            res = c.delete_periodic_task("check_latest_data_and_trigger_thredds_ingestion")
-            log.info(f"Deleted periodic task: {res}")
+        # Thredds integration disabled.
+        # if c.get_periodic_task("check_latest_data_and_trigger_thredds_ingestion"):
+        #     res = c.delete_periodic_task("check_latest_data_and_trigger_thredds_ingestion")
+        #     log.info(f"Deleted periodic task: {res}")
         if res:
             return self.response("Monitoring has been disabled", code=202)
         # Create a periodic task to check for the latest data and trigger Geoserver import

@@ -531,6 +531,7 @@ Returns the JSON content of the vector file.
 
 ---
 
+<!--
 ## THREDDS Endpoints
 
 ### Get Latest THREDDS Ingested Files (All Products)
@@ -633,6 +634,7 @@ Retrieve status for one layer:
 **Endpoint:** `GET /api/thredds/status/{layer}`
 
 These endpoints expose generic THREDDS layer metadata and remain available for backward compatibility.
+-->
 
 ---
 

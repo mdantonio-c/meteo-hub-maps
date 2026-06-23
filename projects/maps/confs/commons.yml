@@ -18,7 +18,7 @@ services:
       WINDY_INGEST_AREA: ${WINDY_INGEST_AREA}
       WINDY_INGEST_FOLDERS: ${WINDY_INGEST_FOLDERS}
       MER_DATA_PATH: ${MER_DATA_PATH}
-      THREDDS_DATA_PATH: ${THREDDS_DATA_PATH}
+      # THREDDS_DATA_PATH: ${THREDDS_DATA_PATH}
     volumes:
       - ${HOST_WINDY_GEOTIFF_DIR}:${WINDY_DATA_PATH}
       - ${STATIC_MAPS_DATA_PATH}:${DATA_PATH}
@@ -27,7 +27,7 @@ services:
       - ${HOST_SUB_SEASONAL_GEOTIFF_DIR}:${SUB_SEASONAL_DATA_PATH}
       - ${HOST_WW3_DIR}:/ww3
       - ${HOST_MER_DIR}:${MER_DATA_PATH}
-      - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
+      # - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
   celery:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
@@ -44,7 +44,7 @@ services:
       WINDY_INGEST_AREA: ${WINDY_INGEST_AREA}
       WINDY_INGEST_FOLDERS: ${WINDY_INGEST_FOLDERS}
       MER_DATA_PATH: ${MER_DATA_PATH}
-      THREDDS_DATA_PATH: ${THREDDS_DATA_PATH}
+      # THREDDS_DATA_PATH: ${THREDDS_DATA_PATH}
     volumes:
       - ${HOST_WINDY_GEOTIFF_DIR}:/windy
       - ${HOST_SEASONAL_GEOTIFF_DIR}:${SEASONAL_DATA_PATH}
@@ -54,7 +54,7 @@ services:
       - ${HOST_SUB_SEASONAL_GEOTIFF_DIR}:${SUB_SEASONAL_DATA_PATH}
       - ${HOST_WW3_DIR}:/ww3
       - ${HOST_MER_DIR}:${MER_DATA_PATH}
-      - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
+      # - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
       - ${DATA_DIR}/celery_health:/status
   celerybeat:
     build: ${PROJECT_DIR}/builds/backend
@@ -80,47 +80,47 @@ services:
     #   - ${HOST_MER_DIR}:${MER_DATA_PATH}
     #   - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
     # command: celery --app restapi.connectors.celery.beat.celery_app beat --loglevel=info
-  thredds:
-    # Build custom THREDDS image with pre-configured directories at build time
-    build: ${PROJECT_DIR}/builds/thredds
-    image: maps/thredds:${RAPYDO_VERSION}
-    ports:
-      - "8082:8080"
-    volumes:
-      # Mount data directories for THREDDS to serve
-      - ${HOST_THREDDS_DIR}:/usr/local/tomcat/content/thredds/public
-      # Persist THREDDS caches on host storage for faster repeated UGRID requests
-      - ${DATA_DIR}/thredds_cache:/usr/local/tomcat/content/thredds/cache
-      # Override TDS/WMS runtime configuration with local tuned files
-      - ${PROJECT_DIR}/builds/thredds/threddsConfig.xml:/usr/local/tomcat/content/thredds/threddsConfig.xml:ro
-      - ${PROJECT_DIR}/builds/thredds/wmsConfig.xml:/usr/local/tomcat/content/thredds/wmsConfig.xml:ro
-    environment:
-      ACTIVATE: ${ACTIVATE_THREDDS}
-      # TDS Content root
-      TDS_CONTENT_ROOT_PATH: /usr/local/tomcat/content
-      # The minimum and maximum Java heap space memory to be allocated to the TDS
-      THREDDS_XMX_SIZE: 12G
-      THREDDS_XMS_SIZE: 4G
-      TDS_HOST: ${PROJECT_DOMAIN}
-      # See https://github.com/Unidata/tomcat-docker#configurable-tomcat-uid-and-gid
-      TOMCAT_USER_ID: ${CURRENT_UID}
-      TOMCAT_GROUP_ID: ${CURRENT_GID}
-      THREDDS_XMX: 12G
-      THREDDS_XMS: 4G
-      # Use G1GC for better handling of large memory heaps
-      JAVA_OPTS: -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Djava.awt.headless=true -Djava.util.prefs.systemRoot=/usr/local/tomcat/content/thredds/javaUtilPrefs
-    healthcheck:
-      test:
-        - "CMD-SHELL"
-        - "curl -fsS http://localhost:8080/thredds/catalog.html >/dev/null || exit 1"
-      interval: 30s
-      timeout: 10s
-      retries: 6
-      start_period: 180s
-    networks:
-      default:
-        aliases:
-          - thredds.dockerized.io
+  # thredds:
+  #   # Build custom THREDDS image with pre-configured directories at build time
+  #   build: ${PROJECT_DIR}/builds/thredds
+  #   image: maps/thredds:${RAPYDO_VERSION}
+  #   ports:
+  #     - "8082:8080"
+  #   volumes:
+  #     # Mount data directories for THREDDS to serve
+  #     - ${HOST_THREDDS_DIR}:/usr/local/tomcat/content/thredds/public
+  #     # Persist THREDDS caches on host storage for faster repeated UGRID requests
+  #     - ${DATA_DIR}/thredds_cache:/usr/local/tomcat/content/thredds/cache
+  #     # Override TDS/WMS runtime configuration with local tuned files
+  #     - ${PROJECT_DIR}/builds/thredds/threddsConfig.xml:/usr/local/tomcat/content/thredds/threddsConfig.xml:ro
+  #     - ${PROJECT_DIR}/builds/thredds/wmsConfig.xml:/usr/local/tomcat/content/thredds/wmsConfig.xml:ro
+  #   environment:
+  #     ACTIVATE: ${ACTIVATE_THREDDS}
+  #     # TDS Content root
+  #     TDS_CONTENT_ROOT_PATH: /usr/local/tomcat/content
+  #     # The minimum and maximum Java heap space memory to be allocated to the TDS
+  #     THREDDS_XMX_SIZE: 12G
+  #     THREDDS_XMS_SIZE: 4G
+  #     TDS_HOST: ${PROJECT_DOMAIN}
+  #     # See https://github.com/Unidata/tomcat-docker#configurable-tomcat-uid-and-gid
+  #     TOMCAT_USER_ID: ${CURRENT_UID}
+  #     TOMCAT_GROUP_ID: ${CURRENT_GID}
+  #     THREDDS_XMX: 12G
+  #     THREDDS_XMS: 4G
+  #     # Use G1GC for better handling of large memory heaps
+  #     JAVA_OPTS: -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Djava.awt.headless=true -Djava.util.prefs.systemRoot=/usr/local/tomcat/content/thredds/javaUtilPrefs
+  #   healthcheck:
+  #     test:
+  #       - "CMD-SHELL"
+  #       - "curl -fsS http://localhost:8080/thredds/catalog.html >/dev/null || exit 1"
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 6
+  #     start_period: 180s
+  #   networks:
+  #     default:
+  #       aliases:
+  #         - thredds.dockerized.io
 
   geoserver:
     image: meteo-hub-geoserver:${PROJECT_VERSION}
