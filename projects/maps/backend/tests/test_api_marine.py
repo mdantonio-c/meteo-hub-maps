@@ -53,8 +53,10 @@ def create_station_file(forcing: str, filename: str, data: dict) -> None:
     shyfem_path = Path(Env.get("MER_DATA_PATH", "/shyfem"))
     forcing_path = shyfem_path.joinpath(forcing)
     forcing_path.mkdir(parents=True, exist_ok=True)
+    json_path = forcing_path.joinpath("json")
+    json_path.mkdir(parents=True, exist_ok=True)
 
-    station_file = forcing_path.joinpath(filename)
+    station_file = json_path.joinpath(filename)
     station_file.write_text(json.dumps(data))
 
 
@@ -407,7 +409,9 @@ class TestMarineShyfem(BaseTests):
         shyfem_path = create_shyfem_directories()
         bolam_path = shyfem_path.joinpath("BOLAM")
         bolam_path.mkdir(parents=True, exist_ok=True)
-        station_file = bolam_path.joinpath("20260701_station_timeseries.json")
+        json_path = bolam_path.joinpath("json")
+        json_path.mkdir(parents=True, exist_ok=True)
+        station_file = json_path.joinpath("20260701_station_timeseries.json")
         station_file.write_text("not valid json {")
 
         endpoint = (
@@ -427,7 +431,9 @@ class TestMarineShyfem(BaseTests):
         shyfem_path = create_shyfem_directories()
         bolam_path = shyfem_path.joinpath("BOLAM")
         bolam_path.mkdir(parents=True, exist_ok=True)
-        station_file = bolam_path.joinpath("20260701_station_timeseries.json")
+        json_path = bolam_path.joinpath("json")
+        json_path.mkdir(parents=True, exist_ok=True)
+        station_file = json_path.joinpath("20260701_station_timeseries.json")
         station_file.write_text("{}")
 
         endpoint = (

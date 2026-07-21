@@ -108,15 +108,15 @@ class ShyfemStationsEndpoint(EndpointResource):
 
         files_by_forcing = {}
         for forcing_name in FORCINGS:
-            forcing_path = Path(data_path, forcing_name)
-            if not forcing_path.exists():
+            json_folder_path = Path(data_path, forcing_name, "json")
+            if not json_folder_path.exists():
                 continue
 
-            # Look for YYYYMMDD_stations.json files
+            # Look for <MODEL>>_YYYYMMDD_assim_station_timeseries.json files
             station_files = sorted(
                 [
                     f.name
-                    for f in forcing_path.iterdir()
+                    for f in json_folder_path.iterdir()
                     if f.is_file() and f.name.endswith("_station_timeseries.json")
                 ],
                 reverse=True,
@@ -155,7 +155,7 @@ class ShyfemStationFileEndpoint(EndpointResource):
             )
 
         data_path = get_data_path()
-        base_path = Path(data_path, forcing_upper)
+        base_path = Path(data_path, forcing_upper, "json")
         file_path = Path(base_path, filename)
 
         if not file_path.exists():
