@@ -115,6 +115,7 @@ class TestMarineShyfem(BaseTests):
         assert "latestRun" in response
         assert "availableForcings" in response
         assert "allForcings" in response
+        assert "forcings" in response
         assert "meta" in response
 
         # Latest run should be the lexicographically maximum date
@@ -128,6 +129,15 @@ class TestMarineShyfem(BaseTests):
         for forcing, date in response["allForcings"].items():
             assert forcing in forcings
             assert len(date) == 8  # YYYYMMDD format
+
+        # forcings should contain one object per available forcing
+        assert isinstance(response["forcings"], list)
+        assert len(response["forcings"]) == 3
+        forcing_names = sorted([x["name"] for x in response["forcings"]])
+        assert forcing_names == sorted(forcings)
+        for forcing_obj in response["forcings"]:
+            assert len(forcing_obj["latestRun"]) == 8
+            assert forcing_obj["isLatestRun"] is True
 
     def test_shyfem_status_mixed_dates(self, client: FlaskClient, faker: Faker) -> None:
         """Test status endpoint when forcings have different latest dates."""
@@ -157,6 +167,15 @@ class TestMarineShyfem(BaseTests):
         assert response["allForcings"]["BOLAM"] == "20260701"
         assert response["allForcings"]["ECMWF"] == "20260630"
         assert response["allForcings"]["ICON"] == "20260701"
+
+        # Per-forcing objects should mirror run freshness
+        forcing_map = {x["name"]: x for x in response["forcings"]}
+        assert forcing_map["BOLAM"]["latestRun"] == "20260701"
+        assert forcing_map["BOLAM"]["isLatestRun"] is True
+        assert forcing_map["ICON"]["latestRun"] == "20260701"
+        assert forcing_map["ICON"]["isLatestRun"] is True
+        assert forcing_map["ECMWF"]["latestRun"] == "20260630"
+        assert forcing_map["ECMWF"]["isLatestRun"] is False
 
     def test_shyfem_status_no_ready_files(
         self, client: FlaskClient, faker: Faker

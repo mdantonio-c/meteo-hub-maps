@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -37,22 +38,26 @@ class ShyfemStatusEndpoint(EndpointResource):
             raise NotFound(f"SHYFEM path {data_path} does not exist")
 
         forcing_latest_files = {}
+        latest_ready_mtime = None
 
         for forcing_name in FORCINGS:
             forcing_path = Path(data_path, forcing_name)
             if not forcing_path.exists():
                 continue
 
-            # Find READY files: YYYYMMDD.GEOSERVER.READY
+            # Find forcing-level READY files: YYYYMMDD.GEOSERVER.READY
             ready_files = [
                 f
                 for f in forcing_path.iterdir()
-                if f.is_file() and f.name.endswith(".GEOSERVER.READY")
+                if f.is_file() and re.match(r"^\d{8}\.GEOSERVER\.READY$", f.name)
             ]
 
             if ready_files:
-                # Get the latest READY file for this forcing by mtime
-                latest = max(ready_files, key=lambda f: f.stat().st_mtime)
+                # Get the latest READY file for this forcing by run date.
+                latest = max(ready_files, key=lambda f: f.name)
+                latest_forcing_mtime = max(f.stat().st_mtime for f in ready_files)
+                if latest_ready_mtime is None or latest_forcing_mtime > latest_ready_mtime:
+                    latest_ready_mtime = latest_forcing_mtime
                 try:
                     date_str = latest.name.split(".GEOSERVER.READY")[0]
                     if len(date_str) == 8:  # YYYYMMDD
@@ -74,12 +79,27 @@ class ShyfemStatusEndpoint(EndpointResource):
             ]
         )
 
+        forcings = [
+            {
+                "name": forcing_name,
+                "latestRun": run_date,
+                "isLatestRun": run_date == latest_date_str,
+            }
+            for forcing_name, run_date in sorted(forcing_latest_files.items())
+        ]
+
+        last_update = (
+            datetime.fromtimestamp(latest_ready_mtime).isoformat()
+            if latest_ready_mtime is not None
+            else datetime.now().isoformat()
+        )
+
         response = {
             "latestRun": latest_date_str,
             "availableForcings": available_forcings,
-            "allForcings": forcing_latest_files,
+            "forcings": forcings,
             "meta": {
-                "lastUpdate": datetime.now().isoformat(),
+                "lastUpdate": last_update,
             },
         }
 

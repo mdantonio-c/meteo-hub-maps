@@ -68,6 +68,17 @@ class Initializer:
             args=[],
         )
 
+        task = c.create_crontab_task(
+            name="check_latest_data_and_trigger_geoserver_import_mer_bolam",
+            hour="*",
+            minute="*",
+            day_of_week="*",
+            day_of_month="*",
+            month_of_year="*",
+            task="check_latest_data_and_trigger_geoserver_import_mer_bolam",
+            args=[],
+        )
+
         # Thredds integration disabled.
         # task = c.create_crontab_task(
         #     name="check_latest_data_and_trigger_thredds_ingestion",
