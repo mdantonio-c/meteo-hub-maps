@@ -23,7 +23,7 @@ variables:
     HOST_SEASONAL_GEOTIFF_DIR: ${DATA_DIR}/seasonal-aim
     HOST_RADAR_DIR: ${DATA_DIR}/radar
     HOST_SUB_SEASONAL_GEOTIFF_DIR: ${DATA_DIR}/sub-seasonal-aim
-    HOST_WW3_DIR: ${DATA_DIR}/ww3
+    HOST_WW3_DIR: ${DATA_DIR}/maps/Windy-00-WW3.web
     RADAR_RETENTION_HOURS: 72
     SEASONAL_DATA_PATH: /seasonal-aim
     WINDY_DATA_PATH: /windy_multilayer
@@ -34,8 +34,12 @@ variables:
     HOST_MER_DIR: ${DATA_DIR}/MER
     MER_DATA_PATH: /shyfem
     RADAR_DATA_PATH: /radar
+    DATASET_CONFIG_PATH: /etc/meteohub/datasets.yml
     SUB_SEASONAL_DATA_PATH: /sub-seasonal-aim
     WW3_DATA_PATH: /ww3
     STATIC_MAPS_DATA_PATH: ${DATA_DIR}/maps
     ALLOWED_IPS: {}
     GEOSERVER_PROXY_BASE_URL: maps.mistralportal.it
+    GEOSERVER_GWC_ENABLED: 1
+    GEOSERVER_DATA_PATH: /geoserver_data
+    HOST_GEOSERVER_DATA_DIR: ${DATA_DIR}/geoserver_data

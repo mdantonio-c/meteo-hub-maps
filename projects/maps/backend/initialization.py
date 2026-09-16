@@ -1,4 +1,5 @@
 from restapi.connectors import celery
+from maps.datasets.registry import load_registry
 
 # Unused since Auth is not enabled
 class Initializer:
@@ -9,6 +10,9 @@ class Initializer:
     """
 
     def __init__(self) -> None:
+        # Validate shared dataset configuration before scheduling ingestion.
+        self.dataset_registry = load_registry()
+
         # Thredds integration disabled.
         # self._initialize_thredds_catalog()
         

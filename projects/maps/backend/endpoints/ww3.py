@@ -8,7 +8,9 @@ from datetime import datetime
 
 from restapi.env import Env
 
-WW3_PATH = Path(Env.get("WW3_DATA_PATH", "/ww3"))
+WW3_BASE_DIR = Path(Env.get("WW3_DATA_PATH", "/ww3"))
+WW3_PATH = WW3_BASE_DIR / "Mediterraneo"
+VECTORS_PATH = WW3_BASE_DIR / "dir-dir"
 
 class WW3Endpoint(EndpointResource):
     labels = ["ww3"]
@@ -22,7 +24,7 @@ class WW3Endpoint(EndpointResource):
         },
     )
     def get(self) -> Response:
-        vectors_path = WW3_PATH / "dir-dir"
+        vectors_path = VECTORS_PATH
         if not vectors_path.exists():
             raise NotFound(f"WW3 vectors path {vectors_path} does not exist")
 
@@ -46,7 +48,7 @@ class WW3FileEndpoint(EndpointResource):
         },
     )
     def get(self, filename: str) -> Response:
-        gradients_path = WW3_PATH / "dir-dir"
+        gradients_path = VECTORS_PATH
         file_path = (gradients_path / filename).resolve()
         
         # Security check: ensure the resolved path is within gradients_path

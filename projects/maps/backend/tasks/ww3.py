@@ -5,6 +5,7 @@ import os
 import shutil
 import requests
 from datetime import datetime
+from typing import Any
 from maps.tasks.geoserver_utils import (
     upload_geotiff_generic,
     publish_layer_generic,
@@ -12,18 +13,54 @@ from maps.tasks.geoserver_utils import (
     associate_sld_with_layer_generic,
     update_slds_from_local_folders
 )
+from maps.datasets.cache import GWCInvalidator
 
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
 PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
 WORKSPACE = "meteohub"
-WW3_BASE_PATH = Env.get("WW3_DATA_PATH", "/ww3")
+WW3_BASE_PATH = os.path.join(Env.get("WW3_DATA_PATH", "/ww3"), "Mediterraneo")
 COPIES_BASE_DIRECTORY = "/geoserver_data/copies"
+
+
+def _ingest_ww3_layers(run_date: str, config: Any = None) -> list:
+    log.info(f"Starting WW3 ingestion for run {run_date}")
+
+    if not os.path.exists(WW3_BASE_PATH):
+        log.warning(f"WW3 base path not found: {WW3_BASE_PATH}")
+        return []
+
+    if config is not None:
+        try:
+            variables = config.datasets.get("ww3", {}).get("variables", [])
+            if not variables:
+                variables = [
+                    d for d in os.listdir(WW3_BASE_PATH)
+                    if os.path.isdir(os.path.join(WW3_BASE_PATH, d)) and d != 'dir-dir'
+                ]
+        except AttributeError:
+            variables = [
+                d for d in os.listdir(WW3_BASE_PATH)
+                if os.path.isdir(os.path.join(WW3_BASE_PATH, d)) and d != 'dir-dir'
+            ]
+    else:
+        variables = [
+            d for d in os.listdir(WW3_BASE_PATH)
+            if os.path.isdir(os.path.join(WW3_BASE_PATH, d)) and d != 'dir-dir'
+        ]
+
+    layers = []
+    for var in variables:
+        process_ww3_variable(var)
+        layers.append(f"ww3_{var}")
+
+    return layers
+
 
 @CeleryExt.task(idempotent=True)
 def update_geoserver_ww3_layers(self, run_date):
     log.info(f"Starting ww3 ingestion for run {run_date}")
-    
+
     create_workspace_generic(GEOSERVER_URL, USERNAME, PASSWORD, WORKSPACE)
     
     # Identify variables from directories, excluding 'dir-dir'
@@ -109,6 +146,33 @@ def update_geoserver_ww3_layers(self, run_date):
         f.write(f"Run: {run_date}\n")
     log.info(f"Created {ready_file}")
     
+    # Seed GWC cache, scoped to each layer's currently available TIME values
+    invalidator = GWCInvalidator(
+        GEOSERVER_URL, USERNAME, PASSWORD, WORKSPACE, enabled=True
+    )
+    for var in variables:
+        layer_name = f"ww3_{var}"
+        try:
+            invalidator.ensure_time_parameter_filter(layer_name)
+            invalidator.truncate(layer_name)
+            times = invalidator.get_granule_times(
+                layer_name, store_name=f"mosaic_{layer_name}", all_times=True
+            )
+            if not times:
+                log.error(
+                    f"No temporal granules found for {layer_name}; skipping GWC seed"
+                )
+                continue
+            style_name = invalidator.get_default_style(layer_name)
+            if not style_name:
+                log.error(f"No default style found for {layer_name}; skipping GWC seed")
+                continue
+            invalidator.seed(
+                layer_name, wait=True, times=times, style_name=style_name
+            )
+            log.info(f"Seeded GWC cache for {layer_name} ({len(times)} timestep(s))")
+        except Exception as e:
+            log.error(f"Failed to seed GWC cache for {layer_name}: {e}")
     # Cleanup CELERY.CHECKED
     for f in os.listdir(WW3_BASE_PATH):
         if f.endswith(".CELERY.CHECKED"):

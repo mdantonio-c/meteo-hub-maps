@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from restapi.connectors import celery
 from restapi.env import Env
 from maps.tasks.data_watcher import DataWatcher, DataWatcherStream
+from maps.tasks.ww3 import update_geoserver_ww3_layers
 from maps.tasks.geoserver_utils import (
     create_workspace_generic,
     upload_geotiff_generic,
@@ -29,7 +30,7 @@ dataset = "icon"
 area = "Italia"
 GRANULE_RETENTION_HOURS = int(Env.get("RADAR_RETENTION_HOURS", 72))
 SUB_SEASONAL_BASE_PATH = Env.get("SUB_SEASONAL_AIM_PATH", "/sub-seasonal-aim")
-WW3_BASE_PATH = Env.get("WW3_DATA_PATH", "/ww3")
+WW3_BASE_PATH = os.path.join(Env.get("WW3_DATA_PATH", "/ww3"), "Mediterraneo")
 WINDY_INGEST_BASE_PATH = Env.get("WINDY_INGEST_BASE_PATH", "/windy")
 WINDY_INGEST_AREA = Env.get("WINDY_INGEST_AREA", "Italia")
 WINDY_INGEST_FOLDERS = [
@@ -571,11 +572,7 @@ def check_latest_data_and_trigger_geoserver_import_ww3(
         # log.info(f"Created {checked_file}")
         
         # Trigger task
-        c = celery.get_instance()
-        c.celery_app.send_task(
-            "update_geoserver_ww3_layers",
-            args=(run_date,)
-        )
+        update_geoserver_ww3_layers.delay(run_date)
         log.info(f"Triggered update_geoserver_ww3_layers for {run_date}")
 
     watcher = DataWatcher(

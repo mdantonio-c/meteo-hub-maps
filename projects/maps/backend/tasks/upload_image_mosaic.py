@@ -15,6 +15,7 @@ from maps.tasks.geoserver_utils import (
     upload_sld_generic,
     process_sld_files
 )
+from maps.datasets.cache import GWCInvalidator
 
 sld_dir_mapping = {
     "hcc": ["cloud_hml-hcc"],
@@ -47,15 +48,16 @@ BASE_PATH = "/windy"
 GEOSERVER_HOST_PATH = f"/geoserver_data/{RENAMED_FILES}"
 GEOSERVER_DATA_DIR = f"geoserver_data/{RENAMED_FILES}/"  # Path where GeoServer can access TIFFs
 
-@CeleryExt.task(idempotent=True)
-def update_geoserver_image_mosaic(
-    self,
-    GEOSERVER_URL: str,
+def _ingest_windy_image_mosaic(
+    geoserver_url: str,
     run: str,
     date: str = datetime.now().strftime("%Y-%m-%d"),
     sld_directory: str = "/SLDs",
     dataset_folder: str = "ICON_2I_all2km",
-) -> None:
+    config=None,
+) -> list:
+    """Ingest Windy mosaics and return published layer names for GWC seeding."""
+    GEOSERVER_URL = geoserver_url
     # Ensure workspace exists before uploading
     create_workspace_generic(GEOSERVER_URL, GEOSERVER_USERNAME, GEOSERVER_PASSWORD, WORKSPACE)
     
@@ -63,6 +65,7 @@ def update_geoserver_image_mosaic(
     update_styles(sld_directory)
     TIFF_DIR = f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/Italia"
     date_edit = datetime.strptime(date, "%Y%m%d").strftime("%Y-%m-%d")
+    layers = []
     for folder in os.listdir(TIFF_DIR):
         folder_path = os.path.join(TIFF_DIR, folder)
         if os.path.isdir(folder_path):
@@ -75,10 +78,54 @@ def update_geoserver_image_mosaic(
                 continue
             if ensure_tiff_files_exist(folder, TIFF_DIR):
                 create_image_mosaic_store(geoserver_name, GEOSERVER_URL)
-            publish_layer(geoserver_name, geoserver_name, GEOSERVER_URL)
+            published = publish_layer(geoserver_name, geoserver_name, GEOSERVER_URL)
             bind_sld(folder, geoserver_name, GEOSERVER_URL)
-            enable_time_dimension(geoserver_name, geoserver_name, GEOSERVER_URL)
-    create_ready_file(TIFF_DIR, run, date)
+            time_enabled = enable_time_dimension(geoserver_name, geoserver_name, GEOSERVER_URL)
+            if published and time_enabled:
+                layers.append(geoserver_name)
+    invalidator = GWCInvalidator(
+        GEOSERVER_URL, GEOSERVER_USERNAME, GEOSERVER_PASSWORD, WORKSPACE, enabled=True
+    )
+    for layer_name in layers:
+        try:
+            if not invalidator.ensure_time_parameter_filter(layer_name):
+                raise RuntimeError("could not configure the GWC TIME parameter filter")
+            if not invalidator.truncate(layer_name):
+                raise RuntimeError("could not truncate the GWC layer cache")
+            times = invalidator.get_granule_times(layer_name, all_times=True)
+            if not times:
+                raise RuntimeError("no temporal granules found")
+            style_name = invalidator.get_default_style(layer_name)
+            if not style_name:
+                raise RuntimeError("no GeoServer default style found")
+            if not invalidator.seed(
+                layer_name, wait=True, times=times, style_name=style_name
+            ):
+                raise RuntimeError("could not seed the GWC layer cache")
+            log.info(f"Seeded GWC cache for {layer_name} ({len(times)} timestep(s))")
+        except Exception as exc:
+            log.error(f"Failed to seed GWC cache for {layer_name}: {exc}")
+    return layers
+
+
+@CeleryExt.task(idempotent=True)
+def update_geoserver_image_mosaic(
+    self,
+    GEOSERVER_URL: str,
+    run: str,
+    date: str = datetime.now().strftime("%Y-%m-%d"),
+    sld_directory: str = "/SLDs",
+    dataset_folder: str = "ICON_2I_all2km",
+) -> None:
+    _ingest_windy_image_mosaic(
+        geoserver_url=GEOSERVER_URL,
+        run=run,
+        date=date,
+        sld_directory=sld_directory,
+        dataset_folder=dataset_folder,
+    )
+    tiff_dir = f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/Italia"
+    create_ready_file(tiff_dir, run, date)
     
 def update_styles(sld_directory: Optional[str] = None) -> None:
     if sld_directory:

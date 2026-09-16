@@ -1,0 +1,403 @@
+version: 1
+
+datasets:
+  - id: icon
+    display_name: ICON 2I all2km
+    kind: forecast
+    enabled: true
+    discovery:
+      base_path_env: WINDY_INGEST_BASE_PATH
+      base_path_default: /windy
+      folder_pattern: "Windy-{run}-ICON_2I_all2km.web"
+      area: Italia
+      runs: ["00", "12"]
+      markers:
+        ready_suffix: .READY
+        checked_suffix: .CELERY.CHECKED
+        completed_suffix: .GEOSERVER.READY
+    ingestion:
+      adapter: windy_image_mosaic
+      trigger: ready_marker
+      batch_mode: run
+    temporal:
+      filename_regex: ".*([0-9]{10}).*"
+      filename_format: yyyyMMddHH
+      timezone: UTC
+    geoserver:
+      workspace: meteohub
+      store_type: ImageMosaic
+      sld:
+        style_name: "{variable}"
+      variables:
+        cloud_hml-hcc:
+          layer_name: cloud_hml-hcc
+          style_name: cloud_hcc
+        cloud_hml-lcc:
+          layer_name: cloud_hml-lcc
+          style_name: cloud_lcc
+        cloud_hml-mcc:
+          layer_name: cloud_hml-mcc
+          style_name: cloud_mcc
+        cloud-tcc:
+          layer_name: cloud-tcc
+          style_name: cloud_tcc
+        prec1-tp:
+          layer_name: prec1-tp
+          style_name: prec1_3
+        prec3-tp:
+          layer_name: prec3-tp
+          style_name: prec1_3
+        prec6-tp:
+          layer_name: prec6-tp
+          style_name: prec6_12_24
+        prec12-tp:
+          layer_name: prec12-tp
+          style_name: prec6_12_24
+        prec24-tp:
+          layer_name: prec24-tp
+          style_name: prec6_12_24
+        pressure-pmsl:
+          layer_name: pressure-pmsl
+          style_name: pressure
+        humidity-r:
+          layer_name: humidity-r
+          style_name: humidity
+        snow1-snow:
+          layer_name: snow1-snow
+          style_name: snow1_3
+        snow3-snow:
+          layer_name: snow3-snow
+          style_name: snow1_3
+        snow6-snow:
+          layer_name: snow6-snow
+          style_name: snow6_12_24
+        snow12-snow:
+          layer_name: snow12-snow
+          style_name: snow6_12_24
+        snow24-snow:
+          layer_name: snow24-snow
+          style_name: snow6_12_24
+        t2m-t2m:
+          layer_name: t2m-t2m
+          style_name: t2m
+        wind-10u:
+          layer_name: wind-10u
+          style_name: wind
+        wind-10v:
+          layer_name: wind-10v
+          style_name: wind
+        wind-vmax_10m:
+          layer_name: wind-vmax_10m
+          style_name: wind
+        pressure-isob:
+          layer_name: pressure-isob
+          style_name: isobars
+        zerot-hzerocl:
+          layer_name: zerot-hzerocl
+          style_name: zerot
+        tot_snow-snow:
+          layer_name: tot_snow-snow
+          style_name: sf_tot
+        tot_prec-tp:
+          layer_name: tot_prec-tp
+          style_name: prec_tot
+    endpoint:
+      route: /datasets/{dataset}
+      operations: [metadata, file_download]
+
+  - id: wrf
+    display_name: WRF
+    kind: forecast
+    enabled: true
+    discovery:
+      base_path_env: WINDY_INGEST_BASE_PATH
+      base_path_default: /windy
+      folder_pattern: "Windy-{run}-WRF.web"
+      area: Italia
+      runs: ["00", "12"]
+      markers:
+        ready_suffix: .READY
+        checked_suffix: .CELERY.CHECKED
+        completed_suffix: .GEOSERVER.READY
+    ingestion:
+      adapter: windy_image_mosaic
+      trigger: ready_marker
+      batch_mode: run
+    temporal:
+      filename_regex: ".*([0-9]{10}).*"
+      filename_format: yyyyMMddHH
+      timezone: UTC
+    geoserver:
+      workspace: meteohub
+      store_type: ImageMosaic
+      sld:
+        style_name: "WRF-{variable}"
+      variables:
+        cloud_hml-hcc:
+          layer_name: WRF-cloud_hml-hcc
+          style_name: cloud_hcc
+        cloud_hml-lcc:
+          layer_name: WRF-cloud_hml-lcc
+          style_name: cloud_lcc
+        cloud_hml-mcc:
+          layer_name: WRF-cloud_hml-mcc
+          style_name: cloud_mcc
+        cloud-tcc:
+          layer_name: WRF-cloud-tcc
+          style_name: cloud_tcc
+        prec1-tp:
+          layer_name: WRF-prec1-tp
+          style_name: prec1_3
+        prec3-tp:
+          layer_name: WRF-prec3-tp
+          style_name: prec1_3
+        prec6-tp:
+          layer_name: WRF-prec6-tp
+          style_name: prec6_12_24
+        prec12-tp:
+          layer_name: WRF-prec12-tp
+          style_name: prec6_12_24
+        prec24-tp:
+          layer_name: WRF-prec24-tp
+          style_name: prec6_12_24
+        pressure-pmsl:
+          layer_name: WRF-pressure-pmsl
+          style_name: pressure
+        humidity-r:
+          layer_name: WRF-humidity-r
+          style_name: humidity
+        snow1-snow:
+          layer_name: WRF-snow1-snow
+          style_name: snow1_3
+        snow3-snow:
+          layer_name: WRF-snow3-snow
+          style_name: snow1_3
+        snow6-snow:
+          layer_name: WRF-snow6-snow
+          style_name: snow6_12_24
+        snow12-snow:
+          layer_name: WRF-snow12-snow
+          style_name: snow6_12_24
+        snow24-snow:
+          layer_name: WRF-snow24-snow
+          style_name: snow6_12_24
+        t2m-t2m:
+          layer_name: WRF-t2m-t2m
+          style_name: t2m
+        wind-10u:
+          layer_name: WRF-wind-10u
+          style_name: wind
+        wind-10v:
+          layer_name: WRF-wind-10v
+          style_name: wind
+        wind-vmax_10m:
+          layer_name: WRF-wind-vmax_10m
+          style_name: wind
+        pressure-isob:
+          layer_name: WRF-pressure-isob
+          style_name: isobars
+        zerot-hzerocl:
+          layer_name: WRF-zerot-hzerocl
+          style_name: zerot
+        tot_snow-snow:
+          layer_name: WRF-tot_snow-snow
+          style_name: sf_tot
+        tot_prec-tp:
+          layer_name: WRF-tot_prec-tp
+          style_name: prec_tot
+    endpoint:
+      route: /datasets/{dataset}
+      operations: [metadata, file_download]
+
+  - id: radar
+    display_name: Radar observations
+    kind: observation
+    enabled: true
+    discovery:
+      base_path_env: RADAR_DATA_PATH
+      base_path_default: /radar
+      variables: [sri, srt]
+      source_files_path: "{base_path}/{variable}/files"
+      markers:
+        ready_suffix: .READY
+        checked_suffix: .CELERY.CHECKED
+        completed_suffix: .GEOSERVER.READY
+    ingestion:
+      adapter: radar_stream
+      trigger: ready_marker
+      batch_mode: time_range
+      rolling_window_hours: 72
+    temporal:
+      filename_regex: "^([0-9]{2}-[0-9]{2}-[0-9]{4}-[0-9]{2}-[0-9]{2})\\.tif$"
+      filename_format: dd-MM-yyyy-HH-mm
+      timezone: UTC
+    geoserver:
+      workspace: meteohub
+      store_type: ImageMosaic
+      sld:
+        style_name: radar-{variable}
+      variables:
+        sri:
+          layer_name: radar-sri
+          style_name: radar_sri
+        srt:
+          layer_name: radar-srt
+          style_name: radar_srt
+    endpoint:
+      route: /radar/{radar_type}/status
+      operations: [status]
+
+  - id: ww3
+    display_name: WW3 wave model
+    kind: forecast
+    enabled: true
+    discovery:
+      base_path_env: WW3_DATA_PATH
+      base_path_default: /ww3
+      source_files_path: "{base_path}/Mediterraneo/{variable}"
+      markers:
+        ready_suffix: .READY
+        checked_suffix: .CELERY.CHECKED
+        completed_suffix: .GEOSERVER.READY
+    ingestion:
+      adapter: ww3_mosaic
+      trigger: ready_marker
+      batch_mode: run
+    temporal:
+      filename_regex: "([0-9]{2}-[0-9]{2}-[0-9]{4}-[0-9]{2}-[0-9]{2})"
+      filename_format: dd-MM-yyyy-HH-mm
+      timezone: UTC
+    geoserver:
+      workspace: meteohub
+      store_type: ImageMosaic
+      sld:
+        style_name: "ww3_{variable}"
+      cache:
+        eligible: true
+        require_explicit_time: true
+      variables: {}
+    endpoint:
+      route: /ww3/vectors
+      operations: [metadata, file_download]
+
+  - id: seasonal
+    display_name: Seasonal forecast
+    kind: forecast
+    enabled: true
+    discovery:
+      base_path_env: SEASONAL_DATA_PATH
+      base_path_default: /seasonal-aim
+      variables: [ano_max_TM, ano_min_Tm, ano_P, mean_TM, mean_Tm, sum_P]
+      markers:
+        ready_suffix: .READY
+        checked_suffix: .CELERY.CHECKED
+        completed_suffix: .GEOSERVER.READY
+    ingestion:
+      adapter: seasonal_mosaic
+      trigger: ready_marker
+      batch_mode: replacement
+    temporal:
+      filename_regex: ".*([0-9]{8}).*"
+      filename_format: yyyyMMdd
+      timezone: UTC
+    geoserver:
+      workspace: meteohub
+      store_type: ImageMosaic
+      sld:
+        style_name: "{variable}"
+      cache:
+        eligible: true
+        require_explicit_time: true
+      variables:
+        ano_max_TM:
+          layer_name: seasonal_ano_max_TM
+          style_name: temp_anomaly
+        ano_min_Tm:
+          layer_name: seasonal_ano_min_Tm
+          style_name: temp_anomaly
+        ano_P:
+          layer_name: seasonal_ano_P
+          style_name: precip_anomaly
+        mean_TM:
+          layer_name: seasonal_mean_TM
+          style_name: t2m
+        mean_Tm:
+          layer_name: seasonal_mean_Tm
+          style_name: t2m
+        sum_P:
+          layer_name: seasonal_sum_P
+          style_name: precip_sum
+    endpoint:
+      route: /seasonal/latest
+      operations: [metadata]
+
+  - id: sub-seasonal
+    display_name: Sub-seasonal forecast
+    kind: forecast
+    enabled: true
+    discovery:
+      base_path_env: SUB_SEASONAL_DATA_PATH
+      base_path_default: /sub-seasonal-aim
+      source_files_path: "{base_path}/{variable}/{value}"
+      markers:
+        ready_suffix: .READY
+        checked_suffix: .CELERY.CHECKED
+        completed_suffix: .GEOSERVER.READY
+    ingestion:
+      adapter: sub_seasonal_mosaic
+      trigger: ready_marker
+      batch_mode: replacement
+    temporal:
+      filename_regex: "([0-9]{4}-[0-9]{2}-[0-9]{2})"
+      filename_format: yyyy-MM-dd
+      timezone: UTC
+    geoserver:
+      workspace: meteohub
+      store_type: ImageMosaic
+      sld:
+        style_name: "{variable}_{value}"
+      cache:
+        eligible: true
+        require_explicit_time: true
+      variables: {}
+    endpoint:
+      route: /sub-seasonal/status
+      operations: [status]
+
+  - id: marine
+    display_name: SHYFEM marine forcing
+    kind: marine
+    enabled: true
+    discovery:
+      base_path_env: MER_DATA_PATH
+      base_path_default: /shyfem
+      forcings_env: MER_FORCINGS
+      variables: [wl]
+      source_files_path: "{base_path}/{forcing}/{variable}"
+      markers:
+        ready_suffix: .READY
+        checked_suffix: .CELERY.CHECKED
+        completed_suffix: .GEOSERVER.READY
+    ingestion:
+      adapter: marine_mosaic
+      trigger: ready_marker
+      batch_mode: forcing_variable
+    temporal:
+      filename_regex: "([0-9]{8}T[0-9]{6})"
+      filename_format: yyyyMMdd'T'HHmmss
+      timezone: UTC
+    geoserver:
+      workspace: meteohub
+      store_type: ImageMosaic
+      sld:
+        style_name: "{variable}"
+      cache:
+        eligible: true
+        require_explicit_time: true
+      variables:
+        wl:
+          layer_name_pattern: SHYFEM-{forcing}-wl
+          style_name: water_level
+    endpoint:
+      route: /marine/shyfem/status
+      operations: [status, stations, file_download]

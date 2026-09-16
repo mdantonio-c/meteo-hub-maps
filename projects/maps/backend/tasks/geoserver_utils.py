@@ -364,11 +364,11 @@ def upload_geotiff_generic(geoserver_url: str, file_path: str, store_name: str, 
                 log.info(f"Successfully refreshed ImageMosaic store: {store_name}")
                 return True
             else:
-                # If refresh fails, fall back to recreating the store
-                log.warning(f"Failed to refresh ImageMosaic store {store_name}. Recreating it.")
-                if not delete_coverage_store(geoserver_url, store_name, username, password, workspace):
-                    return False
-                return upload_mosaic_generic(geoserver_url, actual_path, store_name, username, password, workspace)
+                log.error(
+                    f"Failed to refresh ImageMosaic store {store_name}; preserving "
+                    "the existing store and layer."
+                )
+                return False
         else:
             # Store doesn't exist - create new mosaic
             return upload_mosaic_generic(geoserver_url, actual_path, store_name, username, password, workspace)
@@ -579,8 +579,8 @@ def update_mosaic_coverage_name(geoserver_url: str, store_name: str, native_cove
 def check_style_exists(geoserver_url: str, style_name: str, username: str, password: str, workspace: str = WORKSPACE) -> bool:
     """Check if a style exists in GeoServer."""
     urls_to_check = [
-        f"{geoserver_url}/rest/styles/{style_name}",
-        f"{geoserver_url}/rest/workspaces/{workspace}/styles/{style_name}",
+        f"{geoserver_url}/rest/styles/{style_name}.json",
+        f"{geoserver_url}/rest/workspaces/{workspace}/styles/{style_name}.json",
     ]
 
     for url in urls_to_check:
@@ -609,8 +609,19 @@ def associate_sld_with_layer_generic(geoserver_url: str, layer_name: str, style_
     response = requests.put(layer_url, auth=(username, password), headers=headers, json=data)
 
     if response.status_code == 200:
-        log.info(f"SLD associated with layer {layer_name} successfully.")
-        return True
+        layer_response = requests.get(
+            layer_url, auth=(username, password), headers={"Accept": "application/json"}
+        )
+        if layer_response.status_code == 200:
+            assigned_style = layer_response.json().get("layer", {}).get("defaultStyle", {}).get("name")
+            if assigned_style == style_name:
+                log.info(f"SLD associated with layer {layer_name} successfully.")
+                return True
+        log.error(
+            f"GeoServer did not assign SLD '{style_name}' to layer {layer_name}; "
+            "the requested style may not exist."
+        )
+        return False
     else:
         log.error(f"Failed to associate SLD '{style_name}' with layer {layer_name}: {response.text}")
         return False
