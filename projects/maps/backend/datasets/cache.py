@@ -2,6 +2,7 @@
 
 import os
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterable, List, Optional
 from xml.etree import ElementTree
@@ -24,6 +25,14 @@ GWC_CLIENT_EXPIRE_SECONDS = int(os.environ.get("GWC_CLIENT_EXPIRE_SECONDS", "864
 GWC_SEED_WAIT_TIMEOUT = int(os.environ.get("GWC_SEED_WAIT_TIMEOUT", "300"))
 # Seconds between seed queue polls.
 GWC_SEED_POLL_INTERVAL = int(os.environ.get("GWC_SEED_POLL_INTERVAL", "3"))
+
+
+@dataclass(frozen=True)
+class TemporalCacheLayer:
+    """Published temporal layer and its GeoServer coverage-store identity."""
+
+    name: str
+    store_name: Optional[str] = None
 
 
 class GWCInvalidator:
@@ -344,6 +353,30 @@ class GWCInvalidator:
         if all_times:
             return times
         return times[-GWC_MAX_TIMES_PER_SEED:]
+
+    def refresh_temporal_layer(self, layer: TemporalCacheLayer) -> bool:
+        """Replace every cached tile for one temporal layer after publication.
+
+        The unparameterized truncate removes all stale GWC variants first. The
+        current mosaic times and effective GeoServer style are then used to
+        rebuild precisely the cache keys served to WMS clients.
+        """
+        if not self.enabled:
+            return True
+        if not self.ensure_time_parameter_filter(layer.name):
+            return False
+        if not self.truncate(layer.name):
+            return False
+
+        times = self.get_granule_times(
+            layer.name, store_name=layer.store_name, all_times=True
+        )
+        if not times:
+            return False
+        style_name = self.get_default_style(layer.name)
+        if not style_name:
+            return False
+        return self.seed(layer.name, wait=True, times=times, style_name=style_name)
 
     @staticmethod
     def _normalize_time(value: str) -> str:

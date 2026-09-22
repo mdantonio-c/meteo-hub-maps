@@ -13,7 +13,7 @@ from maps.tasks.geoserver_utils import (
     associate_sld_with_layer_generic,
     update_slds_from_local_folders
 )
-from maps.datasets.cache import GWCInvalidator
+from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer
 
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
@@ -146,33 +146,20 @@ def update_geoserver_ww3_layers(self, run_date):
         f.write(f"Run: {run_date}\n")
     log.info(f"Created {ready_file}")
     
-    # Seed GWC cache, scoped to each layer's currently available TIME values
+    # Refresh each published temporal layer through the shared cache lifecycle.
     invalidator = GWCInvalidator(
         GEOSERVER_URL, USERNAME, PASSWORD, WORKSPACE, enabled=True
     )
     for var in variables:
         layer_name = f"ww3_{var}"
         try:
-            invalidator.ensure_time_parameter_filter(layer_name)
-            invalidator.truncate(layer_name)
-            times = invalidator.get_granule_times(
-                layer_name, store_name=f"mosaic_{layer_name}", all_times=True
-            )
-            if not times:
-                log.error(
-                    f"No temporal granules found for {layer_name}; skipping GWC seed"
-                )
-                continue
-            style_name = invalidator.get_default_style(layer_name)
-            if not style_name:
-                log.error(f"No default style found for {layer_name}; skipping GWC seed")
-                continue
-            invalidator.seed(
-                layer_name, wait=True, times=times, style_name=style_name
-            )
-            log.info(f"Seeded GWC cache for {layer_name} ({len(times)} timestep(s))")
+            if not invalidator.refresh_temporal_layer(
+                TemporalCacheLayer(layer_name, store_name=f"mosaic_{layer_name}")
+            ):
+                raise RuntimeError("could not refresh the GWC layer cache")
+            log.info(f"Refreshed GWC cache for {layer_name}")
         except Exception as e:
-            log.error(f"Failed to seed GWC cache for {layer_name}: {e}")
+            log.error(f"Failed to refresh GWC cache for {layer_name}: {e}")
     # Cleanup CELERY.CHECKED
     for f in os.listdir(WW3_BASE_PATH):
         if f.endswith(".CELERY.CHECKED"):

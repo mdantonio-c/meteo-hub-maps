@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Optional
 
-from .cache import GWCInvalidator
+from .cache import GWCInvalidator, TemporalCacheLayer
 from .locking import DatasetLock
 from .manifest import DatasetConfig
 
@@ -38,32 +38,8 @@ class WW3IngestionAdapter:
             )
             ok = True
             for layer in layers:
-                ok = invalidator.ensure_time_parameter_filter(layer) and ok
-                ok = invalidator.truncate(layer) and ok
-                times = invalidator.get_granule_times(
-                    layer, store_name=f"mosaic_{layer}", all_times=True
-                )
-                if not times:
-                    import warnings
-
-                    warnings.warn(
-                        f"No temporal granules found for {layer}; skipping GWC seed",
-                        RuntimeWarning,
-                    )
-                    ok = False
-                    continue
-                style_name = invalidator.get_default_style(layer)
-                if not style_name:
-                    import warnings
-
-                    warnings.warn(
-                        f"No default style found for {layer}; skipping GWC seed",
-                        RuntimeWarning,
-                    )
-                    ok = False
-                    continue
-                ok = invalidator.seed(
-                    layer, wait=True, times=times, style_name=style_name
+                ok = invalidator.refresh_temporal_layer(
+                    TemporalCacheLayer(layer, store_name=f"mosaic_{layer}")
                 ) and ok
             if not ok:
                 import warnings

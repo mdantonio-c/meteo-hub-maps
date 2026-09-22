@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from .cache import GWCInvalidator
+from .cache import GWCInvalidator, TemporalCacheLayer
 from .locking import DatasetLock
 from .manifest import DatasetConfig
 
@@ -52,14 +52,10 @@ class MarineIngestionAdapter:
                 str(self.config.geoserver.get("workspace", "meteohub")),
                 enabled=True,
             )
-            filter_ok = invalidator.ensure_time_parameter_filter(layer_name)
-            truncate_ok = invalidator.truncate(layer_name)
-            times = invalidator.get_granule_times(layer_name, all_times=True)
-            style_name = invalidator.get_default_style(layer_name)
-            seed_ok = invalidator.seed(
-                layer_name, wait=True, times=times, style_name=style_name
+            cache_ok = invalidator.refresh_temporal_layer(
+                TemporalCacheLayer(layer_name, store_name=f"mosaic_{layer_name}")
             )
-            if not filter_ok or not truncate_ok or not seed_ok:
+            if not cache_ok:
                 import warnings
 
                 warnings.warn(

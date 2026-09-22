@@ -12,6 +12,7 @@ from maps.tasks.geoserver_utils import (
     associate_sld_with_layer_generic,
     update_slds_from_local_folders
 )
+from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer
 
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
@@ -54,6 +55,7 @@ def update_geoserver_sub_seasonal_layers(self, run_date, range_str):
         if os.path.isdir(os.path.join(SUB_SEASONAL_BASE_PATH, d))
     ]
     
+    cache_layers = []
     for var in variables:
         var_path = os.path.join(SUB_SEASONAL_BASE_PATH, var)
         values = [
@@ -61,7 +63,16 @@ def update_geoserver_sub_seasonal_layers(self, run_date, range_str):
             if os.path.isdir(os.path.join(var_path, d))
         ]
         for val in values:
-            process_sub_seasonal_variable(var, val)
+            if process_sub_seasonal_variable(var, val):
+                layer_name = f"sub-seasonal-{var}-{val}"
+                cache_layers.append(
+                    TemporalCacheLayer(layer_name, store_name=f"mosaic-{layer_name}")
+                )
+
+    invalidator = GWCInvalidator(GEOSERVER_URL, USERNAME, PASSWORD, WORKSPACE, enabled=True)
+    for layer in cache_layers:
+        if not invalidator.refresh_temporal_layer(layer):
+            log.error(f"Failed to refresh GWC cache for {layer.name}")
 
     # Cleanup old GEOSERVER.READY files
     for f in os.listdir(SUB_SEASONAL_BASE_PATH):
@@ -88,7 +99,7 @@ def update_geoserver_sub_seasonal_layers(self, run_date, range_str):
             except Exception as e:
                 log.warning(f"Failed to remove {f}: {e}")
 
-def process_sub_seasonal_variable(var, val):
+def process_sub_seasonal_variable(var, val) -> bool:
     layer_name = f"sub-seasonal-{var}-{val}"
     store_name = f"mosaic-{layer_name}"
     
@@ -97,7 +108,7 @@ def process_sub_seasonal_variable(var, val):
     
     if not os.path.exists(source_dir):
         log.warning(f"Source directory not found: {source_dir}")
-        return
+        return False
 
     # Clean and recreate target directory
     if os.path.exists(target_dir):
@@ -114,12 +125,19 @@ def process_sub_seasonal_variable(var, val):
     
     # Upload and Publish
     if upload_geotiff_generic(GEOSERVER_URL, target_dir, store_name, USERNAME, PASSWORD, WORKSPACE):
-        publish_layer_generic(GEOSERVER_URL, store_name, layer_name, USERNAME, PASSWORD, WORKSPACE)
-        enable_time_dimension(GEOSERVER_URL, store_name, layer_name, USERNAME, PASSWORD)
+        if not publish_layer_generic(
+            GEOSERVER_URL, store_name, layer_name, USERNAME, PASSWORD, WORKSPACE
+        ):
+            return False
+        if not enable_time_dimension(GEOSERVER_URL, store_name, layer_name, USERNAME, PASSWORD):
+            return False
         
         # SLD Association
         sld_name = f"{var}_{val}"
-        associate_sld_with_layer_generic(GEOSERVER_URL, layer_name, sld_name, USERNAME, PASSWORD, WORKSPACE)
+        return associate_sld_with_layer_generic(
+            GEOSERVER_URL, layer_name, sld_name, USERNAME, PASSWORD, WORKSPACE
+        )
+    return False
 
 def create_mosaic_config(target_dir):
     indexer_content = "PropertyCollectors=TimestampFileNameExtractorSPI[timeregex](time)\n" \

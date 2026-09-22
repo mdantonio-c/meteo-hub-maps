@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from .cache import GWCInvalidator
+from .cache import GWCInvalidator, TemporalCacheLayer
 from .locking import DatasetLock
 from .manifest import DatasetConfig
 from .markers import MarkerStore
@@ -48,12 +48,8 @@ class SubSeasonalIngestionAdapter:
             )
             ok = True
             for layer in layers:
-                ok = invalidator.ensure_time_parameter_filter(layer) and ok
-                ok = invalidator.truncate(layer) and ok
-                times = invalidator.get_granule_times(layer, all_times=True)
-                style_name = invalidator.get_default_style(layer)
-                ok = invalidator.seed(
-                    layer, wait=True, times=times, style_name=style_name
+                ok = invalidator.refresh_temporal_layer(
+                    TemporalCacheLayer(layer, store_name=f"mosaic-{layer}")
                 ) and ok
             if not ok:
                 import warnings

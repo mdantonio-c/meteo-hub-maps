@@ -17,6 +17,7 @@ from maps.tasks.geoserver_utils import (
     upload_sld_generic,
     associate_sld_with_layer_generic,
 )
+from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer
 # Thredds integration disabled.
 # from maps.tasks.thredds import (  # noqa: F401
 #     check_latest_data_and_trigger_thredds_ingestion,
@@ -770,6 +771,15 @@ def update_geoserver_mer_bolam_layer(
         ):
             log.error(f"Failed to associate style '{MER_WL_STYLE_NAME}' with layer {layer_name}")
             return
+
+    invalidator = GWCInvalidator(
+        GEOSERVER_URL, USERNAME, PASSWORD, GEOSERVER_WORKSPACE, enabled=True
+    )
+    if not invalidator.refresh_temporal_layer(
+        TemporalCacheLayer(layer_name, store_name=store_name)
+    ):
+        log.error(f"Failed to refresh GWC cache for {layer_name}")
+        return
 
     with open(ready_file, "w") as f:
         f.write(f"Processed by GeoServer at {datetime.now().isoformat()}\n")

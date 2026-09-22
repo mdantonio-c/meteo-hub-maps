@@ -15,7 +15,7 @@ from maps.tasks.geoserver_utils import (
     upload_sld_generic,
     process_sld_files
 )
-from maps.datasets.cache import GWCInvalidator
+from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer
 
 sld_dir_mapping = {
     "hcc": ["cloud_hml-hcc"],
@@ -88,23 +88,11 @@ def _ingest_windy_image_mosaic(
     )
     for layer_name in layers:
         try:
-            if not invalidator.ensure_time_parameter_filter(layer_name):
-                raise RuntimeError("could not configure the GWC TIME parameter filter")
-            if not invalidator.truncate(layer_name):
-                raise RuntimeError("could not truncate the GWC layer cache")
-            times = invalidator.get_granule_times(layer_name, all_times=True)
-            if not times:
-                raise RuntimeError("no temporal granules found")
-            style_name = invalidator.get_default_style(layer_name)
-            if not style_name:
-                raise RuntimeError("no GeoServer default style found")
-            if not invalidator.seed(
-                layer_name, wait=True, times=times, style_name=style_name
-            ):
-                raise RuntimeError("could not seed the GWC layer cache")
-            log.info(f"Seeded GWC cache for {layer_name} ({len(times)} timestep(s))")
+            if not invalidator.refresh_temporal_layer(TemporalCacheLayer(layer_name)):
+                raise RuntimeError("could not refresh the GWC layer cache")
+            log.info(f"Refreshed GWC cache for {layer_name}")
         except Exception as exc:
-            log.error(f"Failed to seed GWC cache for {layer_name}: {exc}")
+            log.error(f"Failed to refresh GWC cache for {layer_name}: {exc}")
     return layers
 
 

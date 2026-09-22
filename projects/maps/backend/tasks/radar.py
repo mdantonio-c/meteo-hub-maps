@@ -15,6 +15,7 @@ from maps.tasks.geoserver_utils import (
     associate_sld_with_layer_generic,
     check_style_exists
 )
+from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer
 
 # Configuration
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
@@ -158,6 +159,14 @@ def update_geoserver_radar_layers(
                 else:
                     log.info(f"Time range ({time_range_hours:.1f}h) within {GRANULE_RETENTION_HOURS}-hour window, skipping cleanup")
     force_update_geoserver_radar_layers_index(copies_target_dir, layer_name, store_name, geoserver_url, username, password, variable)
+    if all_success:
+        invalidator = GWCInvalidator(
+            geoserver_url, username, password, WORKSPACE, enabled=True
+        )
+        if not invalidator.refresh_temporal_layer(
+            TemporalCacheLayer(layer_name, store_name=store_name)
+        ):
+            log.error(f"Failed to refresh GWC cache for {layer_name}")
     
     
     # Create single .GEOSERVER.READY file with date range if all files processed successfully
