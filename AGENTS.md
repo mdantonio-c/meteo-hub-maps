@@ -62,7 +62,7 @@ rapydo shell geoserver
 rapydo pull --quiet
 rapydo start
 rapydo shell backend 'restapi wait'
-rapydo shell backend 'restapi tests --wait --destroy'
+rapydo shell backend 'restapi tests --wait --destroy --folder custom'
 ```
 
 Tests use `pytest` with fixtures in `projects/maps/backend/tests/`. Test data paths are mocked to `/tmp/` for cleanup.

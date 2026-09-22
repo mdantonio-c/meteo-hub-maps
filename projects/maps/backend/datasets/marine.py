@@ -50,7 +50,11 @@ class MarineIngestionAdapter:
                 username,
                 password,
                 str(self.config.geoserver.get("workspace", "meteohub")),
-                enabled=True,
+                enabled=bool(
+                    self.config.geoserver.get("cache", {}).get("eligible", True)
+                ),
+                zoom_start=self.config.geoserver.get("cache", {}).get("zoom_start"),
+                zoom_stop=self.config.geoserver.get("cache", {}).get("zoom_stop"),
             )
             cache_ok = invalidator.refresh_temporal_layer(
                 TemporalCacheLayer(layer_name, store_name=f"mosaic_{layer_name}")

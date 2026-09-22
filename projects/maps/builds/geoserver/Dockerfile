@@ -1,6 +1,6 @@
 ARG GEOSERVER_VER="2.26.x-latest"
-FROM docker.osgeo.org/geoserver:3.1.x
-ARG GEOSERVER_VER="3.1.x"
+FROM docker.osgeo.org/geoserver:3.0.1
+ARG GEOSERVER_VER="3.0.1"
 #ARG GEOSERVER_VER="2.18.2"
 #FROM geonode/geoserver:$GEOSERVER_VER
 #ARG GEOSERVER_VER
@@ -35,7 +35,7 @@ RUN id $TOMCAT_USER >/dev/null 2>&1 || useradd \
     mkdir -p /home/$TOMCAT_USER; \
     chown $CURRENT_UID:$CURRENT_GID /home/$TOMCAT_USER
 
-ENV JAVA_OPTS=-Dlog4j2.formatMsgNoLookups=true -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true
+ENV JAVA_OPTS=-Dlog4j2.formatMsgNoLookups=true -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true --add-opens=jdk.proxy3/jdk.proxy3=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
 
 # # Force tomcat to run as NO-root user
 # SHELL ["/bin/bash", "-o", "pipefail", "-c"]

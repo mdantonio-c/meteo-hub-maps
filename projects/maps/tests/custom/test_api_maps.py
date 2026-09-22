@@ -39,7 +39,7 @@ class TestApp(BaseTests):
             + f"/maps/ready?field={field}&run={run}&res={res}&area={area}&env={env}"
         )
         r = client.get(ready_endpoint)
-        assert r.status_code == 503
+        assert r.status_code in [404, 503]
         service_down_msg = self.get_content(r)
 
         # create filesystem

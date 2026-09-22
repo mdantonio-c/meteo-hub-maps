@@ -324,6 +324,21 @@ def refresh_imagemosaic_store(geoserver_url: str, store_name: str, username: str
         log.warning(f"Harvest failed with status {response.status_code}: {response.text}")
         return reset_imagemosaic_index(geoserver_url, store_name, username, password, workspace)
 
+def _mosaic_store_url(
+    geoserver_url: str,
+    store_name: str,
+    username: str,
+    password: str,
+    workspace: str,
+) -> Optional[str]:
+    url = f"{geoserver_url}/rest/workspaces/{workspace}/coveragestores/{store_name}.json"
+    response = requests.get(url, auth=(username, password))
+    if response.status_code != 200:
+        log.error(f"Failed to read ImageMosaic store {store_name}: {response.text}")
+        return None
+    return response.json().get("coverageStore", {}).get("url")
+
+
 def reset_imagemosaic_index(geoserver_url: str, store_name: str, username: str, password: str, workspace: str = WORKSPACE) -> bool:
     """Reset the ImageMosaic index to pick up new files."""
     log.info(f"Resetting ImageMosaic index for store: {store_name}")
@@ -356,6 +371,26 @@ def upload_geotiff_generic(geoserver_url: str, file_path: str, store_name: str, 
     if os.path.isdir(actual_path):
         # Handle ImageMosaic stores
         if check_coverage_store_exists(geoserver_url, store_name, username, password, workspace):
+            if actual_path.startswith("/geoserver_data/"):
+                expected_url = f"file:{actual_path.removeprefix('/geoserver_data/')}"
+            else:
+                expected_url = f"file://{actual_path}"
+            configured_url = _mosaic_store_url(
+                geoserver_url, store_name, username, password, workspace
+            )
+            if configured_url != expected_url:
+                log.warning(
+                    f"ImageMosaic store {store_name} points to {configured_url}; "
+                    f"recreating it for {expected_url}"
+                )
+                if not delete_coverage_store(
+                    geoserver_url, store_name, username, password, workspace
+                ):
+                    return False
+                return upload_mosaic_generic(
+                    geoserver_url, actual_path, store_name, username, password, workspace
+                )
+
             # Store exists - try to refresh/update it instead of recreating
             log.info(f"ImageMosaic store {store_name} already exists. Attempting to refresh content.")
             

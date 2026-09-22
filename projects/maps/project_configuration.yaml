@@ -2,7 +2,7 @@
 project:
   title: Meteo Maps
   description: "API for geo-data on a map"
-  version: "0.6.1"
+  version: "0.7.0"
   rapydo: "3.0"
 
 variables:
@@ -41,5 +41,9 @@ variables:
     ALLOWED_IPS: {}
     GEOSERVER_PROXY_BASE_URL: maps.mistralportal.it
     GEOSERVER_GWC_ENABLED: 1
+    GWC_GRID_SET: EPSG:900913_1024
+    GWC_TILE_SIZE: 1024
+    GWC_SEEDER_CORE_POOL_SIZE: 4
+    GWC_SEEDER_MAX_POOL_SIZE: 6
     GEOSERVER_DATA_PATH: /geoserver_data
     HOST_GEOSERVER_DATA_DIR: ${DATA_DIR}/geoserver_data

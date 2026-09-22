@@ -19,6 +19,7 @@ services:
       WINDY_INGEST_BASE_PATH: ${WINDY_INGEST_BASE_PATH}
       WINDY_INGEST_AREA: ${WINDY_INGEST_AREA}
       WINDY_INGEST_FOLDERS: ${WINDY_INGEST_FOLDERS}
+      WINDY_WRF_INGEST_FOLDERS: ${WINDY_WRF_INGEST_FOLDERS}
       MER_DATA_PATH: ${MER_DATA_PATH}
       MER_FORCINGS: ${MER_FORCINGS:-BOLAM,ECMWF,ICON}
       # THREDDS_DATA_PATH: ${THREDDS_DATA_PATH}
@@ -31,6 +32,7 @@ services:
       - ${HOST_WW3_DIR}:/ww3
       - ${HOST_MER_DIR}:${MER_DATA_PATH}
       - ${PROJECT_DIR}/datasets.yml:${DATASET_CONFIG_PATH}:ro
+      - ${PROJECT_DIR}/tests/custom:/code/tests/custom
       # - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
   celery:
     build: ${PROJECT_DIR}/builds/backend
@@ -50,6 +52,7 @@ services:
       WINDY_INGEST_BASE_PATH: ${WINDY_INGEST_BASE_PATH}
       WINDY_INGEST_AREA: ${WINDY_INGEST_AREA}
       WINDY_INGEST_FOLDERS: ${WINDY_INGEST_FOLDERS}
+      WINDY_WRF_INGEST_FOLDERS: ${WINDY_WRF_INGEST_FOLDERS}
       MER_DATA_PATH: ${MER_DATA_PATH}
       MER_FORCINGS: ${MER_FORCINGS:-BOLAM,ECMWF,ICON}
       # THREDDS_DATA_PATH: ${THREDDS_DATA_PATH}
@@ -63,6 +66,7 @@ services:
       - ${HOST_WW3_DIR}:/ww3
       - ${HOST_MER_DIR}:${MER_DATA_PATH}
       - ${PROJECT_DIR}/datasets.yml:${DATASET_CONFIG_PATH}:ro
+      - ${PROJECT_DIR}/tests/custom:/code/tests/custom
       # - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
       - ${DATA_DIR}/celery_health:/status
   celerybeat:

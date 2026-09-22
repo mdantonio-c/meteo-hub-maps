@@ -41,6 +41,11 @@ class WindyIngestionAdapter:
                 date=date,
                 sld_directory=sld_directory,
                 dataset_folder=dataset_folder,
+                source_directory=str(
+                    Path(Env.get("WINDY_INGEST_BASE_PATH", "/windy"))
+                    / f"Windy-{run}-{dataset_folder}.web"
+                    / Env.get("WINDY_INGEST_AREA", "Italia")
+                ),
                 config=self.config,
             )
             marker_path = Path(Env.get("WINDY_INGEST_BASE_PATH", "/windy"))

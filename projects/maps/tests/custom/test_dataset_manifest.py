@@ -14,7 +14,7 @@ from maps.datasets.paths import safe_dataset_file_path
 
 
 def test_loads_windy_and_radar_manifest() -> None:
-    path = Path(__file__).parents[2] / "datasets.yml"
+    path = Path(__file__).parents[3] / "datasets.yml"
 
     datasets = load_manifest(path)
 
@@ -72,14 +72,14 @@ def test_allows_duplicate_route_templates() -> None:
 
 
 def test_registry_rejects_unknown_dataset() -> None:
-    registry = DatasetRegistry(load_manifest(Path(__file__).parents[2] / "datasets.yml"))
+    registry = DatasetRegistry(load_manifest(Path(__file__).parents[3] / "datasets.yml"))
 
     with pytest.raises(ManifestError, match="unknown dataset"):
         registry.get("missing")
 
 
 def test_registry_resolves_configured_adapter() -> None:
-    registry = DatasetRegistry(load_manifest(Path(__file__).parents[2] / "datasets.yml"))
+    registry = DatasetRegistry(load_manifest(Path(__file__).parents[3] / "datasets.yml"))
 
     assert registry.get("icon").adapter == "windy_image_mosaic"
     assert registry.get("wrf").adapter == "windy_image_mosaic"
@@ -152,7 +152,7 @@ def test_gwc_invalidator_adds_time_parameter_filter(monkeypatch: pytest.MonkeyPa
     payload = put_calls[0][1]["data"]
     assert b"<regexParameterFilter><key>TIME</key>" in payload
     assert b"<regex>.*</regex>" in payload
-    assert b"<gridSetName>EPSG:900913</gridSetName>" in payload
+    assert b"<gridSetName>EPSG:900913_1024</gridSetName>" in payload
     assert b"<expireCache>86400</expireCache>" in payload
     assert b"<expireClients>86400</expireClients>" in payload
 
@@ -163,7 +163,7 @@ def test_gwc_invalidator_keeps_existing_time_parameter_filter(
     class Response:
         status_code = 200
         content = b"""<GeoServerLayer><gridSubsets><gridSubset>
-          <gridSetName>EPSG:900913</gridSetName>
+          <gridSetName>EPSG:900913_1024</gridSetName>
         </gridSubset></gridSubsets><expireCache>86400</expireCache><expireClients>86400</expireClients><parameterFilters>
           <regexParameterFilter><key>TIME</key><defaultValue/><regex>.*</regex></regexParameterFilter>
         </parameterFilters></GeoServerLayer>"""

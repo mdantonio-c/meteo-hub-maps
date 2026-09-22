@@ -13,7 +13,8 @@ from maps.tasks.geoserver_utils import (
     create_ready_file_generic,
     create_workspace_generic,
     upload_sld_generic,
-    process_sld_files
+    process_sld_files,
+    check_coverage_exists,
 )
 from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer
 
@@ -43,7 +44,8 @@ GEOSERVER_PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 WORKSPACE = "meteohub"
 RENAMED_FILES = "copies"
-BASE_PATH = "/windy"
+BASE_PATH = Env.get("WINDY_INGEST_BASE_PATH", "/windy")
+WINDY_INGEST_AREA = Env.get("WINDY_INGEST_AREA", "Italia")
 # TIFF_DIR = f"{BASE_PATH}/Windy-12-ICON_2I_all2km.web/Italia"  # Local path containing .tiff files
 GEOSERVER_HOST_PATH = f"/geoserver_data/{RENAMED_FILES}"
 GEOSERVER_DATA_DIR = f"geoserver_data/{RENAMED_FILES}/"  # Path where GeoServer can access TIFFs
@@ -54,35 +56,76 @@ def _ingest_windy_image_mosaic(
     date: str = datetime.now().strftime("%Y-%m-%d"),
     sld_directory: str = "/SLDs",
     dataset_folder: str = "ICON_2I_all2km",
+    source_directory: Optional[str] = None,
     config=None,
 ) -> list:
     """Ingest Windy mosaics and return published layer names for GWC seeding."""
     GEOSERVER_URL = geoserver_url
+    log.info(f"Starting WRF/Windy ingestion: dataset={dataset_folder}, run={run}, date={date}")
+    tiff_dir = source_directory or f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/{WINDY_INGEST_AREA}"
+    log.info(f"TIFF_DIR: {tiff_dir}")
+
     # Ensure workspace exists before uploading
     create_workspace_generic(GEOSERVER_URL, GEOSERVER_USERNAME, GEOSERVER_PASSWORD, WORKSPACE)
-    
+
     sld_directory = os.path.join(sld_directory, "windy")
     update_styles(sld_directory)
-    TIFF_DIR = f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/Italia"
+    TIFF_DIR = tiff_dir
+
+    if not os.path.exists(TIFF_DIR):
+        log.error(f"TIFF directory does not exist: {TIFF_DIR}")
+        raise FileNotFoundError(f"TIFF directory not found: {TIFF_DIR}")
+
     date_edit = datetime.strptime(date, "%Y%m%d").strftime("%Y-%m-%d")
     layers = []
+    log.info(f"Processing folders in {TIFF_DIR}")
     for folder in os.listdir(TIFF_DIR):
         folder_path = os.path.join(TIFF_DIR, folder)
         if os.path.isdir(folder_path):
             flat_sld_dirs = [item for sublist in sld_dir_mapping.values() for item in sublist]
             if folder in flat_sld_dirs:
-                print(f"📂 Processing folder: {folder}")
+                log.info(f"Processing folder: {folder} (dataset={dataset_folder})")
                 geoserver_name = f"WRF-{folder}" if dataset_folder == "WRF" else folder
+                log.info(f"GeoServer layer name: {geoserver_name}")
+                # process_and_rename_tiffs can remove this now-empty source
+                # directory, so validate the input before moving its files.
+                if not ensure_tiff_files_exist(folder, TIFF_DIR):
+                    log.warning(f"No TIFF files found in {folder}, skipping")
+                    continue
+                log.info(f"Processing TIFFs for {folder} -> {geoserver_name}")
                 process_and_rename_tiffs(date_edit, run, folder, TIFF_DIR, geoserver_name)
             else:
+                log.debug(f"Skipping folder {folder} (not in SLD mapping)")
                 continue
-            if ensure_tiff_files_exist(folder, TIFF_DIR):
-                create_image_mosaic_store(geoserver_name, GEOSERVER_URL)
-            published = publish_layer(geoserver_name, geoserver_name, GEOSERVER_URL)
+            log.info(f"Creating ImageMosaic store: {geoserver_name}")
+            if not create_image_mosaic_store(geoserver_name, GEOSERVER_URL):
+                log.error(f"Failed to update ImageMosaic store for {geoserver_name}")
+                continue
+            # A successful mosaic refresh updates existing Windy coverages.
+            # Do not depend on the response from a duplicate POST; GeoServer
+            # versions report that condition differently.
+            log.info(f"Publishing layer: {geoserver_name}")
+            published = check_coverage_exists(
+                GEOSERVER_URL,
+                geoserver_name,
+                geoserver_name,
+                GEOSERVER_USERNAME,
+                GEOSERVER_PASSWORD,
+                WORKSPACE,
+            ) or publish_layer(geoserver_name, geoserver_name, GEOSERVER_URL)
+            if not published:
+                log.error(f"Failed to publish layer {geoserver_name}")
+                continue
+            log.info(f"Binding SLD for {geoserver_name} using folder {folder}")
             bind_sld(folder, geoserver_name, GEOSERVER_URL)
+            log.info(f"Enabling time dimension for {geoserver_name}")
             time_enabled = enable_time_dimension(geoserver_name, geoserver_name, GEOSERVER_URL)
             if published and time_enabled:
+                log.info(f"Successfully ingested layer: {geoserver_name}")
                 layers.append(geoserver_name)
+            else:
+                log.error(f"Layer {geoserver_name} published={published}, time_enabled={time_enabled}")
+    log.info(f"Ingestion complete: {len(layers)} layers processed for {dataset_folder} run {run}")
     invalidator = GWCInvalidator(
         GEOSERVER_URL, GEOSERVER_USERNAME, GEOSERVER_PASSWORD, WORKSPACE, enabled=True
     )
@@ -93,6 +136,7 @@ def _ingest_windy_image_mosaic(
             log.info(f"Refreshed GWC cache for {layer_name}")
         except Exception as exc:
             log.error(f"Failed to refresh GWC cache for {layer_name}: {exc}")
+    log.info(f"Final layer count for {dataset_folder}: {len(layers)}")
     return layers
 
 
@@ -104,17 +148,25 @@ def update_geoserver_image_mosaic(
     date: str = datetime.now().strftime("%Y-%m-%d"),
     sld_directory: str = "/SLDs",
     dataset_folder: str = "ICON_2I_all2km",
+    source_directory: Optional[str] = None,
 ) -> None:
-    _ingest_windy_image_mosaic(
-        geoserver_url=GEOSERVER_URL,
-        run=run,
-        date=date,
-        sld_directory=sld_directory,
-        dataset_folder=dataset_folder,
-    )
-    tiff_dir = f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/Italia"
+    try:
+        layers = _ingest_windy_image_mosaic(
+            geoserver_url=GEOSERVER_URL,
+            run=run,
+            date=date,
+            sld_directory=sld_directory,
+            dataset_folder=dataset_folder,
+            source_directory=source_directory,
+        )
+        log.info(f"Successfully ingested {len(layers)} layers for {dataset_folder} run {run}")
+    except Exception as e:
+        log.error(f"Failed to ingest {dataset_folder} run {run}: {e}")
+        raise
+
+    tiff_dir = source_directory or f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/{WINDY_INGEST_AREA}"
     create_ready_file(tiff_dir, run, date)
-    
+
 def update_styles(sld_directory: Optional[str] = None) -> None:
     if sld_directory:
         if not os.path.exists(sld_directory):
@@ -291,6 +343,9 @@ def publish_layer(layer_name, native_coverage_name, GEOSERVER_URL):
 
     r = requests.post(url, data=data, headers=headers,
                       auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD))
+    if r.status_code == 409:
+        print("ℹ️ Mosaic layer already published.")
+        return True
     if r.status_code not in [200, 201]:
         print("❌ Failed to publish layer:", r.text)
         return False

@@ -168,16 +168,55 @@ def validate_manifest(document: Any) -> Tuple[DatasetConfig, ...]:
     if version != 1:
         errors.append("version must be 1")
 
+    default_geoserver = document.get("geoserver", {})
+    if not isinstance(default_geoserver, Mapping):
+        errors.append("geoserver must be a mapping")
+        default_geoserver = {}
+    default_cache = default_geoserver.get("cache", {})
+    if not isinstance(default_cache, Mapping):
+        errors.append("geoserver.cache must be a mapping")
+        default_cache = {}
+    for key in ("zoom_start", "zoom_stop"):
+        value = default_cache.get(key)
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int)):
+            errors.append(f"geoserver.cache.{key} must be an integer")
+
     raw_datasets = document.get("datasets")
     if not isinstance(raw_datasets, list) or not raw_datasets:
         errors.append("datasets must be a non-empty list")
         raw_datasets = []
 
-    configs = tuple(
-        config
-        for index, raw in enumerate(raw_datasets)
-        if (config := _validate_dataset(raw, index, errors)) is not None
-    )
+    configs_list = []
+    for index, raw in enumerate(raw_datasets):
+        config = _validate_dataset(raw, index, errors)
+        if config is None:
+            continue
+        dataset_cache = config.geoserver.get("cache", {})
+        if not isinstance(dataset_cache, Mapping):
+            errors.append(f"datasets[{index}].geoserver.cache must be a mapping")
+            dataset_cache = {}
+        merged_cache = dict(default_cache)
+        merged_cache.update(dataset_cache)
+        for key in ("zoom_start", "zoom_stop"):
+            value = merged_cache.get(key)
+            if value is not None and (isinstance(value, bool) or not isinstance(value, int)):
+                errors.append(f"datasets[{index}].geoserver.cache.{key} must be an integer")
+        geoserver = dict(config.geoserver)
+        geoserver["cache"] = merged_cache
+        configs_list.append(
+            DatasetConfig(
+                identifier=config.identifier,
+                kind=config.kind,
+                adapter=config.adapter,
+                endpoint=config.endpoint,
+                discovery=config.discovery,
+                ingestion=config.ingestion,
+                temporal=config.temporal,
+                geoserver=geoserver,
+                raw=config.raw,
+            )
+        )
+    configs = tuple(configs_list)
     _validate_unique(((config.identifier, config.identifier) for config in configs), errors, "dataset id")
 
     if errors:

@@ -25,6 +25,7 @@ class RadarIngestionAdapter:
 
         # Resolve SLD name from manifest config
         sld_name = self.config.resolve_sld(variable=variable)
+        cache_config = self.config.geoserver.get("cache", {})
 
         _ingest_radar_layers(
             variable=variable,
@@ -35,4 +36,5 @@ class RadarIngestionAdapter:
             password=password,
             sld_directory=sld_directory,
             sld_name=sld_name,
+            cache_config=cache_config,
         )

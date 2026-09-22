@@ -19,6 +19,7 @@ from maps.tasks.geoserver_utils import (
     check_style_exists
 )
 from .upload_image_mosaic import enable_time_dimension
+from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer
 
 # Get GeoServer credentials for seasonal task
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
@@ -61,11 +62,12 @@ seasonal_to_copies_mapping = {
 COVERAGESTORE_PREFIX = "tiff_store"
 DEFAULT_STORE_NAME = "tiff_store"
 WORKSPACE = "meteohub"
-WINDY_BASE_DIRECTORY: str = "/windy"
+WINDY_BASE_DIRECTORY: str = Env.get("WINDY_INGEST_BASE_PATH", "/windy")
+WINDY_INGEST_AREA: str = Env.get("WINDY_INGEST_AREA", "Italia")
 
-def create_ready_file(base_path, run: str, date: str) -> None:
+def create_ready_file(base_path, run: str, date: str, dataset_folder: str = "ICON_2I_all2km") -> None:
     """Create a ready file to indicate that the process is complete."""
-    data_path = os.path.join(base_path, f"Windy-{run}-ICON_2I_all2km.web/Italia")
+    data_path = os.path.join(base_path, f"Windy-{run}-{dataset_folder}.web/{WINDY_INGEST_AREA}")
     identifier = f"{date}{run}"
     create_ready_file_generic(data_path, identifier, "windy")
 
@@ -144,7 +146,9 @@ def create_seasonal_ready_file(base_path, date_identifier: str) -> None:
     """Create a ready file to indicate that the seasonal process is complete."""
     create_ready_file_generic(base_path, date_identifier, "seasonal")
 
-def process_seasonal_tiff_files(base_path, sld_directory, geoserver_url, username, password, date_identifier):
+def process_seasonal_tiff_files(
+    base_path, sld_directory, geoserver_url, username, password, date_identifier
+) -> list:
     """Iterate over seasonal TIFF files and upload them to GeoServer with temporal dimension."""
     create_workspace(geoserver_url, username, password)
     
@@ -163,6 +167,7 @@ def process_seasonal_tiff_files(base_path, sld_directory, geoserver_url, usernam
     # Process each seasonal subdirectory
     seasonal_subdirs = ['ano_max_TM', 'ano_min_Tm', 'ano_P', 'mean_TM', 'mean_Tm', 'sum_P']
     
+    cache_layers = []
     for subdir in seasonal_subdirs:
         subdir_path = os.path.join(base_path, subdir)
         if not os.path.exists(subdir_path):
@@ -232,6 +237,9 @@ def process_seasonal_tiff_files(base_path, sld_directory, geoserver_url, usernam
                             sld_success = associate_sld_with_layer(geoserver_url, layer_name, sld_name, username, password)
                             if sld_success:
                                 log.info(f"Successfully processed seasonal temporal layer: {layer_name} with SLD: {sld_name}")
+                                cache_layers.append(
+                                    TemporalCacheLayer(layer_name, store_name=store_name)
+                                )
                             else:
                                 log.error(f"Failed to associate SLD '{sld_name}' with layer '{layer_name}'")
                         else:
@@ -246,6 +254,7 @@ def process_seasonal_tiff_files(base_path, sld_directory, geoserver_url, usernam
             log.warning(f"No TIFF files found in seasonal directory: {subdir_path}")
     
     log.info(f"Completed processing all seasonal subdirectories for date: {date_identifier}")
+    return cache_layers
 
 def create_seasonal_temporal_config(target_dir: str, layer_name: str) -> None:
     """Create temporal mosaic configuration files for seasonal data."""
@@ -424,7 +433,13 @@ def update_geoserver_seasonal_layers(
         log.warning(f"SLD directory does not exist: {sld_directory}")
     
     # Process seasonal TIFF files with temporal dimension
-    process_seasonal_tiff_files(SEASONAL_BASE_DIRECTORY, sld_directory, geoserver_url, username, password, date)
-    
+    cache_layers = process_seasonal_tiff_files(
+        SEASONAL_BASE_DIRECTORY, sld_directory, geoserver_url, username, password, date
+    )
+    invalidator = GWCInvalidator(geoserver_url, username, password, WORKSPACE, enabled=True)
+    for layer in cache_layers:
+        if not invalidator.refresh_temporal_layer(layer):
+            log.error(f"Failed to refresh GWC cache for {layer.name}")
+
     # Create final ready file
     create_seasonal_ready_file(SEASONAL_BASE_DIRECTORY, date)

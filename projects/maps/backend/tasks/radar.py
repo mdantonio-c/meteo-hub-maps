@@ -40,6 +40,17 @@ RADAR_SLD_MAPPING = {
     "srt": "radar-srt" 
 }
 
+
+def _radar_cache_config() -> Dict[str, Any]:
+    """Read radar cache settings from the dataset manifest."""
+    from maps.datasets.manifest import load_manifest
+
+    manifest_path = Env.get("DATASET_CONFIG_PATH", "/etc/meteohub/datasets.yml")
+    for dataset in load_manifest(manifest_path):
+        if dataset.identifier == "radar":
+            return dict(dataset.geoserver.get("cache", {}))
+    return {}
+
 @CeleryExt.task(idempotent=True)
 def update_geoserver_radar_layers(
     self,
@@ -50,6 +61,7 @@ def update_geoserver_radar_layers(
     username: str = USERNAME,
     password: str = PASSWORD,
     sld_directory: Optional[str] = None,
+    cache_config: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Update GeoServer with radar layers incrementally.
     
@@ -67,6 +79,8 @@ def update_geoserver_radar_layers(
         filenames = [filenames]
     if not isinstance(dates, list):
         dates = [dates]
+    if cache_config is None:
+        cache_config = _radar_cache_config()
     
     # Convert dates to datetime objects
     date_dts = []
@@ -106,6 +120,20 @@ def update_geoserver_radar_layers(
     
     # Process all files in the batch
     all_success = True
+    layer_name = f"radar-{variable}"
+    store_name = f"mosaic_{layer_name}"
+    invalidator = GWCInvalidator(
+        geoserver_url,
+        username,
+        password,
+        WORKSPACE,
+        enabled=bool((cache_config or {}).get("eligible", True)),
+        zoom_start=(cache_config or {}).get("zoom_start"),
+        zoom_stop=(cache_config or {}).get("zoom_stop"),
+    )
+    previous_times = invalidator.get_granule_times(
+        layer_name, store_name=store_name, all_times=True
+    )
     for filename, date_dt in zip(filenames, date_dts):
         log.info(f"Processing file: {filename}, date: {date_dt}")
         success = process_radar_file(variable, filename, date_dt, geoserver_url, username, password)
@@ -113,8 +141,6 @@ def update_geoserver_radar_layers(
             log.warning(f"Failed to process {filename}")
             all_success = False
     
-    layer_name = f"radar-{variable}"
-    store_name = f"mosaic_{layer_name}"
     copies_target_dir = os.path.join(COPIES_BASE_DIRECTORY, layer_name)
     # Batch-level cleanup after all files are processed
     if all_success and len(filenames) > 0:
@@ -160,13 +186,47 @@ def update_geoserver_radar_layers(
                     log.info(f"Time range ({time_range_hours:.1f}h) within {GRANULE_RETENTION_HOURS}-hour window, skipping cleanup")
     force_update_geoserver_radar_layers_index(copies_target_dir, layer_name, store_name, geoserver_url, username, password, variable)
     if all_success:
-        invalidator = GWCInvalidator(
-            geoserver_url, username, password, WORKSPACE, enabled=True
+        cached_times = invalidator.get_granule_times(
+            layer_name, store_name=store_name, all_times=True
         )
-        if not invalidator.refresh_temporal_layer(
-            TemporalCacheLayer(layer_name, store_name=store_name)
-        ):
-            log.error(f"Failed to refresh GWC cache for {layer_name}")
+        stale_times = sorted(set(previous_times) - set(cached_times))
+        if stale_times:
+            if not invalidator.truncate(
+                layer_name, times=stale_times
+            ):
+                log.warning(
+                    f"Failed to truncate stale radar times for {layer_name}: "
+                    f"{stale_times}"
+                )
+            else:
+                log.info(
+                    f"Removed {len(stale_times)} stale radar cache times "
+                    f"for {layer_name}"
+                )
+
+        # Overlapping radar timestamps are unchanged. Only timestamps newly
+        # added to the mosaic need an incremental cache seed.
+        new_times = sorted(set(cached_times) - set(previous_times))
+        if new_times:
+            if not invalidator.ensure_time_parameter_filter(layer_name):
+                log.warning(f"Failed to configure GWC TIME filtering for {layer_name}")
+            elif not invalidator.truncate(layer_name, times=new_times):
+                log.warning(
+                    f"Failed to truncate new radar times for {layer_name}: "
+                    f"{new_times}"
+                )
+            else:
+                if not invalidator.seed_new_times(
+                    layer_name, new_times, store_name=store_name, wait=True
+                ):
+                    log.warning(f"Partial GWC seed for {layer_name}: {new_times}")
+                else:
+                    log.info(
+                        f"Incremental GWC cache update for {layer_name}: "
+                        f"truncated and seeded {len(new_times)} new time(s)"
+                    )
+        else:
+            log.info(f"No new granule times detected for {layer_name}")
     
     
     # Create single .GEOSERVER.READY file with date range if all files processed successfully
@@ -215,6 +275,17 @@ def update_geoserver_radar_layers(
                         f.write(f"Coverage: {(overall_max_date - overall_min_date).total_seconds() / 3600:.1f} hours\n")
                     log.info(f"Created {geoserver_ready_path}")
                     log.info(f"GeoServer time range: {overall_min_date} to {overall_max_date} ({len(file_dates)} files)")
+                    
+                    # Debounce: create CELERY.CHECKED file to prevent re-triggering
+                    # by the minute-by-minute cron task until the next data arrival.
+                    checked_file = os.path.join(
+                        var_path,
+                        f"{overall_min_date.strftime('%Y%m%d%H%M')}.CELERY.CHECKED",
+                    )
+                    with open(checked_file, "w") as f:
+                        f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
+                        f.write(f"Run: {run_date}\n")
+                        log.info(f"Created {checked_file}")
                     
                     # Delete all .CELERY.CHECKED files now that processing is complete
                     existing_checked_files = [f for f in os.listdir(var_path) if f.endswith('.CELERY.CHECKED')]

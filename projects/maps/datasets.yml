@@ -1,5 +1,10 @@
 version: 1
 
+geoserver:
+  cache:
+    zoom_start: 5
+    zoom_stop: 8
+
 datasets:
   - id: icon
     display_name: ICON 2I all2km
@@ -234,6 +239,11 @@ datasets:
     geoserver:
       workspace: meteohub
       store_type: ImageMosaic
+      cache:
+        eligible: true
+        require_explicit_time: true
+        zoom_start: 5
+        zoom_stop: 9
       sld:
         style_name: radar-{variable}
       variables:

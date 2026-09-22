@@ -518,13 +518,14 @@ List available WW3 vector files (JSON format).
 
 Retrieve the content of a specific WW3 vector file.
 
-**Endpoint:** `GET /api/ww3/vectors/<filename>`
+**Endpoint:** `GET /api/ww3/vectors/<zoom>/<filename>`
 
 **Path Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `filename` | string | Yes | Name of the vector file (e.g., `20251203_00.json`) |
+| `zoom` | integer | Yes | Web Mercator zoom level from `0` through `22` |
+| `filename` | string | Yes | Vector file name, for example `14-09-2026-01-00.geojson` |
 
 **Response:** `200 OK`
 

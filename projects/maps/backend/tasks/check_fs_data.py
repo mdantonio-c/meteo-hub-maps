@@ -258,7 +258,7 @@ def check_latest_data_and_trigger_geoserver_import_windy(
         date = identifier[:8]
         run = identifier[8:10]
         dataset_folder = _extract_dataset_from_path(path)
-        return (GEOSERVER_URL, run, date, "/SLDs", dataset_folder)
+        return (GEOSERVER_URL, run, date, "/SLDs", dataset_folder, path)
 
     if non_wrf_paths:
         watcher = DataWatcher(
@@ -773,7 +773,13 @@ def update_geoserver_mer_bolam_layer(
             return
 
     invalidator = GWCInvalidator(
-        GEOSERVER_URL, USERNAME, PASSWORD, GEOSERVER_WORKSPACE, enabled=True
+        GEOSERVER_URL,
+        USERNAME,
+        PASSWORD,
+        GEOSERVER_WORKSPACE,
+        enabled=Env.get("GEOSERVER_GWC_ENABLED", "1") == "1",
+        zoom_start=int(Env.get("GEOSERVER_GWC_ZOOM_START", "5")),
+        zoom_stop=int(Env.get("GEOSERVER_GWC_ZOOM_STOP", "9")),
     )
     if not invalidator.refresh_temporal_layer(
         TemporalCacheLayer(layer_name, store_name=store_name)

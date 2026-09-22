@@ -17,35 +17,38 @@ The system expects the following structure under the configured `WW3_DATA_PATH` 
 
 ```
 /ww3/
-├── <run_date>.READY
-├── <from_date>-<to_date>.GEOSERVER.READY
-├── <run_date>.CELERY.CHECKED
-├── hs/
-│   ├── <date>-<time>.tif
-│   └── ...
-├── t01/
-│   ├── <date>-<time>.tif
-│   └── ...
-└── dir-dir/
-    ├── <filename>.json
-    └── ...
+└── Mediterraneo/
+    ├── <run_date>.READY
+    ├── <from_date>-<to_date>.GEOSERVER.READY
+    ├── <run_date>.CELERY.CHECKED
+    ├── hs/
+    │   ├── <date>-<time>.tif
+    │   └── ...
+    ├── t01/
+    │   ├── <date>-<time>.tif
+    │   └── ...
+    └── dir-dir/
+        └── <zoom>/
+            └── <filename>.geojson
 ```
 
 **Example:**
 ```
 /ww3/
-├── 20251203.READY
-├── 2025120300-2025120600.GEOSERVER.READY
-├── hs/
-│   ├── 03-12-2025-00.tif
-│   ├── 03-12-2025-01.tif
-│   └── ...
-├── t01/
-│   ├── 03-12-2025-00.tif
-│   └── ...
-└── dir-dir/
-    ├── 20251203_00.json
-    └── ...
+└── Mediterraneo/
+    ├── 20251203.READY
+    ├── 2025120300-2025120600.GEOSERVER.READY
+    ├── hs/
+    │   ├── 03-12-2025-00.tif
+    │   ├── 03-12-2025-01.tif
+    │   └── ...
+    ├── t01/
+    │   ├── 03-12-2025-00.tif
+    │   └── ...
+    └── dir-dir/
+        └── 5/
+            ├── 03-12-2025-00.geojson
+            └── ...
 ```
 
 ### File Naming Convention
@@ -69,7 +72,7 @@ check_latest_data_and_trigger_geoserver_import_ww3()
 
 ### 2. Detection Logic
 
-1.  Scan for `.READY` files in `WW3_DATA_PATH`.
+1.  Scan for `.READY` files in `WW3_DATA_PATH/Mediterraneo`.
 2.  Check if `.GEOSERVER.READY` already exists for that run.
 3.  Trigger ingestion if new data is found.
 4.  Uses `DataWatcher` to handle file locking and status updates consistently.
@@ -128,19 +131,27 @@ GET /api/ww3/vectors
 **Response:**
 ```json
 [
-  "20251203_00.json",
-  "20251203_01.json"
+  "5/03-12-2025-00.geojson",
+  "5/03-12-2025-01.geojson"
 ]
 ```
 
 #### Get Specific Vector File
 
 ```bash
-GET /api/ww3/vectors/<filename>
+GET /api/ww3/vectors/<zoom>/<filename>
+```
+
+For example:
+
+```bash
+GET /api/ww3/vectors/5/03-12-2025-00.geojson
 ```
 
 **Response:**
-Returns the content of the requested JSON file.
+Returns the content of the requested JSON/GeoJSON file. The zoom must be from
+`0` through `22`, and the file is read from
+`WW3_DATA_PATH/Mediterraneo/dir-dir/<zoom>/`.
 
 ## GeoServer Integration
 
@@ -166,4 +177,3 @@ http://geoserver:8080/geoserver/meteohub/wms?
 ### Environment Variables
 
 - `WW3_DATA_PATH`: Path to the WW3 data root (default: `/ww3`).
-

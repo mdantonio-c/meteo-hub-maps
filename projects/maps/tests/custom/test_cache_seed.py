@@ -1,13 +1,8 @@
 """Tests for GWC caching and seed completion in cache.py."""
 
-import sys
-import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-
 from unittest.mock import MagicMock, patch
 
-from datasets.cache import GWCInvalidator
+from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer
 import requests as requests_lib
 
 
@@ -298,6 +293,7 @@ class TestGWCSeedCompletion:
         assert mock_post.call_count == 2
         first_payload = mock_post.call_args_list[0].kwargs["data"]
         second_payload = mock_post.call_args_list[1].kwargs["data"]
+        assert "<format>image/png</format>" in first_payload
         assert "<string>STYLES</string>" in first_payload
         assert "<string>ww3_hs-hs</string>" in first_payload
         assert "<string>2024-01-01T00:00:00Z</string>" in first_payload
@@ -305,8 +301,8 @@ class TestGWCSeedCompletion:
 
     @patch('datasets.cache.requests.get')
     @patch('datasets.cache.requests.post')
-    def test_truncate_queues_all_times_before_waiting(self, mock_post, mock_get):
-        """All stale variants are queued before waiting to start any seed work."""
+    def test_truncate_waits_for_each_time_before_next_request(self, mock_post, mock_get):
+        """Each temporal variant is deleted before the next one is submitted."""
         mock_post.return_value = MagicMock(status_code=200)
         mock_get.return_value = MagicMock(
             status_code=200,
@@ -319,7 +315,7 @@ class TestGWCSeedCompletion:
             style_name="test_style",
         ) is True
         assert mock_post.call_count == 2
-        assert mock_get.call_count == 1
+        assert mock_get.call_count == 2
         assert all(
             "<type>truncate</type>" in call.kwargs["data"]
             for call in mock_post.call_args_list
@@ -350,3 +346,51 @@ class TestGWCSeedCompletion:
 
         assert self.invalidator.get_default_style("ww3_hs-hs") == "ww3_hs-hs"
         assert "/rest/layers/meteohub:ww3_hs-hs.json" in mock_get.call_args.args[0]
+
+    def test_refresh_temporal_layer_uses_full_refresh_lifecycle(self):
+        """Published layers use one ordered cache lifecycle through the seam."""
+        layer = TemporalCacheLayer("t2m-t2m", store_name="t2m-t2m")
+        with patch.object(
+            self.invalidator, "ensure_time_parameter_filter", return_value=True
+        ) as filter_, patch.object(
+            self.invalidator, "truncate", return_value=True
+        ) as truncate, patch.object(
+            self.invalidator,
+            "get_granule_times",
+            return_value=["2024-01-01T00:00:00.000Z"],
+        ) as times, patch.object(
+            self.invalidator, "get_default_style", return_value="t2m"
+        ) as style, patch.object(
+            self.invalidator, "seed", return_value=True
+        ) as seed:
+            assert self.invalidator.refresh_temporal_layer(layer) is True
+
+        filter_.assert_called_once_with("t2m-t2m")
+        times.assert_called_once_with("t2m-t2m", store_name="t2m-t2m", all_times=True)
+        style.assert_called_once_with("t2m-t2m")
+        truncate.assert_called_once_with(
+            "t2m-t2m",
+            times=["2024-01-01T00:00:00.000Z"],
+            style_name="t2m",
+        )
+        seed.assert_called_once_with(
+            "t2m-t2m",
+            wait=True,
+            times=["2024-01-01T00:00:00.000Z"],
+            style_name="t2m",
+        )
+
+    @patch("datasets.cache.requests.get")
+    @patch("datasets.cache.requests.put")
+    def test_ensure_grid_set_declares_1024px_tiles(self, mock_put, mock_get):
+        mock_get.return_value = MagicMock(
+            status_code=500,
+            text='Failed to get GridSet. A GridSet with name "EPSG:900913_1024" does not exist.',
+        )
+        mock_put.return_value = MagicMock(status_code=201)
+
+        assert self.invalidator._ensure_grid_set() is True
+        payload = mock_put.call_args.kwargs["data"]
+        assert "<tileWidth>1024</tileWidth>" in payload
+        assert "<tileHeight>1024</tileHeight>" in payload
+        assert "<name>EPSG:900913_1024</name>" in payload

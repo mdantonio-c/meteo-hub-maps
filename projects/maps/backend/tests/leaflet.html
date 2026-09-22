@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WMS Layer Switcher — meteohub</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.1/dist/leaflet.timedimension.control.min.css" />
+<style>
+  html, body { height: 100%; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  #map { position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
+
+  #panel {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 1000;
+    background: rgba(255,255,255,0.96);
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+    padding: 14px 16px;
+    width: 300px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+  #panel h1 {
+    font-size: 14px;
+    margin: 0 0 8px 0;
+    color: #222;
+  }
+  #panel label {
+    display: block;
+    font-size: 12px;
+    color: #444;
+    margin-bottom: 4px;
+    margin-top: 10px;
+  }
+  #panel select, #panel input[type=text] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+  #panel .row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  #panel .row label {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+  #zoomLevel {
+    font-size: 11px;
+    margin-top: 10px;
+    color: #666;
+    text-align: right;
+  }
+  #status {
+    font-size: 11px;
+    margin-top: 10px;
+    color: #666;
+    line-height: 1.4;
+    white-space: pre-wrap;
+  }
+  #status.error { color: #b00020; }
+  button#reload {
+    margin-top: 10px;
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f5f5f5;
+    cursor: pointer;
+  }
+  button#reload:hover { background: #eee; }
+  #opacityVal { font-size: 11px; color: #666; margin-left: 6px; }
+  button#measure {
+    margin-top: 14px;
+    width: 100%;
+    padding: 8px 8px;
+    font-size: 12px;
+    border: 1px solid #2a6fd9;
+    border-radius: 4px;
+    background: #2a6fd9;
+    color: #fff;
+    cursor: pointer;
+  }
+  button#measure:hover { background: #1e5bb8; }
+  button#measure:disabled { background: #9db8e0; border-color: #9db8e0; cursor: default; }
+  #measureResult {
+    font-size: 12px;
+    margin-top: 8px;
+    color: #222;
+    min-height: 16px;
+    font-weight: 600;
+  }
+  #timeInfo {
+    font-size: 11px;
+    margin-top: 10px;
+    color: #444;
+    display: none;
+  }
+  button#preloadTimesteps {
+    margin-top: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 12px;
+    border: 1px solid #2a6fd9;
+    border-radius: 4px;
+    background: #fff;
+    color: #2a6fd9;
+    cursor: pointer;
+    display: none;
+  }
+  button#preloadTimesteps:hover { background: #eef3fc; }
+  button#preloadTimesteps:disabled { color: #9db8e0; border-color: #9db8e0; cursor: default; }
+  #preloadResult {
+    font-size: 11px;
+    margin-top: 6px;
+    color: #444;
+    display: none;
+  }
+  button#checkCache {
+    margin-top: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 12px;
+    border: 1px solid #6a5acd;
+    border-radius: 4px;
+    background: #fff;
+    color: #4b3fa1;
+    cursor: pointer;
+  }
+  button#checkCache:hover { background: #f3f1ff; }
+  button#checkCache:disabled { color: #aaa; border-color: #ccc; cursor: default; }
+  #cacheResult {
+    font-size: 11px;
+    margin-top: 6px;
+    color: #444;
+    white-space: pre-wrap;
+  }
+  .leaflet-bar-timecontrol {
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="panel">
+  <h1>WMS Layer Switcher</h1>
+
+  <label for="wmsBase">GeoServer WMS endpoint</label>
+  <input type="text" id="wmsBase" value="http://localhost:8081/geoserver/meteohub/wms" />
+
+  <button id="reload">Reload capabilities</button>
+
+  <label for="layerSelect">Layer</label>
+  <select id="layerSelect"><option>Loading…</option></select>
+
+  <div class="row" style="margin-top:10px;">
+    <label><input type="checkbox" id="transparent" checked> Transparent</label>
+  </div>
+
+  <div id="zoomLevel"></div>
+
+  <label for="opacity">Opacity <span id="opacityVal">100%</span></label>
+  <input type="range" id="opacity" min="0" max="1" step="0.05" value="1" style="width:100%;">
+
+  <button id="measure">Measure full map rendering time</button>
+  <div id="measureResult"></div>
+
+  <div id="timeInfo"></div>
+  <button id="preloadTimesteps">Preload all timesteps</button>
+  <div id="preloadResult"></div>
+  <button id="checkCache">Check current tile cache</button>
+  <div id="cacheResult"></div>
+
+  <div id="status">Fetching GetCapabilities…</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/iso8601-js-period@0.2.1/iso8601.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.1/dist/leaflet.timedimension.min.js"></script>
+<script>
+(function () {
+  const DEFAULT_BBOX = [30.26303955078125, -7.115900039672852, 45.80303955078125, 36.22409996032715]; // [south, west, north, east]
+  const DEFAULT_LAYER = 'meteohub:ww3_hs-hs';
+
+  const map = L.map('map', { zoomControl: true }).fitBounds([
+    [DEFAULT_BBOX[0], DEFAULT_BBOX[1]],
+    [DEFAULT_BBOX[2], DEFAULT_BBOX[3]]
+  ]);
+
+  L.tileLayer('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/blank.png').addTo(map); // placeholder, replaced below
+  map.eachLayer(l => map.removeLayer(l));
+
+  // Basemap
+  const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  const wmsBaseInput = document.getElementById('wmsBase');
+  const layerSelect = document.getElementById('layerSelect');
+  const statusEl = document.getElementById('status');
+  const zoomLevelEl = document.getElementById('zoomLevel');
+  const transparentCheckbox = document.getElementById('transparent');
+  const opacitySlider = document.getElementById('opacity');
+  const opacityVal = document.getElementById('opacityVal');
+  const reloadBtn = document.getElementById('reload');
+  const measureBtn = document.getElementById('measure');
+  const measureResult = document.getElementById('measureResult');
+
+  let currentWmsLayer = null;
+  let currentTimeDimension = null;
+  let currentTimeControl = null;
+  let layerTimesByName = {};
+  const timeInfoEl = document.getElementById('timeInfo');
+  const preloadBtn = document.getElementById('preloadTimesteps');
+  const preloadResult = document.getElementById('preloadResult');
+  const checkCacheBtn = document.getElementById('checkCache');
+  const cacheResult = document.getElementById('cacheResult');
+  let preloadedTimes = null;
+  let preloadListenerLayer = null;
+  let preloadCancelled = false;
+  let preloadRequestedCount = 0;
+  const PRELOAD_BATCH_SIZE = 4;
+  const PRELOAD_BATCH_DELAY_MS = 250;
+
+  function onPreloadTimeload(e) {
+    preloadedTimes.add(e.time);
+    const total = currentTimeDimension.getAvailableTimes().length;
+    preloadResult.textContent = `Preloaded ${preloadedTimes.size}/${total} timestep(s)`;
+    if (preloadedTimes.size >= total) {
+      preloadBtn.disabled = false;
+      preloadBtn.textContent = 'Preload all timesteps';
+      preloadListenerLayer.off('timeload', onPreloadTimeload);
+      preloadListenerLayer = null;
+    }
+  }
+
+  function scheduleNextPreloadBatch() {
+    if (preloadCancelled || !currentTimeDimension) return;
+    const total = currentTimeDimension.getAvailableTimes().length;
+    if (preloadRequestedCount >= total - 1) return;
+
+    // Re-requesting an already-cached time is a cheap no-op for the layer, so
+    // growing the "howmany" each batch only triggers network fetches for the
+    // newly added steps — this spreads requests instead of firing them all at once.
+    preloadRequestedCount = Math.min(total - 1, preloadRequestedCount + PRELOAD_BATCH_SIZE);
+    currentTimeDimension.prepareNextTimes(1, preloadRequestedCount, true);
+
+    if (preloadRequestedCount < total - 1) {
+      setTimeout(scheduleNextPreloadBatch, PRELOAD_BATCH_DELAY_MS);
+    }
+  }
+
+  function preloadAllTimesteps() {
+    if (!currentTimeDimension || !currentWmsLayer) return;
+    if (preloadListenerLayer) preloadListenerLayer.off('timeload', onPreloadTimeload);
+
+    const total = currentTimeDimension.getAvailableTimes().length;
+    preloadedTimes = new Set([currentTimeDimension.getCurrentTime()]);
+    preloadCancelled = false;
+    preloadRequestedCount = 0;
+    preloadBtn.textContent = 'Cancel preloading';
+    preloadResult.style.display = 'block';
+    preloadResult.textContent = `Preloaded ${preloadedTimes.size}/${total} timestep(s)`;
+
+    preloadListenerLayer = currentWmsLayer;
+    currentWmsLayer.on('timeload', onPreloadTimeload);
+    scheduleNextPreloadBatch();
+  }
+
+  function cancelPreload() {
+    preloadCancelled = true;
+    preloadBtn.textContent = 'Preload all timesteps';
+    if (preloadListenerLayer) {
+      preloadListenerLayer.off('timeload', onPreloadTimeload);
+      preloadListenerLayer = null;
+    }
+  }
+
+  function togglePreload() {
+    if (preloadBtn.textContent === 'Cancel preloading') {
+      cancelPreload();
+    } else {
+      preloadAllTimesteps();
+    }
+  }
+
+  function getActiveWmsTileLayer() {
+    return currentTimeDimension && currentWmsLayer
+      ? (currentWmsLayer._currentLayer || currentWmsLayer.getBaseLayer())
+      : currentWmsLayer;
+  }
+
+  async function checkCurrentTileCache() {
+    const layer = getActiveWmsTileLayer();
+    const tile = layer && Object.values(layer._tiles || {}).find(entry => entry.el.src);
+    const timeLayers = currentWmsLayer && currentWmsLayer._layers
+      ? Object.values(currentWmsLayer._layers)
+      : [];
+    const loadedTimeLayers = timeLayers.filter(timeLayer => timeLayer.isLoaded && timeLayer.isLoaded());
+    const leafletCacheStatus = currentTimeDimension
+      ? `Leaflet timestep cache: ${loadedTimeLayers.length}/${currentTimeDimension.getAvailableTimes().length} layer(s) loaded.`
+      : 'Leaflet timestep cache: not applicable (the selected layer has no time dimension).';
+    if (!tile) {
+      cacheResult.textContent = `${leafletCacheStatus}\nNo visible WMS tile is available yet. Wait for the map to load.`;
+      return;
+    }
+
+    checkCacheBtn.disabled = true;
+    cacheResult.textContent = 'Checking GeoWebCache for a visible WMS tile...';
+    try {
+      // Revalidate the exact rendered tile without allowing the browser HTTP cache
+      // to hide GeoWebCache's response headers.
+      const response = await fetch(tile.el.src, { cache: 'no-store' });
+      const result = response.headers.get('geowebcache-cache-result');
+      const reason = response.headers.get('geowebcache-miss-reason');
+      if (result) {
+        cacheResult.textContent = `${leafletCacheStatus}\nGeoWebCache: ${result}${reason ? ` (${reason})` : ''}`;
+      } else {
+        cacheResult.textContent =
+          `${leafletCacheStatus}\nGeoWebCache status header is unavailable. Ensure the WMS origin permits CORS and exposes geowebcache-cache-result.`;
+      }
+    } catch (error) {
+      cacheResult.textContent =
+        `${leafletCacheStatus}\nCache check failed: ${error.message}. The WMS origin must permit CORS for this diagnostic.`;
+    } finally {
+      checkCacheBtn.disabled = false;
+    }
+  }
+
+  // --- Full map rendering time measurement ---
+  // Times how long it takes for every tile (basemap + WMS overlay) currently
+  // needed to fill the viewport to finish loading, starting from a forced redraw.
+  let measuring = false;
+  let measureStart = 0;
+  let pendingLayers = 0;
+
+  function onLayerLoadDuringMeasure() {
+    pendingLayers = Math.max(0, pendingLayers - 1);
+    if (measuring && pendingLayers === 0) {
+      const elapsedMs = performance.now() - measureStart;
+      measuring = false;
+      measureBtn.disabled = false;
+      measureBtn.textContent = 'Measure full map rendering time';
+      measureResult.textContent = `Rendered in ${elapsedMs.toFixed(0)} ms`;
+    }
+  }
+
+  function runMeasurement() {
+    if (measuring) return;
+    // When a time dimension is active, the actual tile layer for the current
+    // step is wrapped inside the TimeDimension layer, so time that one instead.
+    const activeWmsTileLayer = getActiveWmsTileLayer();
+    const layersToTime = [baseLayer, activeWmsTileLayer].filter(Boolean);
+    if (layersToTime.length === 0) return;
+
+    measuring = true;
+    pendingLayers = layersToTime.length;
+    measureBtn.disabled = true;
+    measureBtn.textContent = 'Measuring…';
+    measureResult.textContent = '';
+
+    // One-time load listeners for this measurement pass
+    layersToTime.forEach(layer => layer.once('load', onLayerLoadDuringMeasure));
+
+    measureStart = performance.now();
+    // Force every tile in the current view to be re-requested so we time a
+    // full render rather than relying on already-cached/loaded tiles.
+    layersToTime.forEach(layer => layer.redraw());
+  }
+
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg;
+    statusEl.className = isError ? 'error' : '';
+  }
+
+  function getBaseUrl() {
+    // Strip any query string the user might paste in, keep just the WMS endpoint path
+    const raw = wmsBaseInput.value.trim();
+    try {
+      const u = new URL(raw);
+      return u.origin + u.pathname;
+    } catch (e) {
+      return raw.split('?')[0];
+    }
+  }
+
+  function getLayerTimeExtent(node) {
+    // WMS capabilities express the time dimension as either an Extent (1.1.1)
+    // or a Dimension (1.3.0) element named "time" on the layer node.
+    const candidates = Array.from(node.children || node.childNodes)
+      .filter(n => (n.nodeName === 'Extent' || n.nodeName === 'Dimension') &&
+        n.getAttribute && (n.getAttribute('name') || '').toLowerCase() === 'time');
+    const match = candidates.find(n => n.textContent && n.textContent.trim().length > 0);
+    return match ? match.textContent.trim() : null;
+  }
+
+  function buildLayer(layerName) {
+    if (currentTimeControl) {
+      map.removeControl(currentTimeControl);
+      currentTimeControl = null;
+    }
+    if (preloadListenerLayer) {
+      preloadListenerLayer.off('timeload', onPreloadTimeload);
+      preloadListenerLayer = null;
+    }
+    preloadCancelled = true;
+    if (currentWmsLayer) {
+      map.removeLayer(currentWmsLayer);
+      currentWmsLayer = null;
+    }
+    currentTimeDimension = null;
+    timeInfoEl.style.display = 'none';
+    preloadBtn.style.display = 'none';
+    preloadBtn.disabled = false;
+    preloadBtn.textContent = 'Preload all timesteps';
+    preloadResult.style.display = 'none';
+    preloadResult.textContent = '';
+    cacheResult.textContent = '';
+
+    const baseWmsLayer = L.tileLayer.wms(getBaseUrl(), {
+      layers: layerName,
+      format: 'image/png',
+       transparent: transparentCheckbox.checked,
+       version: '1.1.1',
+        crs: L.CRS.EPSG3857,
+       opacity: parseFloat(opacitySlider.value),
+       // Opt into GeoServer's tiled WMS endpoint, which emits an explicit
+       // geowebcache-cache-result header for cache diagnostics. GeoWebCache's
+       // default grid sets use 256px tiles, so keep Leaflet at that size too.
+       tiled: true
+    });
+
+    const timesRaw = layerTimesByName[layerName];
+    if (timesRaw) {
+      const availableTimes = L.TimeDimension.Util.parseTimesExpression(timesRaw);
+      currentTimeDimension = new L.TimeDimension({ times: availableTimes });
+
+       currentWmsLayer = L.timeDimension.layer.wms(baseWmsLayer, {
+         timeDimension: currentTimeDimension,
+         updateTimeDimension: false,
+         // Keep every fetched timestep layer cached so preloading isn't evicted.
+         cache: availableTimes.length
+       });
+       // The plugin's default moveend/zoomend handler redraws every cached time
+       // layer. Leaflet already requests tiles for the active layer after a map
+       // change; retaining hidden timesteps prevents N-times request fan-out.
+       currentWmsLayer.getEvents = () => ({});
+       currentWmsLayer.addTo(map);
+
+      currentTimeControl = new L.Control.TimeDimension({
+        timeDimension: currentTimeDimension,
+        player: new L.TimeDimension.Player({
+          transitionTime: 1000,
+          loop: true,
+          startOver: true
+        }, currentTimeDimension),
+        speedSlider: true,
+        minSpeed: 0.1,
+        maxSpeed: 10,
+        speedStep: 0.1,
+        loopButton: true,
+        timeSliderDragUpdate: true
+      });
+      map.addControl(currentTimeControl);
+
+      timeInfoEl.style.display = 'block';
+      timeInfoEl.textContent = `Time dimension: ${availableTimes.length} step(s) available. Use the play/speed controls at the bottom-left of the map.`;
+      preloadBtn.style.display = 'block';
+    } else {
+      currentWmsLayer = baseWmsLayer.addTo(map);
+    }
+  }
+
+  function populateSelect(layers) {
+    layerSelect.innerHTML = '';
+    if (layers.length === 0) {
+      const opt = document.createElement('option');
+      opt.textContent = 'No layers found';
+      layerSelect.appendChild(opt);
+      return;
+    }
+    layers.forEach(({ name, title, hasTime }) => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      const label = title && title !== name ? `${title} (${name})` : name;
+      opt.textContent = hasTime ? `⏱ ${label}` : label;
+      layerSelect.appendChild(opt);
+    });
+
+    // Preselect the layer from the original GetMap request, if present
+    const preselect = layers.find(l => l.name === DEFAULT_LAYER);
+    layerSelect.value = preselect ? preselect.name : layers[0].name;
+    buildLayer(layerSelect.value);
+  }
+
+  async function loadCapabilities() {
+    setStatus('Fetching GetCapabilities…');
+    layerSelect.innerHTML = '<option>Loading…</option>';
+
+    const capsUrl = getBaseUrl() + '?service=WMS&version=1.1.1&request=GetCapabilities';
+
+    try {
+      const resp = await fetch(capsUrl);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const text = await resp.text();
+      const xml = new DOMParser().parseFromString(text, 'text/xml');
+
+      const parserError = xml.querySelector('parsererror');
+      if (parserError) throw new Error('Could not parse GetCapabilities XML');
+
+      const layerNodes = Array.from(xml.getElementsByTagName('Layer'))
+        .filter(node => node.getElementsByTagName('Name').length > 0 &&
+                        node.getElementsByTagName('Name')[0].parentNode === node);
+
+      layerTimesByName = {};
+      const layers = layerNodes.map(node => {
+        const name = node.getElementsByTagName('Name')[0]?.textContent?.trim();
+        const titleNode = node.getElementsByTagName('Title')[0];
+        const title = titleNode ? titleNode.textContent.trim() : name;
+        const times = name ? getLayerTimeExtent(node) : null;
+        if (name && times) layerTimesByName[name] = times;
+        return { name, title, hasTime: !!times };
+      }).filter(l => !!l.name);
+
+      if (layers.length === 0) {
+        setStatus('GetCapabilities responded but no layers were found in it.', true);
+      } else {
+        setStatus(`Loaded ${layers.length} layer(s) from ${getBaseUrl()}`);
+      }
+      populateSelect(layers);
+
+    } catch (err) {
+      setStatus(
+        'Could not load GetCapabilities automatically (' + err.message + ').\n' +
+        'This is usually a CORS restriction from the browser when calling ' +
+        'localhost from a file opened outside that origin, or the server ' +
+        'being unreachable from where this page is running.\n' +
+        'Falling back to the single layer from your original request — you ' +
+        'can still type another layer name manually below.',
+        true
+      );
+      populateSelect([{ name: DEFAULT_LAYER, title: DEFAULT_LAYER }]);
+    }
+  }
+
+  function updateZoomLevel() {
+    const z = map.getZoom();
+    zoomLevelEl.textContent = `Zoom: ${z}`;
+  }
+
+  layerSelect.addEventListener('change', () => buildLayer(layerSelect.value));
+  map.on('zoomend', updateZoomLevel);
+  updateZoomLevel();
+
+  transparentCheckbox.addEventListener('change', () => buildLayer(layerSelect.value));
+  opacitySlider.addEventListener('input', () => {
+    opacityVal.textContent = Math.round(opacitySlider.value * 100) + '%';
+    if (currentWmsLayer) currentWmsLayer.setOpacity(parseFloat(opacitySlider.value));
+  });
+  reloadBtn.addEventListener('click', loadCapabilities);
+  measureBtn.addEventListener('click', runMeasurement);
+  preloadBtn.addEventListener('click', togglePreload);
+  checkCacheBtn.addEventListener('click', checkCurrentTileCache);
+
+  loadCapabilities();
+})();
+</script>
+
+</body>
+</html>
