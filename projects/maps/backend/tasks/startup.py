@@ -16,8 +16,9 @@ import requests
 from celery.signals import worker_init
 from typing import List, Optional
 
-from maps.datasets.cache import GWCInvalidator, GWC_GRID_SET
+from maps.datasets.cache import GWCInvalidator
 from maps.tasks.geoserver_utils import update_slds_from_local_folders
+from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
 
 GEOSERVER_URL = Env.get("GEOSERVER_URL", "http://geoserver.dockerized.io:8080/geoserver")
 GEOSERVER_USER = Env.get("GEOSERVER_ADMIN_USER", "admin")
@@ -39,7 +40,7 @@ def _get_all_layers(
             url,
             auth=(username, password),
             headers={"Accept": "application/json"},
-            timeout=30,
+            timeout=GEOSERVER_REQUEST_TIMEOUT,
         )
         if response.status_code != 200:
             log.error(
@@ -84,7 +85,7 @@ def initialize_geoserver(self) -> bool:
         password=GEOSERVER_PASSWORD,
         workspace=GEOSERVER_WORKSPACE,
         enabled=True,
-        timeout=30,
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
     )
     
     layers = _get_all_layers(GEOSERVER_URL, GEOSERVER_USER, GEOSERVER_PASSWORD, GEOSERVER_WORKSPACE)

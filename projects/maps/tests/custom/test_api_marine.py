@@ -11,11 +11,12 @@ from restapi.env import Env
 from restapi.tests import API_URI, BaseTests, FlaskClient
 from restapi.utilities.logs import log
 
+TEST_DATA_PATH = Path("/tmp/shyfem_test")
 
 # Helper functions for test setup
 def create_shyfem_directories() -> Path:
     """Create base SHYFEM directory structure."""
-    shyfem_path = Path(Env.get("MER_DATA_PATH", "/shyfem"))
+    shyfem_path = TEST_DATA_PATH
     shyfem_path.mkdir(parents=True, exist_ok=True)
     return shyfem_path
 
@@ -27,7 +28,7 @@ def create_ready_files(forcing: str, dates: list) -> None:
         forcing: Forcing name (BOLAM, ECMWF, ICON)
         dates: List of date strings in YYYYMMDD format
     """
-    shyfem_path = Path(Env.get("MER_DATA_PATH", "/shyfem"))
+    shyfem_path = TEST_DATA_PATH
     forcing_path = shyfem_path.joinpath(forcing)
     forcing_path.mkdir(parents=True, exist_ok=True)
 
@@ -50,7 +51,7 @@ def create_station_file(forcing: str, filename: str, data: dict) -> None:
         filename: Station file name (e.g., "20260701_station_timeseries.json")
         data: Dictionary to serialize as JSON
     """
-    shyfem_path = Path(Env.get("MER_DATA_PATH", "/shyfem"))
+    shyfem_path = TEST_DATA_PATH
     forcing_path = shyfem_path.joinpath(forcing)
     forcing_path.mkdir(parents=True, exist_ok=True)
     json_path = forcing_path.joinpath("json")
@@ -62,7 +63,7 @@ def create_station_file(forcing: str, filename: str, data: dict) -> None:
 
 def cleanup_shyfem_data() -> None:
     """Remove all SHYFEM test data."""
-    shyfem_path = Path(Env.get("MER_DATA_PATH", "/shyfem"))
+    shyfem_path = TEST_DATA_PATH
     if shyfem_path.exists():
         shutil.rmtree(shyfem_path)
 
@@ -71,8 +72,9 @@ def cleanup_shyfem_data() -> None:
 def setup_shyfem_env(monkeypatch):
     """Set up SHYFEM environment variables for tests."""
     # Use a temporary test path that the test has permission to delete
-    test_data_path = "/tmp/shyfem_test"
-    monkeypatch.setenv("MER_DATA_PATH", test_data_path)
+    monkeypatch.setattr(
+        "maps.endpoints.marine.get_data_path", lambda: TEST_DATA_PATH
+    )
 
     # Cleanup before test
     cleanup_shyfem_data()

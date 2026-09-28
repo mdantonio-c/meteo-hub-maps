@@ -1,8 +1,18 @@
 """Tests for GWC caching and seed completion in cache.py."""
 
+import sys
+import types
 from unittest.mock import MagicMock, patch
 
+from maps.datasets import cache
 from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer
+
+# Legacy mock targets in this suite use ``datasets.cache``. Keep that alias
+# while the application package is namespaced as ``maps.datasets``.
+datasets_module = types.ModuleType("datasets")
+datasets_module.__path__ = []
+sys.modules.setdefault("datasets", datasets_module)
+sys.modules.setdefault("datasets.cache", cache)
 import requests as requests_lib
 
 

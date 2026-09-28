@@ -6,6 +6,7 @@ from typing import Optional
 import os
 import requests
 from datetime import datetime
+from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
 
 WORKSPACE = "meteohub"
 
@@ -40,7 +41,9 @@ def create_workspace_generic(geoserver_url: str, username: str, password: str, w
     headers = {"Content-Type": "application/json"}
     data = {"workspace": {"name": workspace}}
 
-    response = requests.post(url, json=data, auth=(username, password))
+    response = requests.post(
+        url, json=data, auth=(username, password), timeout=GEOSERVER_REQUEST_TIMEOUT
+    )
     if response.status_code == 201:
         log.info(f"Workspace '{workspace}' created successfully.")
         return True
@@ -73,7 +76,14 @@ def upload_sld_generic(geoserver_url: str, sld_content: str, layer_name: str, us
     params = {"name": layer_name}
 
     try:
-        response = requests.post(url, auth=(username, password), headers=headers, params=params, data=sld_content.encode('utf-8'))
+        response = requests.post(
+            url,
+            auth=(username, password),
+            headers=headers,
+            params=params,
+            data=sld_content.encode("utf-8"),
+            timeout=GEOSERVER_REQUEST_TIMEOUT,
+        )
         
         if response.status_code == 201:
             log.info(f"SLD for layer {layer_name} created successfully.")
@@ -82,7 +92,13 @@ def upload_sld_generic(geoserver_url: str, sld_content: str, layer_name: str, us
             log.info(f"SLD for layer {layer_name} already exists. Updating it.")
             # Update existing SLD
             update_url = f"{geoserver_url}/rest/styles/{layer_name}"
-            response = requests.put(update_url, auth=(username, password), headers=headers, data=sld_content.encode('utf-8'))
+            response = requests.put(
+                update_url,
+                auth=(username, password),
+                headers=headers,
+                data=sld_content.encode("utf-8"),
+                timeout=GEOSERVER_REQUEST_TIMEOUT,
+            )
             
             if response.status_code == 200:
                 log.info(f"SLD for layer {layer_name} updated successfully.")
@@ -193,14 +209,18 @@ def update_slds_from_local_folders(sld_base_directory: str, geoserver_url: str, 
 def check_coverage_store_exists(geoserver_url: str, store_name: str, username: str, password: str, workspace: str = WORKSPACE) -> bool:
     """Check if a coverage store already exists."""
     url = f"{geoserver_url}/rest/workspaces/{workspace}/coveragestores/{store_name}"
-    response = requests.get(url, auth=(username, password))
+    response = requests.get(
+        url, auth=(username, password), timeout=GEOSERVER_REQUEST_TIMEOUT
+    )
     return response.status_code == 200
 
 
 def delete_coverage_store(geoserver_url: str, store_name: str, username: str, password: str, workspace: str = WORKSPACE) -> bool:
     """Delete a coverage store and all its resources."""
     url = f"{geoserver_url}/rest/workspaces/{workspace}/coveragestores/{store_name}?recurse=true"
-    response = requests.delete(url, auth=(username, password))
+    response = requests.delete(
+        url, auth=(username, password), timeout=GEOSERVER_REQUEST_TIMEOUT
+    )
     if response.status_code in [200, 404]:  # 404 means already deleted
         log.info(f"Deleted coverage store {store_name}.")
         return True
@@ -212,14 +232,21 @@ def delete_coverage_store(geoserver_url: str, store_name: str, username: str, pa
 def check_coverage_exists(geoserver_url: str, store_name: str, coverage_name: str, username: str, password: str, workspace: str = WORKSPACE) -> bool:
     """Check if a coverage already exists within a store."""
     url = f"{geoserver_url}/rest/workspaces/{workspace}/coveragestores/{store_name}/coverages/{coverage_name}"
-    response = requests.get(url, auth=(username, password))
+    response = requests.get(
+        url, auth=(username, password), timeout=GEOSERVER_REQUEST_TIMEOUT
+    )
     return response.status_code == 200
 
 
 def get_all_coverage_stores(geoserver_url: str, username: str, password: str, workspace: str = WORKSPACE) -> list:
     """Get all coverage stores in the workspace."""
     url = f"{geoserver_url}/rest/workspaces/{workspace}/coveragestores"
-    response = requests.get(url, auth=(username, password), headers={"Accept": "application/json"})
+    response = requests.get(
+        url,
+        auth=(username, password),
+        headers={"Accept": "application/json"},
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
     
     if response.status_code == 200:
         data = response.json()
@@ -311,7 +338,13 @@ def refresh_imagemosaic_store(geoserver_url: str, store_name: str, username: str
     </harvest>"""
     
     headers = {"Content-Type": "application/xml"}
-    response = requests.post(harvest_url, data=harvest_data, headers=headers, auth=(username, password))
+    response = requests.post(
+        harvest_url,
+        data=harvest_data,
+        headers=headers,
+        auth=(username, password),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
     
     if response.status_code == 202:
         log.info(f"Successfully initiated harvest for ImageMosaic store: {store_name}")
@@ -332,7 +365,9 @@ def _mosaic_store_url(
     workspace: str,
 ) -> Optional[str]:
     url = f"{geoserver_url}/rest/workspaces/{workspace}/coveragestores/{store_name}.json"
-    response = requests.get(url, auth=(username, password))
+    response = requests.get(
+        url, auth=(username, password), timeout=GEOSERVER_REQUEST_TIMEOUT
+    )
     if response.status_code != 200:
         log.error(f"Failed to read ImageMosaic store {store_name}: {response.text}")
         return None
@@ -345,7 +380,9 @@ def reset_imagemosaic_index(geoserver_url: str, store_name: str, username: str, 
     
     # Reset the index
     reset_url = f"{geoserver_url}/rest/workspaces/{workspace}/coveragestores/{store_name}/reset"
-    response = requests.post(reset_url, auth=(username, password))
+    response = requests.post(
+        reset_url, auth=(username, password), timeout=GEOSERVER_REQUEST_TIMEOUT
+    )
     
     if response.status_code in [200, 202]:
         log.info(f"Successfully reset ImageMosaic index for store: {store_name}")
@@ -420,7 +457,12 @@ def upload_geotiff_generic(geoserver_url: str, file_path: str, store_name: str, 
 
         try:
             with open(actual_path, "rb") as file:
-                response = requests.put(url, data=file, auth=(username, password))
+                response = requests.put(
+                    url,
+                    data=file,
+                    auth=(username, password),
+                    timeout=GEOSERVER_REQUEST_TIMEOUT,
+                )
         except Exception as e:
             log.error(f"An error occurred while uploading GeoTIFF: {e}")
             return False
@@ -465,7 +507,13 @@ def upload_mosaic_generic(geoserver_url: str, mosaic_dir: str, store_name: str, 
         }
     }
 
-    response = requests.post(url, json=data, headers=headers, auth=(username, password))
+    response = requests.post(
+        url,
+        json=data,
+        headers=headers,
+        auth=(username, password),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
     
     if response.status_code in [201, 202]:
         log.info(f"Created mosaic coverage store {store_name}.")
@@ -494,7 +542,9 @@ def publish_layer_generic(geoserver_url: str, store_name: str, layer_name: str, 
         
         # Retry logic for listing coverages
         for _ in range(3):
-            list_response = requests.get(list_url, auth=(username, password))
+            list_response = requests.get(
+                list_url, auth=(username, password), timeout=GEOSERVER_REQUEST_TIMEOUT
+            )
             if list_response.status_code == 200:
                 break
             time.sleep(2)
@@ -544,7 +594,13 @@ def publish_layer_generic(geoserver_url: str, store_name: str, layer_name: str, 
         }
     }
 
-    response = requests.post(url, json=data, headers=headers, auth=(username, password))
+    response = requests.post(
+        url,
+        json=data,
+        headers=headers,
+        auth=(username, password),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
     log.info(f"Publishing Layer: {sanitized_layer_name} with coverage name: {coverage_name}")
     log.info(f"Response Code: {response.status_code}")
 
@@ -575,7 +631,13 @@ def update_coverage_name(geoserver_url: str, store_name: str, coverage_name: str
         }
     }
 
-    response = requests.put(url, json=data, headers=headers, auth=(username, password))
+    response = requests.put(
+        url,
+        json=data,
+        headers=headers,
+        auth=(username, password),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
     
     if response.status_code == 200:
         log.info(f"Updated coverage name from {store_name} to {coverage_name}.")
@@ -599,7 +661,13 @@ def update_mosaic_coverage_name(geoserver_url: str, store_name: str, native_cove
         }
     }
 
-    response = requests.put(url, json=data, headers=headers, auth=(username, password))
+    response = requests.put(
+        url,
+        json=data,
+        headers=headers,
+        auth=(username, password),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
     
     if response.status_code == 200:
         log.info(f"Updated mosaic coverage name from {native_coverage_name} to {new_coverage_name}.")
@@ -619,7 +687,9 @@ def check_style_exists(geoserver_url: str, style_name: str, username: str, passw
     ]
 
     for url in urls_to_check:
-        response = requests.get(url, auth=(username, password))
+        response = requests.get(
+            url, auth=(username, password), timeout=GEOSERVER_REQUEST_TIMEOUT
+        )
         if response.status_code == 200:
             log.debug(f"Style '{style_name}' exists in GeoServer (endpoint: {url})")
             return True
@@ -641,11 +711,20 @@ def associate_sld_with_layer_generic(geoserver_url: str, layer_name: str, style_
     }
     headers = {"Content-Type": "application/json"}
 
-    response = requests.put(layer_url, auth=(username, password), headers=headers, json=data)
+    response = requests.put(
+        layer_url,
+        auth=(username, password),
+        headers=headers,
+        json=data,
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
 
     if response.status_code == 200:
         layer_response = requests.get(
-            layer_url, auth=(username, password), headers={"Accept": "application/json"}
+            layer_url,
+            auth=(username, password),
+            headers={"Accept": "application/json"},
+            timeout=GEOSERVER_REQUEST_TIMEOUT,
         )
         if layer_response.status_code == 200:
             assigned_style = layer_response.json().get("layer", {}).get("defaultStyle", {}).get("name")

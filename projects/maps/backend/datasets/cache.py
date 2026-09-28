@@ -6,10 +6,11 @@ import time
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Tuple, Union
 from xml.etree import ElementTree
 
 import requests
+from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ class GWCInvalidator:
         password: str,
         workspace: str,
         enabled: Optional[bool] = None,
-        timeout: float = 30.0,
+        timeout: Optional[Union[float, Tuple[float, float]]] = None,
         zoom_start: Optional[int] = None,
         zoom_stop: Optional[int] = None,
     ) -> None:
@@ -66,7 +67,7 @@ class GWCInvalidator:
         self.password = password
         self.workspace = workspace
         self.enabled = enabled if enabled is not None else GWC_ENABLED_DEFAULT
-        self.timeout = timeout
+        self.timeout = timeout if timeout is not None else GEOSERVER_REQUEST_TIMEOUT
         self.zoom_start = SEED_ZOOM_START if zoom_start is None else zoom_start
         self.zoom_stop = SEED_ZOOM_STOP if zoom_stop is None else zoom_stop
 

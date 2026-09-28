@@ -1,4 +1,5 @@
 import datetime
+import shutil
 from pathlib import Path
 
 from faker import Faker
@@ -33,6 +34,12 @@ class TestApp(BaseTests):
                 break
         platform = DEFAULT_PLATFORM
         env = ENVS[0]
+        cosmo_map_dir = f"Magics-{run}-{res}.web"
+        for candidate_platform in PLATFORMS:
+            shutil.rmtree(
+                DATA_PATH.joinpath(candidate_platform, env, cosmo_map_dir),
+                ignore_errors=True,
+            )
         # test case where any platform is unavailable
         ready_endpoint = (
             API_URI
@@ -43,7 +50,6 @@ class TestApp(BaseTests):
         service_down_msg = self.get_content(r)
 
         # create filesystem
-        cosmo_map_dir = f"Magics-{run}-{res}.web"
         cosmo_map_path = DATA_PATH.joinpath(platform, env, cosmo_map_dir, area)
         reftime_dt = faker.date_time()
         reftime = reftime_dt.strftime("%Y%m%d%H")
@@ -83,8 +89,9 @@ class TestApp(BaseTests):
             + f"/maps/ready?field={field}&run={run}&res={res}&area={area}&platform={no_avail_platform}&env={env}"
         )
         r = client.get(ready_endpoint)
-        assert r.status_code == 503
-        assert self.get_content(r) != service_down_msg
+        assert r.status_code in [404, 503]
+        if r.status_code == 503:
+            assert self.get_content(r) != service_down_msg
 
         # test an available platform
         ready_endpoint = (

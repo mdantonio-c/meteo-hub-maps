@@ -16,7 +16,7 @@ from maps.tasks.geoserver_utils import (
     process_sld_files,
     check_coverage_exists,
 )
-from maps.tasks.cache_control import schedule_cache_refresh_chord
+from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
 
 sld_dir_mapping = {
     "hcc": ["cloud_hml-hcc"],
@@ -181,6 +181,10 @@ def update_geoserver_image_mosaic(
         or f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/{WINDY_INGEST_AREA}"
     )
     identifier = f"{date}{run}"
+    # Imported here because some ingestion tests load this module without the
+    # complete task package; production workers always resolve it normally.
+    from maps.tasks.cache_control import schedule_cache_refresh_chord
+
     schedule_cache_refresh_chord(
         [
             {
@@ -232,6 +236,7 @@ def create_or_update_sld(folder: str, sld_directory: str) -> None:
         headers=headers,
         data=sld_content,
         auth=(GEOSERVER_USERNAME, GEOSERVER_PASSWORD),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
     )
     if response.status_code in [200, 201]:
         print("Style updated successfully.")
@@ -400,6 +405,7 @@ def publish_layer(layer_name, native_coverage_name, GEOSERVER_URL):
         data=data,
         headers=headers,
         auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
     )
     if r.status_code == 409:
         print("ℹ️ Mosaic layer already published.")
@@ -433,6 +439,7 @@ def bind_sld(folder, layer_name, GEOSERVER_URL):
         data=data,
         headers=headers,
         auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
     )
     if r.status_code not in [200, 201]:
         print("❌ Failed to enable time dimension:", r.text)
@@ -467,6 +474,7 @@ def enable_time_dimension(store_name, coverage_name, GEOSERVER_URL):
         data=data,
         headers=headers,
         auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
     )
     if r.status_code not in [200, 201]:
         print("❌ Failed to enable time dimension:", r.text)

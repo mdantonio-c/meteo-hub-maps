@@ -13,6 +13,7 @@ from maps.tasks.geoserver_utils import (
     update_slds_from_local_folders,
 )
 from maps.tasks.cache_control import schedule_cache_refresh_chord
+from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
 
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
@@ -91,15 +92,12 @@ def update_geoserver_sub_seasonal_layers(self, run_date, range_str):
             for filename in os.listdir(SUB_SEASONAL_BASE_PATH)
             if filename.endswith(".GEOSERVER.READY") and filename != os.path.basename(ready_file)
         ],
+        checked_files=[
+            os.path.join(SUB_SEASONAL_BASE_PATH, filename)
+            for filename in os.listdir(SUB_SEASONAL_BASE_PATH)
+            if filename.endswith(".CELERY.CHECKED")
+        ],
     )
-
-    # Cleanup CELERY.CHECKED
-    for f in os.listdir(SUB_SEASONAL_BASE_PATH):
-        if f.endswith(".CELERY.CHECKED"):
-            try:
-                os.remove(os.path.join(SUB_SEASONAL_BASE_PATH, f))
-            except Exception as e:
-                log.warning(f"Failed to remove {f}: {e}")
 
 
 def process_sub_seasonal_variable(var, val) -> bool:
@@ -184,6 +182,12 @@ def enable_time_dimension(geoserver_url, store_name, layer_name, username, passw
     </coverage>
     """.strip()
 
-    response = requests.put(url, data=data, headers=headers, auth=(username, password))
+    response = requests.put(
+        url,
+        data=data,
+        headers=headers,
+        auth=(username, password),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
     if response.status_code not in [200, 201]:
         log.error(f"Failed to enable time dimension for {layer_name}: {response.text}")

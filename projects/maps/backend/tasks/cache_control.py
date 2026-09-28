@@ -12,7 +12,7 @@ from typing import Any, Iterable, List, Optional
 from celery import chord, signature
 from redis import Redis
 from restapi.connectors import celery
-from restapi.connectors.celery import CeleryExt
+from restapi.connectors.celery import CeleryExt, CeleryRetryTask
 from restapi.env import Env
 from restapi.utilities.logs import log
 
@@ -142,6 +142,22 @@ def schedule_cache_refresh_chord(
     chord.  A marker therefore means all stale cache entries were removed, not
     that every replacement tile was eagerly generated.
     """
+    callback = signature(
+        "write_geoserver_ready",
+        kwargs={
+            "ready_file": ready_file,
+            "ready_contents": ready_contents,
+            "obsolete_ready_files": list(obsolete_ready_files or []),
+            "checked_files": list(checked_files or []),
+            "completion": completion or {},
+        },
+        queue="ingest",
+        routing_key="ingest",
+    )
+    if Env.get("GEOSERVER_GWC_ENABLED", "1") != "1":
+        callback.apply_async(args=[[]])
+        return
+
     header = []
     for request in requests:
         layer_name = request["layer_name"]
@@ -157,18 +173,6 @@ def schedule_cache_refresh_chord(
             )
         )
 
-    callback = signature(
-        "write_geoserver_ready",
-        kwargs={
-            "ready_file": ready_file,
-            "ready_contents": ready_contents,
-            "obsolete_ready_files": list(obsolete_ready_files or []),
-            "checked_files": list(checked_files or []),
-            "completion": completion or {},
-        },
-        queue="ingest",
-        routing_key="ingest",
-    )
     if not header:
         callback.apply_async(args=[[]])
         return
@@ -253,7 +257,10 @@ def invalidate_gwc_layer(
         blocking_timeout=30,
     )
     if not lock.acquire():
-        raise RuntimeError(f"could not acquire GWC invalidation lock for {layer_name}")
+        log.info("Deferring GWC invalidation for {} while its lock is held", layer_name)
+        raise CeleryRetryTask(
+            f"GWC invalidation lock is held for {layer_name}; retry shortly"
+        )
     try:
         if not _is_current(workspace, layer_name, generation):
             raise RuntimeError(f"GWC invalidation superseded for {layer_name}")

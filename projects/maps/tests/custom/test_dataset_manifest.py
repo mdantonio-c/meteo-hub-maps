@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from restapi.env import Env
 
 from maps.datasets.manifest import ManifestError, load_manifest, validate_manifest
 from maps.datasets.markers import MarkerStore
@@ -14,7 +15,7 @@ from maps.datasets.paths import safe_dataset_file_path
 
 
 def test_loads_windy_and_radar_manifest() -> None:
-    path = Path(__file__).parents[3] / "datasets.yml"
+    path = Path(Env.get("DATASET_CONFIG_PATH", "/etc/meteohub/datasets.yml"))
 
     datasets = load_manifest(path)
 
@@ -73,7 +74,7 @@ def test_allows_duplicate_route_templates() -> None:
 
 def test_registry_rejects_unknown_dataset() -> None:
     registry = DatasetRegistry(
-        load_manifest(Path(__file__).parents[3] / "datasets.yml")
+        load_manifest(Path(Env.get("DATASET_CONFIG_PATH", "/etc/meteohub/datasets.yml")))
     )
 
     with pytest.raises(ManifestError, match="unknown dataset"):
@@ -82,7 +83,7 @@ def test_registry_rejects_unknown_dataset() -> None:
 
 def test_registry_resolves_configured_adapter() -> None:
     registry = DatasetRegistry(
-        load_manifest(Path(__file__).parents[3] / "datasets.yml")
+        load_manifest(Path(Env.get("DATASET_CONFIG_PATH", "/etc/meteohub/datasets.yml")))
     )
 
     assert registry.get("icon").adapter == "windy_image_mosaic"
@@ -124,9 +125,9 @@ def test_dataset_lock_is_reentrant_after_release(tmp_path: Path) -> None:
 
 
 def test_gwc_invalidator_is_noop_when_disabled() -> None:
-    assert GWCInvalidator("http://geoserver", "user", "password", "meteohub").truncate(
-        "t2m"
-    )
+    assert GWCInvalidator(
+        "http://geoserver", "user", "password", "meteohub", enabled=False
+    ).truncate("t2m")
 
 
 def test_gwc_invalidator_adds_time_parameter_filter(
@@ -164,7 +165,10 @@ def test_gwc_invalidator_adds_time_parameter_filter(
     assert b"<regex>.*</regex>" in payload
     assert b"<gridSetName>EPSG:900913_1024</gridSetName>" in payload
     assert b"<expireCache>86400</expireCache>" in payload
-    assert b"<expireClients>300</expireClients>" in payload
+    assert (
+        f"<expireClients>{cache.GWC_CLIENT_EXPIRE_SECONDS}</expireClients>".encode()
+        in payload
+    )
 
 
 def test_gwc_invalidator_keeps_existing_time_parameter_filter(
@@ -174,7 +178,7 @@ def test_gwc_invalidator_keeps_existing_time_parameter_filter(
         status_code = 200
         content = b"""<GeoServerLayer><gridSubsets><gridSubset>
           <gridSetName>EPSG:900913_1024</gridSetName>
-        </gridSubset></gridSubsets><expireCache>86400</expireCache><expireClients>300</expireClients><parameterFilters>
+        </gridSubset></gridSubsets><expireCache>86400</expireCache><expireClients>0</expireClients><parameterFilters>
           <regexParameterFilter><key>TIME</key><defaultValue/><regex>.*</regex></regexParameterFilter>
         </parameterFilters></GeoServerLayer>"""
 

@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from celery.exceptions import Ignore
 
 from maps.tasks import cache_control
 
@@ -37,9 +38,8 @@ def test_invalidation_discards_superseded_generation() -> None:
     task = MagicMock()
     with patch.object(cache_control, "_is_current", return_value=False), patch.object(
         cache_control, "_redis"
-    ) as redis_factory, pytest.raises(RuntimeError, match="superseded"):
+    ) as redis_factory, pytest.raises(Ignore, match="superseded"):
         cache_control.invalidate_gwc_layer.run(
-            task,
             layer_name="radar-sri",
             geoserver_url="http://geoserver",
             username="admin",
@@ -62,7 +62,6 @@ def test_invalidation_fails_when_layer_lock_is_held() -> None:
         cache_control, "_redis", return_value=redis_client
     ), pytest.raises(RuntimeError, match="could not acquire"):
         cache_control.invalidate_gwc_layer.run(
-            task,
             layer_name="radar-sri",
             geoserver_url="http://geoserver",
             username="admin",
@@ -87,7 +86,6 @@ def test_warm_task_submits_only_the_next_time() -> None:
     ) as get_instance:
         get_instance.return_value.celery_app = celery_app
         cache_control.warm_gwc_layer.run(
-            task,
             layer_name="radar-sri",
             geoserver_url="http://geoserver",
             username="admin",
@@ -137,7 +135,6 @@ def test_invalidation_uses_explicit_warm_times(monkeypatch) -> None:
     ) as get_instance:
         get_instance.return_value.celery_app = celery_app
         cache_control.invalidate_gwc_layer.run(
-            task,
             layer_name="radar-sri",
             geoserver_url="http://geoserver",
             username="admin",
@@ -187,6 +184,32 @@ def test_cache_refresh_chord_writes_marker_after_all_invalidations(tmp_path) -> 
     chord_result.assert_called_once()
 
 
+def test_disabled_gwc_refresh_schedules_ready_without_redis_or_header(tmp_path) -> None:
+    callback = MagicMock()
+
+    with patch.object(cache_control.Env, "get", return_value="0"), patch.object(
+        cache_control, "_redis"
+    ) as redis_factory, patch(
+        "maps.tasks.cache_control.chord", side_effect=AssertionError("chord disabled")
+    ), patch("maps.tasks.cache_control.signature", return_value=callback):
+        cache_control.schedule_cache_refresh_chord(
+            [
+                {
+                    "layer_name": "layer",
+                    "geoserver_url": "http://geoserver",
+                    "username": "admin",
+                    "password": "password",
+                    "workspace": "meteohub",
+                }
+            ],
+            ready_file=str(tmp_path / "ready.GEOSERVER.READY"),
+            ready_contents="ready\n",
+        )
+
+    redis_factory.assert_not_called()
+    callback.apply_async.assert_called_once_with(args=[[]])
+
+
 def test_write_geoserver_ready_writes_after_chord_completion(tmp_path) -> None:
     ready_file = tmp_path / "current.GEOSERVER.READY"
     obsolete_file = tmp_path / "stale.GEOSERVER.READY"
@@ -195,7 +218,6 @@ def test_write_geoserver_ready_writes_after_chord_completion(tmp_path) -> None:
     checked_file.touch()
 
     cache_control.write_geoserver_ready.run(
-        MagicMock(),
         [],
         str(ready_file),
         "ready\n",

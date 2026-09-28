@@ -97,6 +97,7 @@ class ShyfemStatusEndpoint(EndpointResource):
         response = {
             "latestRun": latest_date_str,
             "availableForcings": available_forcings,
+            "allForcings": forcing_latest_files,
             "forcings": forcings,
             "meta": {
                 "lastUpdate": last_update,

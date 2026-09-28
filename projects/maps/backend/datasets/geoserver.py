@@ -5,6 +5,7 @@ from typing import List, Optional, Union
 import os
 import shutil
 import requests
+from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
 
 
 def atomic_copy_to_mosaic(target_dir: str, source_files: List[str], copy_fn=shutil.copy2) -> str:
@@ -183,6 +184,6 @@ class GeoServerPublisher:
             data=data,
             headers={"Content-Type": "application/xml", "Accept": "application/xml"},
             auth=(self.username, self.password),
-            timeout=30,
+            timeout=GEOSERVER_REQUEST_TIMEOUT,
         )
         return response.status_code in (200, 201)

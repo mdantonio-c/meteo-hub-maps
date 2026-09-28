@@ -1,4 +1,6 @@
+from datetime import datetime
 from pathlib import Path
+import shutil
 
 from faker import Faker
 from maps.endpoints.config import DATASETS, DEFAULT_PLATFORM, RUNS
@@ -30,6 +32,7 @@ class TestApp(BaseTests):
         # no run specified any maps is ready
         tiles_dir = f"Tiles-{run}-{dataset}.web"
         tiles_path = DATA_PATH.joinpath(platform, "PROD", tiles_dir, area)
+        shutil.rmtree(tiles_path, ignore_errors=True)
         tiles_path.mkdir(parents=True, exist_ok=True)
         r = client.get(f"{API_URI}/tiles?dataset={dataset}")
         assert r.status_code == 404
@@ -38,7 +41,7 @@ class TestApp(BaseTests):
 
         # no run specified but map is ready
         # create a ready file
-        reftime = faker.pyint(1000000000, 9999999999)
+        reftime = datetime.now().strftime("%Y%m%d%H")
         tiles_readyfile_path = tiles_path.joinpath(f"{reftime}.READY")
         open(tiles_readyfile_path, "a").close()
         r = client.get(f"{API_URI}/tiles?dataset={dataset}")

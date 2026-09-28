@@ -8,6 +8,7 @@ USERNAME = "admin"
 PASSWORD = "D3vMode!"
 WORKSPACE = "meteohub"
 COVERAGESTORE_PREFIX = "tiff_store"
+GEOSERVER_REQUEST_TIMEOUT = (10, 600)
 
 def create_workspace():
     """Create a workspace if it doesn't exist."""
@@ -15,7 +16,9 @@ def create_workspace():
     headers = {"Content-Type": "application/json"}
     data = {"workspace": {"name": WORKSPACE}}
 
-    response = requests.post(url, json=data, auth=(USERNAME, PASSWORD))
+    response = requests.post(
+        url, json=data, auth=(USERNAME, PASSWORD), timeout=GEOSERVER_REQUEST_TIMEOUT
+    )
     if response.status_code == 201:
         print(f"Workspace '{WORKSPACE}' created successfully.")
     elif response.status_code == 409:
@@ -29,7 +32,9 @@ def upload_geotiff(file_path, store_name):
     headers = {"Content-Type": "image/tiff"}
 
     with open(file_path, "rb") as file:
-        response = requests.put(url, data=file, auth=(USERNAME, PASSWORD))
+        response = requests.put(
+            url, data=file, auth=(USERNAME, PASSWORD), timeout=GEOSERVER_REQUEST_TIMEOUT
+        )
 
     if response.status_code in [201, 202]:
         print(f"Uploaded {file_path} as {store_name}.")
@@ -117,7 +122,14 @@ def upload_sld(sld, layer_name):
     headers = {"Content-Type": "application/vnd.ogc.sld+xml"}
     params = {"name": layer_name}
 
-    response = requests.post(url, auth=(USERNAME, PASSWORD), headers=headers, params=params, data=sld)
+    response = requests.post(
+        url,
+        auth=(USERNAME, PASSWORD),
+        headers=headers,
+        params=params,
+        data=sld,
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
 
     print(f"Response Code: {response.status_code}")
     print(f"Response Text: {response.text}")
@@ -139,7 +151,13 @@ def associate_sld_with_layer(layer_name, style_name):
     }
     headers = {"Content-Type": "application/json"}
 
-    response = requests.put(layer_url, auth=(USERNAME, PASSWORD), headers=headers, json=data)
+    response = requests.put(
+        layer_url,
+        auth=(USERNAME, PASSWORD),
+        headers=headers,
+        json=data,
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
 
     if response.status_code == 200:
         print(f"SLD associated with layer {layer_name} successfully.")
@@ -160,7 +178,13 @@ def publish_layer(store_name, file_path, layer_name, sld=None):
         }
     }
 
-    response = requests.post(url, json=data, headers=headers, auth=(USERNAME, PASSWORD))
+    response = requests.post(
+        url,
+        json=data,
+        headers=headers,
+        auth=(USERNAME, PASSWORD),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
     
     print(f"Publishing Layer: {sanitized_layer_name}")
     print(f"Response Code: {response.status_code}")
@@ -176,13 +200,21 @@ def publish_layer(store_name, file_path, layer_name, sld=None):
     else:
         # # Delete the existing layer and coverage store
         delete_url = f"{GEOSERVER_URL}/rest/workspaces/{WORKSPACE}/coveragestores/{store_name}?recurse=true"
-        delete_response = requests.delete(delete_url, auth=(USERNAME, PASSWORD))
+        delete_response = requests.delete(
+            delete_url, auth=(USERNAME, PASSWORD), timeout=GEOSERVER_REQUEST_TIMEOUT
+        )
         if delete_response.status_code == 200:
             print(f"Deleted existing store {store_name}.")
             # Re-upload the GeoTIFF
             upload_geotiff(file_path, store_name)
             print(f"Re-uploaded {file_path} as {store_name}.")
-            response = requests.post(url, json=data, headers=headers, auth=(USERNAME, PASSWORD))
+            response = requests.post(
+                url,
+                json=data,
+                headers=headers,
+                auth=(USERNAME, PASSWORD),
+                timeout=GEOSERVER_REQUEST_TIMEOUT,
+            )
     
             print(f"Publishing Layer: {sanitized_layer_name}")
             print(f"Response Code: {response.status_code}")

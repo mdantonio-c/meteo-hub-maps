@@ -17,6 +17,7 @@ from maps.tasks.geoserver_utils import (
 )
 from maps.datasets.cache import GWCInvalidator
 from maps.tasks.cache_control import schedule_cache_refresh_chord
+from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
 
 # Configuration
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
@@ -608,7 +609,11 @@ def add_granule_to_mosaic(
 
     try:
         response = requests.post(
-            url, data=file_url, headers=headers, auth=(username, password), timeout=30
+            url,
+            data=file_url,
+            headers=headers,
+            auth=(username, password),
+            timeout=GEOSERVER_REQUEST_TIMEOUT,
         )
 
         if response.status_code in [HTTP_OK, HTTP_CREATED, HTTP_ACCEPTED]:
@@ -640,7 +645,9 @@ def remove_oldest_granule(
     # GET /geoserver/rest/workspaces/<ws>/coveragestores/<mosaic>/coverages/<mosaic>/index/granules.json
 
     index_url = f"{geoserver_url}/rest/workspaces/{workspace}/coveragestores/{store_name}/coverages/{layer_name}/index/granules.json"
-    response = requests.get(index_url, auth=(username, password))
+    response = requests.get(
+        index_url, auth=(username, password), timeout=GEOSERVER_REQUEST_TIMEOUT
+    )
     log.info(f"Response: {response.status_code}, {response.text}")
     if response.status_code != 200:
         log.error(
@@ -678,7 +685,10 @@ def remove_oldest_granule(
                 params = {"filter": f"location='{location}'"}
 
                 del_response = requests.delete(
-                    delete_url, params=params, auth=(username, password)
+                    delete_url,
+                    params=params,
+                    auth=(username, password),
+                    timeout=GEOSERVER_REQUEST_TIMEOUT,
                 )
                 log.info(
                     f"Deleted oldest granule: {location}, response: {del_response.status_code}"
@@ -691,7 +701,10 @@ def remove_oldest_granule(
                     recalc_params = {"recalculate": "nativebbox,latlonbbox"}
 
                     recalc_response = requests.put(
-                        recalc_url, params=recalc_params, auth=(username, password)
+                        recalc_url,
+                        params=recalc_params,
+                        auth=(username, password),
+                        timeout=GEOSERVER_REQUEST_TIMEOUT,
                     )
 
                     if recalc_response.status_code in [200, 201]:
@@ -838,7 +851,9 @@ def remove_files_older_than_retention(
 
                 try:
                     del_response = requests.delete(
-                        del_url, auth=(username, password), timeout=30
+                        del_url,
+                        auth=(username, password),
+                        timeout=GEOSERVER_REQUEST_TIMEOUT,
                     )
 
                     if del_response.status_code in [
@@ -952,7 +967,13 @@ def enable_radar_time_dimension(
     </coverage>
     """.strip()
 
-    response = requests.put(url, data=data, headers=headers, auth=(username, password))
+    response = requests.put(
+        url,
+        data=data,
+        headers=headers,
+        auth=(username, password),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
     if response.status_code not in [200, 201]:
         log.error(f"Failed to enable time dimension for {layer_name}: {response.text}")
         return False

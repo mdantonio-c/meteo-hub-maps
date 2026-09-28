@@ -46,6 +46,10 @@ cache_module.GWCInvalidator = MagicMock()
 cache_module.TemporalCacheLayer = MagicMock()
 sys.modules.setdefault("maps.datasets.cache", cache_module)
 
+cache_control_module = types.ModuleType("maps.tasks.cache_control")
+cache_control_module.schedule_cache_refresh_chord = MagicMock()
+sys.modules.setdefault("maps.tasks.cache_control", cache_control_module)
+
 module_path = Path("/code/maps/tasks/upload_image_mosaic.py")
 spec = spec_from_file_location("maps.tasks.upload_image_mosaic", module_path)
 windy_task = module_from_spec(spec)
@@ -64,7 +68,7 @@ def test_publish_layer_accepts_existing_mosaic_coverage(mock_post):
 def test_ingestion_uses_watcher_source_directory() -> None:
     source_directory = "/windy/Windy-12-WRF.web/Italia"
     windy_task._ingest_windy_image_mosaic = MagicMock(return_value=[])
-    windy_task.create_ready_file = MagicMock()
+    cache_control_module.schedule_cache_refresh_chord.reset_mock()
 
     windy_task.update_geoserver_image_mosaic(
         None,
@@ -77,7 +81,9 @@ def test_ingestion_uses_watcher_source_directory() -> None:
     )
 
     assert windy_task._ingest_windy_image_mosaic.call_args.kwargs["source_directory"] == source_directory
-    windy_task.create_ready_file.assert_called_once_with(source_directory, "12", "20260922")
+    assert cache_control_module.schedule_cache_refresh_chord.call_args.kwargs["ready_file"] == (
+        f"{source_directory}/2026092212.GEOSERVER.READY"
+    )
 
 
 def test_workers_receive_dedicated_wrf_ingest_folders() -> None:

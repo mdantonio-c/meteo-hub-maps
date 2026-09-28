@@ -18,6 +18,7 @@ from maps.tasks.geoserver_utils import (
     associate_sld_with_layer_generic,
 )
 from maps.tasks.cache_control import schedule_cache_refresh_chord
+from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
 
 # Thredds integration disabled.
 # from maps.tasks.thredds import (  # noqa: F401
@@ -137,7 +138,13 @@ def _enable_mer_time_dimension(
     </coverage>
     """.strip()
 
-    response = requests.put(url, data=data, headers=headers, auth=(username, password))
+    response = requests.put(
+        url,
+        data=data,
+        headers=headers,
+        auth=(username, password),
+        timeout=GEOSERVER_REQUEST_TIMEOUT,
+    )
     if response.status_code not in [200, 201]:
         log.error(f"Failed to enable time dimension for {layer_name}: {response.text}")
 

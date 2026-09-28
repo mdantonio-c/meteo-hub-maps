@@ -6,17 +6,21 @@ import pytest
 from restapi.env import Env
 from restapi.tests import API_URI, BaseTests, FlaskClient
 
+TEST_WW3_PATH = Path("/tmp/ww3_test")
+
 
 def ww3_path() -> Path:
-    return Path(Env.get("WW3_DATA_PATH", "/ww3"))
+    return TEST_WW3_PATH
 
 
 @pytest.fixture(autouse=True)
 def setup_ww3_env(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("WW3_DATA_PATH", "/tmp/ww3_test")
-    shutil.rmtree("/tmp/ww3_test", ignore_errors=True)
+    monkeypatch.setattr(
+        "maps.endpoints.ww3.get_ww3_path", lambda: TEST_WW3_PATH / "Mediterraneo"
+    )
+    shutil.rmtree(TEST_WW3_PATH, ignore_errors=True)
     yield
-    shutil.rmtree("/tmp/ww3_test", ignore_errors=True)
+    shutil.rmtree(TEST_WW3_PATH, ignore_errors=True)
 
 
 class TestWW3Vectors(BaseTests):
