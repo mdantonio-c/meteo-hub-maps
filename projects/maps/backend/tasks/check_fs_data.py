@@ -17,14 +17,15 @@ from maps.tasks.geoserver_utils import (
     upload_sld_generic,
     associate_sld_with_layer_generic,
 )
-from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer
+from maps.tasks.cache_control import schedule_cache_refresh
+
 # Thredds integration disabled.
 # from maps.tasks.thredds import (  # noqa: F401
 #     check_latest_data_and_trigger_thredds_ingestion,
 #     ingest_MER_ready_directory,
 # )
 
-GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver" # TODO: get from env
+GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"  # TODO: get from env
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
 PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
 dataset = "icon"
@@ -84,7 +85,9 @@ def _extract_dataset_from_path(path: str) -> str:
     match = re.match(r"^Windy-(\d{2})-(.+)\.web$", folder)
     if match:
         return match.group(2)
-    log.warning(f"Could not parse windy dataset from path: {path}. Falling back to ICON_2I_all2km")
+    log.warning(
+        f"Could not parse windy dataset from path: {path}. Falling back to ICON_2I_all2km"
+    )
     return "ICON_2I_all2km"
 
 
@@ -108,7 +111,9 @@ def _create_mer_mosaic_config(target_dir: str) -> None:
         f.write(timeregex_content)
 
 
-def _enable_mer_time_dimension(geoserver_url: str, store_name: str, layer_name: str, username: str, password: str) -> None:
+def _enable_mer_time_dimension(
+    geoserver_url: str, store_name: str, layer_name: str, username: str, password: str
+) -> None:
     url = f"{geoserver_url}/rest/workspaces/{GEOSERVER_WORKSPACE}/coveragestores/{store_name}/coverages/{layer_name}"
     headers = {
         "Content-Type": "application/xml",
@@ -161,7 +166,9 @@ def _get_latest_mer_ready_run(forcing_dir: str) -> str | None:
         if not os.path.isdir(variable_path):
             continue
         for filename in os.listdir(variable_path):
-            match = re.match(r"^(\d{8})T\d{6}\.(tif|tiff)$", filename, flags=re.IGNORECASE)
+            match = re.match(
+                r"^(\d{8})T\d{6}\.(tif|tiff)$", filename, flags=re.IGNORECASE
+            )
             if match:
                 inferred_dates.append(match.group(1))
 
@@ -188,17 +195,24 @@ def _read_run_from_marker(marker_path: str) -> str | None:
     return None
 
 
-def _update_forcing_geoserver_ready_if_complete(forcing_dir: str, forcing_name: str, run_date: str) -> None:
+def _update_forcing_geoserver_ready_if_complete(
+    forcing_dir: str, forcing_name: str, run_date: str
+) -> None:
     # Write forcing-level run marker used by the marine status endpoint.
     forcing_ready_file = os.path.join(forcing_dir, f"{run_date}.GEOSERVER.READY")
 
     # Keep only one forcing-level GEOSERVER.READY marker.
     for filename in os.listdir(forcing_dir):
-        if filename.endswith(".GEOSERVER.READY") and filename != f"{run_date}.GEOSERVER.READY":
+        if (
+            filename.endswith(".GEOSERVER.READY")
+            and filename != f"{run_date}.GEOSERVER.READY"
+        ):
             try:
                 os.remove(os.path.join(forcing_dir, filename))
             except Exception as e:
-                log.warning(f"Failed removing stale forcing ready marker {filename}: {e}")
+                log.warning(
+                    f"Failed removing stale forcing ready marker {filename}: {e}"
+                )
 
     with open(forcing_ready_file, "w") as f:
         f.write(f"Processed by GeoServer at {datetime.now().isoformat()}\n")
@@ -210,7 +224,9 @@ def _update_forcing_geoserver_ready_if_complete(forcing_dir: str, forcing_name: 
 
 def _ensure_mer_wl_style() -> bool:
     """Ensure the MER water_level style exists in GeoServer."""
-    if check_style_exists(GEOSERVER_URL, MER_WL_STYLE_NAME, USERNAME, PASSWORD, GEOSERVER_WORKSPACE):
+    if check_style_exists(
+        GEOSERVER_URL, MER_WL_STYLE_NAME, USERNAME, PASSWORD, GEOSERVER_WORKSPACE
+    ):
         return True
 
     for style_path in MER_WL_STYLE_CANDIDATE_PATHS:
@@ -228,11 +244,14 @@ def _ensure_mer_wl_style() -> bool:
             log.error(f"MER wl SLD is empty: {style_path}")
             continue
 
-        if upload_sld_generic(GEOSERVER_URL, sld_content, MER_WL_STYLE_NAME, USERNAME, PASSWORD):
+        if upload_sld_generic(
+            GEOSERVER_URL, sld_content, MER_WL_STYLE_NAME, USERNAME, PASSWORD
+        ):
             return True
 
     log.error("Unable to ensure MER wl style 'water_level' in GeoServer")
     return False
+
 
 @CeleryExt.task(idempotent=True)
 def check_latest_data_and_trigger_geoserver_import_windy(
@@ -312,10 +331,10 @@ def check_latest_data_and_trigger_geoserver_import_seasonal(
     watcher = DataWatcher(
         paths=seasonal_path,
     )
-    
+
     watcher.check_and_trigger(
         task_name="update_geoserver_seasonal_layers",
-        task_args=lambda identifier, f, p: (identifier,)
+        task_args=lambda identifier, f, p: (identifier,),
     )
     log.info("Finished checking seasonal data")
 
@@ -331,20 +350,24 @@ def check_latest_data_and_trigger_geoserver_import_radar(
     log.info("Checking latest radar data")
     if not os.path.exists(radar_path):
         # Try to find it in likely locations if default fails
-        possible_paths = [radar_path, "/data/radar", os.path.join(os.getcwd(), "data/radar")]
+        possible_paths = [
+            radar_path,
+            "/data/radar",
+            os.path.join(os.getcwd(), "data/radar"),
+        ]
         found = False
         for p in possible_paths:
             if os.path.exists(p):
                 radar_path = p
                 found = True
                 break
-        
+
         if not found:
             log.warning(f"Radar path does not exist: {radar_path}")
             return
 
     variables = ["sri", "srt"]
-    
+
     for var in variables:
         log.info(f"Checking variable: {var}")
         var_path = os.path.join(radar_path, var)
@@ -356,17 +379,16 @@ def check_latest_data_and_trigger_geoserver_import_radar(
             paths=var_path,
             ready_suffix=".READY",
             processed_suffix=".GEOSERVER.READY",
-            debounce_seconds=1800, # 30 minutes for radar
+            debounce_seconds=1800,  # 30 minutes for radar
             retention_hours=GRANULE_RETENTION_HOURS,
-            sort_key=lambda f: f, # Default sort is fine (YYYYMMDDHHMM.READY)
-            identifier_extractor=lambda f: f.split(".")[0]
+            sort_key=lambda f: f,  # Default sort is fine (YYYYMMDDHHMM.READY)
+            identifier_extractor=lambda f: f.split(".")[0],
         )
 
         watcher.check_and_trigger(
-            task_name="update_geoserver_radar_layers",
-            var_name=var
+            task_name="update_geoserver_radar_layers", var_name=var
         )
-            
+
     log.info("Finished checking radar data")
 
 
@@ -379,37 +401,51 @@ def check_latest_data_and_trigger_geoserver_import_sub_seasonal(
     Check the latest sub-seasonal data in the given path.
     """
     log.info("Checking latest sub-seasonal data")
-    
+
     def custom_action(identifier, latest_file, path):
         run_date = identifier
         retry = 0
-        
+
         # Calculate range from files in t2m/quintile_1
         # Get a random variable folder instead of hardcoding t2m
-        var_dirs = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d)) and d not in ['.', '..']]
+        var_dirs = [
+            d
+            for d in os.listdir(path)
+            if os.path.isdir(os.path.join(path, d)) and d not in [".", ".."]
+        ]
         if not var_dirs:
             log.warning(f"No variable directories found in {path}")
             return
-        
-        sample_var = var_dirs[0] if var_dirs[0] != "json_weekly" else var_dirs[1]  # Use first available variable folder
+
+        sample_var = (
+            var_dirs[0] if var_dirs[0] != "json_weekly" else var_dirs[1]
+        )  # Use first available variable folder
         var_path = os.path.join(path, sample_var)
-        
-        child_dirs = [d for d in os.listdir(var_path) if os.path.isdir(os.path.join(var_path, d)) and d not in ['.', '..']]
+
+        child_dirs = [
+            d
+            for d in os.listdir(var_path)
+            if os.path.isdir(os.path.join(var_path, d)) and d not in [".", ".."]
+        ]
         if not child_dirs:
             log.warning(f"No child directories found in {var_path}")
             return
-        
+
         sample_child = child_dirs[0]  # Use first available child folder
         sample_dir = os.path.join(var_path, sample_child)
         if not os.path.exists(sample_dir):
             log.warning(f"Sample directory {sample_dir} not found for run {run_date}")
             return
 
-        files = [f for f in os.listdir(sample_dir) if f.endswith(".tiff") or f.endswith(".tif")]
+        files = [
+            f
+            for f in os.listdir(sample_dir)
+            if f.endswith(".tiff") or f.endswith(".tif")
+        ]
         if not files:
             log.warning(f"No files found in {sample_dir}")
             return
-            
+
         dates = []
         for f in files:
             try:
@@ -417,15 +453,15 @@ def check_latest_data_and_trigger_geoserver_import_sub_seasonal(
                 dates.append(datetime.strptime(d_str, "%Y-%m-%d"))
             except ValueError:
                 continue
-        
+
         if not dates:
             log.warning("No valid dates found in files")
             return
-            
+
         min_date = min(dates)
         max_date = max(dates)
         range_str = f"{min_date.strftime('%Y%m%d')}-{max_date.strftime('%Y%m%d')}"
-        
+
         # Check if processed
         geoserver_ready_file = os.path.join(path, f"{range_str}.GEOSERVER.READY")
         if os.path.exists(geoserver_ready_file):
@@ -434,20 +470,26 @@ def check_latest_data_and_trigger_geoserver_import_sub_seasonal(
                 with open(geoserver_ready_file, "r") as f:
                     content = f.read()
                     if f"Run: {run_date}" in content:
-                        log.info(f"Range {range_str} already processed for run {run_date}")
+                        log.info(
+                            f"Range {range_str} already processed for run {run_date}"
+                        )
                         return
                     else:
-                        log.info(f"Range {range_str} exists but for a different run. Re-processing.")
+                        log.info(
+                            f"Range {range_str} exists but for a different run. Re-processing."
+                        )
             except Exception as e:
                 log.warning(f"Failed to read {geoserver_ready_file}: {e}")
                 # If we can't read it, assume we need to re-process or at least check pending
-        
+
         # Check if pending (debounce)
         checked_file = os.path.join(path, f"{range_str}.CELERY.CHECKED")
         if os.path.exists(checked_file):
             # Check if pending for more than 300 seconds
             file_mtime = os.path.getmtime(checked_file)
-            age_seconds = (datetime.now() - datetime.fromtimestamp(file_mtime)).total_seconds()
+            age_seconds = (
+                datetime.now() - datetime.fromtimestamp(file_mtime)
+            ).total_seconds()
             # Read the retry count from the file
             try:
                 with open(checked_file, "r") as f:
@@ -460,25 +502,33 @@ def check_latest_data_and_trigger_geoserver_import_sub_seasonal(
                 log.warning(f"Failed to read retry count from {checked_file}: {e}")
                 retry = 0
             if age_seconds > 300:
-                log.info(f"Range {range_str} pending for {age_seconds:.0f}s (> 300s), removing and re-triggering")
+                log.info(
+                    f"Range {range_str} pending for {age_seconds:.0f}s (> 300s), removing and re-triggering"
+                )
                 retry += 1
                 if retry > 1:
-                    log.error(f"Range {range_str} has been retried {retry} times, marking container as unhealthy")
+                    log.error(
+                        f"Range {range_str} has been retried {retry} times, marking container as unhealthy"
+                    )
                     # Mark container as unhealthy by creating/touching the health check failure file
                     health_check_file = "/status/health_check_failure"
                     with open(health_check_file, "w") as hf:
-                        hf.write(f"Sub-seasonal processing stuck for range {range_str} after {retry} retries\n")
+                        hf.write(
+                            f"Sub-seasonal processing stuck for range {range_str} after {retry} retries\n"
+                        )
                         hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
                     os.remove(checked_file)
                     return
                 os.remove(checked_file)
             else:
-                log.info(f"Range {range_str} already checked (pending for {age_seconds:.0f}s)")
+                log.info(
+                    f"Range {range_str} already checked (pending for {age_seconds:.0f}s)"
+                )
                 return
         if os.path.exists(checked_file):
             log.info(f"Range {range_str} already checked (pending)")
             return
-            
+
         # Create CELERY.CHECKED
         with open(checked_file, "w") as f:
             f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
@@ -486,25 +536,23 @@ def check_latest_data_and_trigger_geoserver_import_sub_seasonal(
             f.write(f"Range: {range_str}\n")
             f.write(f"Retry: {retry}\n")
         log.info(f"Created {checked_file}")
-        
+
         # Trigger task
         c = celery.get_instance()
         c.celery_app.send_task(
-            "update_geoserver_sub_seasonal_layers",
-            args=(run_date, range_str)
+            "update_geoserver_sub_seasonal_layers", args=(run_date, range_str)
         )
-        log.info(f"Triggered update_geoserver_sub_seasonal_layers for {run_date} range {range_str}")
+        log.info(
+            f"Triggered update_geoserver_sub_seasonal_layers for {run_date} range {range_str}"
+        )
 
     watcher = DataWatcher(
         paths=sub_seasonal_path,
         ready_suffix=".READY",
-        processed_suffix=".GEOSERVER.READY"
+        processed_suffix=".GEOSERVER.READY",
     )
-    
-    watcher.check_and_trigger(
-        custom_action=custom_action,
-        skip_debounce=True
-    )
+
+    watcher.check_and_trigger(custom_action=custom_action, skip_debounce=True)
     log.info("Finished checking sub-seasonal data")
 
 
@@ -517,11 +565,11 @@ def check_latest_data_and_trigger_geoserver_import_ww3(
     Check the latest ww3 data in the given path.
     """
     log.info("Checking latest ww3 data")
-    
+
     def custom_action(identifier, latest_file, path):
         run_date = identifier
         # retry = 0
-        
+
         # # Check if processed
         # # If there's any GEOSERVER.READY file, return and we're okay
         # if any(f.endswith(".GEOSERVER.READY") for f in os.listdir(path)):
@@ -564,28 +612,23 @@ def check_latest_data_and_trigger_geoserver_import_ww3(
         # if os.path.exists(checked_file):
         #     log.info(f"Run {run_date} already checked (pending)")
         #     return
-            
+
         # # Create CELERY.CHECKED
         # with open(checked_file, "w") as f:
         #     f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
         #     f.write(f"Run: {run_date}\n")
         #     f.write(f"Retry: {retry}\n")
         # log.info(f"Created {checked_file}")
-        
+
         # Trigger task
         update_geoserver_ww3_layers.delay(run_date)
         log.info(f"Triggered update_geoserver_ww3_layers for {run_date}")
 
     watcher = DataWatcher(
-        paths=ww3_path,
-        ready_suffix=".READY",
-        processed_suffix=".GEOSERVER.READY"
+        paths=ww3_path, ready_suffix=".READY", processed_suffix=".GEOSERVER.READY"
     )
-    
-    watcher.check_and_trigger(
-        custom_action=custom_action,
-        skip_debounce=False
-    )
+
+    watcher.check_and_trigger(custom_action=custom_action, skip_debounce=False)
     log.info("Finished checking ww3 data")
 
 
@@ -626,14 +669,17 @@ def check_latest_data_and_trigger_geoserver_import_mer_bolam(
         for variable_name in variable_dirs:
             source_dir = os.path.join(forcing_dir, variable_name)
             tiff_files = [
-                f for f in os.listdir(source_dir)
+                f
+                for f in os.listdir(source_dir)
                 if f.lower().endswith((".tif", ".tiff"))
             ]
             if not tiff_files:
                 continue
 
             layer_name = f"SHYFEM-{forcing_name}-{variable_name}"
-            checked_file = os.path.join(forcing_dir, f"{run_date}.{variable_name}.CELERY.CHECKED")
+            checked_file = os.path.join(
+                forcing_dir, f"{run_date}.{variable_name}.CELERY.CHECKED"
+            )
             ready_file = os.path.join(forcing_dir, f"{run_date}.GEOSERVER.READY")
 
             if os.path.exists(ready_file):
@@ -642,7 +688,10 @@ def check_latest_data_and_trigger_geoserver_import_mer_bolam(
 
             retry = 0
             if os.path.exists(checked_file):
-                age_seconds = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(checked_file))).total_seconds()
+                age_seconds = (
+                    datetime.now()
+                    - datetime.fromtimestamp(os.path.getmtime(checked_file))
+                ).total_seconds()
                 try:
                     with open(checked_file, "r") as f:
                         lines = f.readlines()
@@ -657,15 +706,21 @@ def check_latest_data_and_trigger_geoserver_import_mer_bolam(
                 if age_seconds > 300:
                     retry += 1
                     if retry > 1:
-                        log.error(f"MER processing stuck for {layer_name} after {retry} retries")
+                        log.error(
+                            f"MER processing stuck for {layer_name} after {retry} retries"
+                        )
                         with open("/status/health_check_failure", "w") as hf:
-                            hf.write(f"MER processing stuck for {layer_name} after {retry} retries\n")
+                            hf.write(
+                                f"MER processing stuck for {layer_name} after {retry} retries\n"
+                            )
                             hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
                         os.remove(checked_file)
                         continue
                     os.remove(checked_file)
                 else:
-                    log.info(f"{layer_name} already checked (pending for {age_seconds:.0f}s)")
+                    log.info(
+                        f"{layer_name} already checked (pending for {age_seconds:.0f}s)"
+                    )
                     continue
 
             with open(checked_file, "w") as f:
@@ -680,7 +735,9 @@ def check_latest_data_and_trigger_geoserver_import_mer_bolam(
                 "update_geoserver_mer_bolam_layer",
                 args=(source_dir, forcing_dir, forcing_name, variable_name, run_date),
             )
-            log.info(f"Triggered update_geoserver_mer_bolam_layer for {layer_name} ({run_date})")
+            log.info(
+                f"Triggered update_geoserver_mer_bolam_layer for {layer_name} ({run_date})"
+            )
 
     log.info("Finished checking MER data")
 
@@ -699,7 +756,9 @@ def update_geoserver_mer_bolam_layer(
     """
     layer_name = f"SHYFEM-{forcing_name}-{variable_name}"
     store_name = f"mosaic-{layer_name}"
-    checked_file = os.path.join(forcing_dir, f"{run_date}.{variable_name}.CELERY.CHECKED")
+    checked_file = os.path.join(
+        forcing_dir, f"{run_date}.{variable_name}.CELERY.CHECKED"
+    )
     ready_file = os.path.join(forcing_dir, f"{run_date}.GEOSERVER.READY")
     target_dir = os.path.join(GEOSERVER_COPIES_BASE_DIRECTORY, layer_name)
 
@@ -708,8 +767,7 @@ def update_geoserver_mer_bolam_layer(
         return
 
     tiff_files = [
-        f for f in os.listdir(source_dir)
-        if f.lower().endswith((".tif", ".tiff"))
+        f for f in os.listdir(source_dir) if f.lower().endswith((".tif", ".tiff"))
     ]
     if not tiff_files:
         log.warning(f"No TIFF files found in {source_dir}")
@@ -725,7 +783,9 @@ def update_geoserver_mer_bolam_layer(
     os.makedirs(target_dir, exist_ok=True)
 
     for tif_name in tiff_files:
-        shutil.copy2(os.path.join(source_dir, tif_name), os.path.join(target_dir, tif_name))
+        shutil.copy2(
+            os.path.join(source_dir, tif_name), os.path.join(target_dir, tif_name)
+        )
 
     _create_mer_mosaic_config(target_dir)
 
@@ -753,12 +813,16 @@ def update_geoserver_mer_bolam_layer(
         log.error(f"Failed to publish layer {layer_name}")
         return
 
-    _enable_mer_time_dimension(GEOSERVER_URL, store_name, layer_name, USERNAME, PASSWORD)
+    _enable_mer_time_dimension(
+        GEOSERVER_URL, store_name, layer_name, USERNAME, PASSWORD
+    )
 
     # For water level layers, ensure style exists and set it as default.
     if variable_name.lower() == "wl":
         if not _ensure_mer_wl_style():
-            log.error(f"Failed to ensure SLD style '{MER_WL_STYLE_NAME}' for layer {layer_name}")
+            log.error(
+                f"Failed to ensure SLD style '{MER_WL_STYLE_NAME}' for layer {layer_name}"
+            )
             return
 
         if not associate_sld_with_layer_generic(
@@ -769,23 +833,21 @@ def update_geoserver_mer_bolam_layer(
             PASSWORD,
             GEOSERVER_WORKSPACE,
         ):
-            log.error(f"Failed to associate style '{MER_WL_STYLE_NAME}' with layer {layer_name}")
+            log.error(
+                f"Failed to associate style '{MER_WL_STYLE_NAME}' with layer {layer_name}"
+            )
             return
 
-    invalidator = GWCInvalidator(
+    schedule_cache_refresh(
+        layer_name,
         GEOSERVER_URL,
         USERNAME,
         PASSWORD,
         GEOSERVER_WORKSPACE,
-        enabled=Env.get("GEOSERVER_GWC_ENABLED", "1") == "1",
+        store_name=store_name,
         zoom_start=int(Env.get("GEOSERVER_GWC_ZOOM_START", "5")),
         zoom_stop=int(Env.get("GEOSERVER_GWC_ZOOM_STOP", "9")),
     )
-    if not invalidator.refresh_temporal_layer(
-        TemporalCacheLayer(layer_name, store_name=store_name)
-    ):
-        log.error(f"Failed to refresh GWC cache for {layer_name}")
-        return
 
     with open(ready_file, "w") as f:
         f.write(f"Processed by GeoServer at {datetime.now().isoformat()}\n")

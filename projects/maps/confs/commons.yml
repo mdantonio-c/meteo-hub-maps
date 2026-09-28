@@ -10,6 +10,7 @@ services:
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
       GEOSERVER_GWC_ENABLED: ${GEOSERVER_GWC_ENABLED}
+      GWC_CLIENT_EXPIRE_SECONDS: ${GWC_CLIENT_EXPIRE_SECONDS}
       WW3_DATA_PATH: ${WW3_DATA_PATH}
       SEASONAL_DATA_PATH: ${SEASONAL_DATA_PATH}
       RADAR_DATA_PATH: ${RADAR_DATA_PATH}
@@ -37,12 +38,29 @@ services:
   celery:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
+    command:
+      - celery
+      - --app
+      - restapi.connectors.celery.worker.celery_app
+      - worker
+      - --concurrency=1
+      - --pool=prefork
+      - -Ofair
+      - -Q
+      - ingest
+      - -n
+      - maps-ingest@%h
     environment:
       PLATFORM: ${PLATFORM}
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
       GEOSERVER_GWC_ENABLED: ${GEOSERVER_GWC_ENABLED}
+      GWC_CLIENT_EXPIRE_SECONDS: ${GWC_CLIENT_EXPIRE_SECONDS}
       GEOSERVER_DATA_PATH: ${GEOSERVER_DATA_PATH}
+      GEOSERVER_URL: http://geoserver.dockerized.io:8080/geoserver
+      GEOSERVER_WORKSPACE: meteohub
+      SLD_BASE_DIRECTORY: /SLDs
+      SYNC_SLDS_ON_STARTUP: 1
       RADAR_RETENTION_HOURS: ${RADAR_RETENTION_HOURS}
       WW3_DATA_PATH: ${WW3_DATA_PATH}
       SEASONAL_DATA_PATH: ${SEASONAL_DATA_PATH}
@@ -69,6 +87,82 @@ services:
       - ${PROJECT_DIR}/tests/custom:/code/tests/custom
       # - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
       - ${DATA_DIR}/celery_health:/status
+  gwc_cache_control:
+    extends:
+      service: celery
+    environment:
+      ACTIVATE: 1
+      PROJECT_NAME: maps
+      EXTENDED_PACKAGE: no_extended_project
+      APP_MODE: ${APP_MODE}
+      CURRENT_UID: ${CURRENT_UID}
+      CURRENT_GID: ${CURRENT_GID}
+      CELERY_ENABLE: 1
+      CELERY_BROKER_SERVICE: REDIS
+      CELERY_BACKEND_SERVICE: REDIS
+      REDIS_ENABLE: 1
+      REDIS_ENABLE_CONNECTOR: 1
+      REDIS_HOST: redis.dockerized.io
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      GWC_SEEDER_CORE_POOL_SIZE: ${GWC_SEEDER_CORE_POOL_SIZE}
+    volumes:
+      - ${SUBMODULE_DIR}/do/controller/confs/projects_defaults.yaml:/code/confs/projects_defaults.yaml
+      - ${PROJECT_DIR}/project_configuration.yaml:/code/confs/project_configuration.yaml
+      - ${PROJECT_DIR}/backend:/code/${COMPOSE_PROJECT_NAME}
+      - ${BASE_PROJECT_DIR}/backend:/code/${EXTENDED_PROJECT}
+      - ${BASE_PROJECT_DIR}/project_configuration.yaml:/code/confs/extended_project_configuration.yaml
+      - ${SUBMODULE_DIR}/http-api/restapi:${PYTHON_PATH}/restapi
+    command:
+      - celery
+      - --app
+      - restapi.connectors.celery.worker.celery_app
+      - worker
+      - --concurrency=1
+      - --pool=prefork
+      - -Ofair
+      - -Q
+      - cache-control
+      - -n
+      - maps-cache-control@%h
+  gwc_cache_warm:
+    extends:
+      service: celery
+    environment:
+      ACTIVATE: 1
+      PROJECT_NAME: maps
+      EXTENDED_PACKAGE: no_extended_project
+      APP_MODE: ${APP_MODE}
+      CURRENT_UID: ${CURRENT_UID}
+      CURRENT_GID: ${CURRENT_GID}
+      CELERY_ENABLE: 1
+      CELERY_BROKER_SERVICE: REDIS
+      CELERY_BACKEND_SERVICE: REDIS
+      REDIS_ENABLE: 1
+      REDIS_ENABLE_CONNECTOR: 1
+      REDIS_HOST: redis.dockerized.io
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      GWC_SEEDER_CORE_POOL_SIZE: ${GWC_SEEDER_CORE_POOL_SIZE}
+    volumes:
+      - ${SUBMODULE_DIR}/do/controller/confs/projects_defaults.yaml:/code/confs/projects_defaults.yaml
+      - ${PROJECT_DIR}/project_configuration.yaml:/code/confs/project_configuration.yaml
+      - ${PROJECT_DIR}/backend:/code/${COMPOSE_PROJECT_NAME}
+      - ${BASE_PROJECT_DIR}/backend:/code/${EXTENDED_PROJECT}
+      - ${BASE_PROJECT_DIR}/project_configuration.yaml:/code/confs/extended_project_configuration.yaml
+      - ${SUBMODULE_DIR}/http-api/restapi:${PYTHON_PATH}/restapi
+    command:
+      - celery
+      - --app
+      - restapi.connectors.celery.worker.celery_app
+      - worker
+      - --concurrency=${GWC_SEEDER_CORE_POOL_SIZE}
+      - --pool=prefork
+      - -Ofair
+      - -Q
+      - cache-warm
+      - -n
+      - maps-cache-warm@%h
   celerybeat:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}

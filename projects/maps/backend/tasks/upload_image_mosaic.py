@@ -16,7 +16,7 @@ from maps.tasks.geoserver_utils import (
     process_sld_files,
     check_coverage_exists,
 )
-from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer
+from maps.tasks.cache_control import schedule_cache_refresh
 
 sld_dir_mapping = {
     "hcc": ["cloud_hml-hcc"],
@@ -34,7 +34,7 @@ sld_dir_mapping = {
     "isobars": ["pressure-isob"],
     "zerot": ["zerot-hzerocl"],
     "sf_tot": ["tot_snow-snow"],
-    "prec_tot": ["tot_prec-tp"]
+    "prec_tot": ["tot_prec-tp"],
 }
 
 # === CONFIGURATION ===
@@ -48,7 +48,10 @@ BASE_PATH = Env.get("WINDY_INGEST_BASE_PATH", "/windy")
 WINDY_INGEST_AREA = Env.get("WINDY_INGEST_AREA", "Italia")
 # TIFF_DIR = f"{BASE_PATH}/Windy-12-ICON_2I_all2km.web/Italia"  # Local path containing .tiff files
 GEOSERVER_HOST_PATH = f"/geoserver_data/{RENAMED_FILES}"
-GEOSERVER_DATA_DIR = f"geoserver_data/{RENAMED_FILES}/"  # Path where GeoServer can access TIFFs
+GEOSERVER_DATA_DIR = (
+    f"geoserver_data/{RENAMED_FILES}/"  # Path where GeoServer can access TIFFs
+)
+
 
 def _ingest_windy_image_mosaic(
     geoserver_url: str,
@@ -61,12 +64,19 @@ def _ingest_windy_image_mosaic(
 ) -> list:
     """Ingest Windy mosaics and return published layer names for GWC seeding."""
     GEOSERVER_URL = geoserver_url
-    log.info(f"Starting WRF/Windy ingestion: dataset={dataset_folder}, run={run}, date={date}")
-    tiff_dir = source_directory or f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/{WINDY_INGEST_AREA}"
+    log.info(
+        f"Starting WRF/Windy ingestion: dataset={dataset_folder}, run={run}, date={date}"
+    )
+    tiff_dir = (
+        source_directory
+        or f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/{WINDY_INGEST_AREA}"
+    )
     log.info(f"TIFF_DIR: {tiff_dir}")
 
     # Ensure workspace exists before uploading
-    create_workspace_generic(GEOSERVER_URL, GEOSERVER_USERNAME, GEOSERVER_PASSWORD, WORKSPACE)
+    create_workspace_generic(
+        GEOSERVER_URL, GEOSERVER_USERNAME, GEOSERVER_PASSWORD, WORKSPACE
+    )
 
     sld_directory = os.path.join(sld_directory, "windy")
     update_styles(sld_directory)
@@ -82,7 +92,9 @@ def _ingest_windy_image_mosaic(
     for folder in os.listdir(TIFF_DIR):
         folder_path = os.path.join(TIFF_DIR, folder)
         if os.path.isdir(folder_path):
-            flat_sld_dirs = [item for sublist in sld_dir_mapping.values() for item in sublist]
+            flat_sld_dirs = [
+                item for sublist in sld_dir_mapping.values() for item in sublist
+            ]
             if folder in flat_sld_dirs:
                 log.info(f"Processing folder: {folder} (dataset={dataset_folder})")
                 geoserver_name = f"WRF-{folder}" if dataset_folder == "WRF" else folder
@@ -93,7 +105,9 @@ def _ingest_windy_image_mosaic(
                     log.warning(f"No TIFF files found in {folder}, skipping")
                     continue
                 log.info(f"Processing TIFFs for {folder} -> {geoserver_name}")
-                process_and_rename_tiffs(date_edit, run, folder, TIFF_DIR, geoserver_name)
+                process_and_rename_tiffs(
+                    date_edit, run, folder, TIFF_DIR, geoserver_name
+                )
             else:
                 log.debug(f"Skipping folder {folder} (not in SLD mapping)")
                 continue
@@ -119,23 +133,28 @@ def _ingest_windy_image_mosaic(
             log.info(f"Binding SLD for {geoserver_name} using folder {folder}")
             bind_sld(folder, geoserver_name, GEOSERVER_URL)
             log.info(f"Enabling time dimension for {geoserver_name}")
-            time_enabled = enable_time_dimension(geoserver_name, geoserver_name, GEOSERVER_URL)
+            time_enabled = enable_time_dimension(
+                geoserver_name, geoserver_name, GEOSERVER_URL
+            )
             if published and time_enabled:
                 log.info(f"Successfully ingested layer: {geoserver_name}")
                 layers.append(geoserver_name)
             else:
-                log.error(f"Layer {geoserver_name} published={published}, time_enabled={time_enabled}")
-    log.info(f"Ingestion complete: {len(layers)} layers processed for {dataset_folder} run {run}")
-    invalidator = GWCInvalidator(
-        GEOSERVER_URL, GEOSERVER_USERNAME, GEOSERVER_PASSWORD, WORKSPACE, enabled=True
+                log.error(
+                    f"Layer {geoserver_name} published={published}, time_enabled={time_enabled}"
+                )
+    log.info(
+        f"Ingestion complete: {len(layers)} layers processed for {dataset_folder} run {run}"
     )
     for layer_name in layers:
-        try:
-            if not invalidator.refresh_temporal_layer(TemporalCacheLayer(layer_name)):
-                raise RuntimeError("could not refresh the GWC layer cache")
-            log.info(f"Refreshed GWC cache for {layer_name}")
-        except Exception as exc:
-            log.error(f"Failed to refresh GWC cache for {layer_name}: {exc}")
+        schedule_cache_refresh(
+            layer_name,
+            GEOSERVER_URL,
+            GEOSERVER_USERNAME,
+            GEOSERVER_PASSWORD,
+            WORKSPACE,
+        )
+        log.info("Scheduled priority GWC invalidation for {}", layer_name)
     log.info(f"Final layer count for {dataset_folder}: {len(layers)}")
     return layers
 
@@ -159,13 +178,19 @@ def update_geoserver_image_mosaic(
             dataset_folder=dataset_folder,
             source_directory=source_directory,
         )
-        log.info(f"Successfully ingested {len(layers)} layers for {dataset_folder} run {run}")
+        log.info(
+            f"Successfully ingested {len(layers)} layers for {dataset_folder} run {run}"
+        )
     except Exception as e:
         log.error(f"Failed to ingest {dataset_folder} run {run}: {e}")
         raise
 
-    tiff_dir = source_directory or f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/{WINDY_INGEST_AREA}"
+    tiff_dir = (
+        source_directory
+        or f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/{WINDY_INGEST_AREA}"
+    )
     create_ready_file(tiff_dir, run, date)
+
 
 def update_styles(sld_directory: Optional[str] = None) -> None:
     if sld_directory:
@@ -176,8 +201,9 @@ def update_styles(sld_directory: Optional[str] = None) -> None:
         for folder in os.listdir(sld_directory):
             create_or_update_sld(folder, sld_directory)
 
+
 def create_or_update_sld(folder: str, sld_directory: str) -> None:
-    style_name = folder.rsplit('.')[0]
+    style_name = folder.rsplit(".")[0]
     sld_path = os.path.join(sld_directory, folder)
     if not os.path.exists(sld_path):
         print(f"❌ SLD path does not exist: {sld_path}")
@@ -189,14 +215,17 @@ def create_or_update_sld(folder: str, sld_directory: str) -> None:
         print(f"❌ SLD file does not exist or is not a file: {sld_file}")
         return
 
-    with open(sld_file, 'r', encoding='utf-8') as f:
+    with open(sld_file, "r", encoding="utf-8") as f:
         sld_content = f.read()
-        
+
     url = f"{GEOSERVER_URL}/rest/styles/{style_name}"
-    headers = {
-        "Content-Type": "application/vnd.ogc.sld+xml"
-    }
-    response = requests.put(url, headers=headers, data=sld_content, auth=(GEOSERVER_USERNAME, GEOSERVER_PASSWORD))
+    headers = {"Content-Type": "application/vnd.ogc.sld+xml"}
+    response = requests.put(
+        url,
+        headers=headers,
+        data=sld_content,
+        auth=(GEOSERVER_USERNAME, GEOSERVER_PASSWORD),
+    )
     if response.status_code in [200, 201]:
         print("Style updated successfully.")
     else:
@@ -209,15 +238,20 @@ def create_or_update_sld(folder: str, sld_directory: str) -> None:
             username=GEOSERVER_USERNAME,
             password=GEOSERVER_PASSWORD,
         )
-        
+
+
 def upload_sld(geoserver_url, sld_content, layer_name, username, password):
     """Unified function to upload the SLD to GeoServer."""
-    return upload_sld_generic(geoserver_url, sld_content, layer_name, username, password)
-    
+    return upload_sld_generic(
+        geoserver_url, sld_content, layer_name, username, password
+    )
+
+
 def create_ready_file(base_path, run: str, date: str) -> None:
     """Create a ready file to indicate that the process is complete."""
     identifier = f"{date}{run}"
-    create_ready_file_generic(base_path, identifier, "windy")    
+    create_ready_file_generic(base_path, identifier, "windy")
+
 
 def write_mosaic_config_files(output_dir):
     indexer_content = """PropertyCollectors=TimestampFileNameExtractorSPI[timeregex](time)
@@ -237,10 +271,15 @@ def write_mosaic_config_files(output_dir):
 
     print("📝 Wrote indexer.properties and timeregex.properties")
 
-def process_and_rename_tiffs(base_date_str, start_hour, folder, TIFF_DIR, output_store_name):
+
+def process_and_rename_tiffs(
+    base_date_str, start_hour, folder, TIFF_DIR, output_store_name
+):
     print("🔄 Processing and renaming TIFFs...")
 
-    base_datetime = datetime.strptime(base_date_str, "%Y-%m-%d") + timedelta(hours=int(start_hour))
+    base_datetime = datetime.strptime(base_date_str, "%Y-%m-%d") + timedelta(
+        hours=int(start_hour)
+    )
     # Keep Windy and WRF mosaics isolated by writing to the target store/layer folder.
     output_dir = os.path.join(GEOSERVER_HOST_PATH, output_store_name)
     os.makedirs(GEOSERVER_HOST_PATH, exist_ok=True)
@@ -257,18 +296,23 @@ def process_and_rename_tiffs(base_date_str, start_hour, folder, TIFF_DIR, output
     subdir_path = os.path.join(TIFF_DIR, folder)
     print("--------------------------------" + subdir_path)
 
-    nomecartella, nomevariabile = subdir_path.rsplit('-', 1)
+    nomecartella, nomevariabile = subdir_path.rsplit("-", 1)
 
     # Extract offset from end of nomecartella (e.g., "cum6" → 6)
-    match = re.search(r'(\d+)$', nomecartella)
+    match = re.search(r"(\d+)$", nomecartella)
     cumulata_offset = int(match.group(1)) if match else 0
-    print(f"📁 Entering: {subdir_path} (variabile: {nomevariabile}) ➕ Offset: {cumulata_offset}")
+    print(
+        f"📁 Entering: {subdir_path} (variabile: {nomevariabile}) ➕ Offset: {cumulata_offset}"
+    )
 
     # Get matching files
-    tiff_files = sorted([
-        f for f in os.listdir(subdir_path)
-        if f.startswith(f"{nomevariabile}_comp_") and f.endswith(".tif")
-    ])
+    tiff_files = sorted(
+        [
+            f
+            for f in os.listdir(subdir_path)
+            if f.startswith(f"{nomevariabile}_comp_") and f.endswith(".tif")
+        ]
+    )
 
     for i, filename in enumerate(tiff_files):
         total_hours = cumulata_offset + i
@@ -288,14 +332,15 @@ def process_and_rename_tiffs(base_date_str, start_hour, folder, TIFF_DIR, output
         except OSError:
             pass  # Directory not empty or still in use
 
+
 # === UTILS ===
 def create_image_mosaic_store(store_name, GEOSERVER_URL):
     """Create or refresh an ImageMosaic store with improved handling."""
     from maps.tasks.geoserver_utils import upload_geotiff_generic
-    
+
     # Use the directory path for the mosaic
     mosaic_path = os.path.join(GEOSERVER_DATA_DIR, store_name)
-    
+
     # Use the improved generic function that handles ImageMosaic updates properly
     success = upload_geotiff_generic(
         geoserver_url=GEOSERVER_URL,
@@ -303,9 +348,9 @@ def create_image_mosaic_store(store_name, GEOSERVER_URL):
         store_name=store_name,
         username=GEOSERVER_USERNAME,
         password=GEOSERVER_PASSWORD,
-        workspace=WORKSPACE
+        workspace=WORKSPACE,
     )
-    
+
     if success:
         print(f"✅ Successfully created/updated ImageMosaic store: {store_name}")
         return True
@@ -316,6 +361,7 @@ def create_image_mosaic_store(store_name, GEOSERVER_URL):
     print("✅ Created coverage store.")
     return True
 
+
 # def delete_coverage_store(folder):
 #     url = f"{GEOSERVER_URL}/rest/workspaces/{WORKSPACE}/coveragestores/{folder}?recurse=true"
 #     r = requests.delete(url, auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD))
@@ -325,6 +371,7 @@ def create_image_mosaic_store(store_name, GEOSERVER_URL):
 #         print("ℹ️ No existing coverage store found.")
 #     else:
 #         print(f"❌ Failed to delete coverage store: {r.status_code} - {r.text}")
+
 
 def publish_layer(layer_name, native_coverage_name, GEOSERVER_URL):
     url = f"{GEOSERVER_URL}/rest/workspaces/{WORKSPACE}/coveragestores/{layer_name}/coverages"
@@ -341,8 +388,12 @@ def publish_layer(layer_name, native_coverage_name, GEOSERVER_URL):
     </coverage>
     """.strip()
 
-    r = requests.post(url, data=data, headers=headers,
-                      auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD))
+    r = requests.post(
+        url,
+        data=data,
+        headers=headers,
+        auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD),
+    )
     if r.status_code == 409:
         print("ℹ️ Mosaic layer already published.")
         return True
@@ -351,6 +402,7 @@ def publish_layer(layer_name, native_coverage_name, GEOSERVER_URL):
         return False
     print("✅ Published mosaic layer.")
     return True
+
 
 def bind_sld(folder, layer_name, GEOSERVER_URL):
     sld = [key for key, values in sld_dir_mapping.items() if folder in values]
@@ -369,20 +421,22 @@ def bind_sld(folder, layer_name, GEOSERVER_URL):
     </layer>
     """.strip()
 
-    r = requests.put(url, data=data, headers=headers,
-                     auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD))
+    r = requests.put(
+        url,
+        data=data,
+        headers=headers,
+        auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD),
+    )
     if r.status_code not in [200, 201]:
         print("❌ Failed to enable time dimension:", r.text)
         return False
     print("✅ Time dimension enabled and style applied.")
     return True
 
+
 def enable_time_dimension(store_name, coverage_name, GEOSERVER_URL):
     url = f"{GEOSERVER_URL}/rest/workspaces/{WORKSPACE}/coveragestores/{store_name}/coverages/{coverage_name}"
-    headers = {
-        "Content-Type": "application/xml",
-        "Accept": "application/xml"
-    }
+    headers = {"Content-Type": "application/xml", "Accept": "application/xml"}
     data = f"""
     <coverage>
         <enabled>true</enabled>
@@ -393,7 +447,7 @@ def enable_time_dimension(store_name, coverage_name, GEOSERVER_URL):
                     <presentation>LIST</presentation>
                     <units>ISO8601</units>
                     <defaultValue>
-                        <strategy>MINIMUM</strategy>
+                        <strategy>MAXIMUM</strategy>
                     </defaultValue>
                 </dimensionInfo>
             </entry>
@@ -401,17 +455,24 @@ def enable_time_dimension(store_name, coverage_name, GEOSERVER_URL):
     </coverage>
     """.strip()
 
-    r = requests.put(url, data=data, headers=headers,
-                     auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD))
+    r = requests.put(
+        url,
+        data=data,
+        headers=headers,
+        auth=HTTPBasicAuth(GEOSERVER_USERNAME, GEOSERVER_PASSWORD),
+    )
     if r.status_code not in [200, 201]:
         print("❌ Failed to enable time dimension:", r.text)
         return False
     print("✅ Time dimension enabled and style applied.")
     return True
 
+
 def ensure_tiff_files_exist(folder, TIFF_DIR):
     tiff_folder = os.path.join(TIFF_DIR, folder)
-    tiff_files = [f for f in os.listdir(tiff_folder) if f.endswith(".tif") or f.endswith(".tiff")]
+    tiff_files = [
+        f for f in os.listdir(tiff_folder) if f.endswith(".tif") or f.endswith(".tiff")
+    ]
     if not tiff_files:
         print("⚠️ No TIFF files found.")
         return False

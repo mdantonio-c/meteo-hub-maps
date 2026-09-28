@@ -83,6 +83,11 @@ class Initializer:
             args=[],
         )
 
+        task = c.celery_app.send_task(
+            name="initialize_geoserver",
+            args=[],
+        )
+
         # Thredds integration disabled.
         # task = c.create_crontab_task(
         #     name="check_latest_data_and_trigger_thredds_ingestion",

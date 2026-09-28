@@ -91,6 +91,15 @@ class StartMonitoring(EndpointResource):
     #@check_ip_access(ALLOWED_IPS)
     def post(self):
         c = celery.get_instance()
+
+        task = c.celery_app.send_task(
+            name="initialize_geoserver",
+            args=[],
+            queue="ingest"
+        )
+
+        self.delete()
+
         # Create a periodic task to check for the latest data and trigger Geoserver import
         task = c.create_crontab_task(
             name="check_latest_data_and_trigger_geoserver_import_windy",
@@ -152,17 +161,6 @@ class StartMonitoring(EndpointResource):
             task="check_latest_data_and_trigger_geoserver_import_mer_bolam",
             args=[],
         )
-        # Thredds integration disabled.
-        # task = c.create_crontab_task(
-        #     name="check_latest_data_and_trigger_thredds_ingestion",
-        #     hour="*",
-        #     minute="*",
-        #     day_of_week="*",
-        #     day_of_month="*",
-        #     month_of_year="*",
-        #     task="check_latest_data_and_trigger_thredds_ingestion",
-        #     args=[],
-        # )
         return self.response("Monitoring started", code=202)
     
     @decorators.endpoint(

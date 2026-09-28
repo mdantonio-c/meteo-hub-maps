@@ -72,14 +72,18 @@ def test_allows_duplicate_route_templates() -> None:
 
 
 def test_registry_rejects_unknown_dataset() -> None:
-    registry = DatasetRegistry(load_manifest(Path(__file__).parents[3] / "datasets.yml"))
+    registry = DatasetRegistry(
+        load_manifest(Path(__file__).parents[3] / "datasets.yml")
+    )
 
     with pytest.raises(ManifestError, match="unknown dataset"):
         registry.get("missing")
 
 
 def test_registry_resolves_configured_adapter() -> None:
-    registry = DatasetRegistry(load_manifest(Path(__file__).parents[3] / "datasets.yml"))
+    registry = DatasetRegistry(
+        load_manifest(Path(__file__).parents[3] / "datasets.yml")
+    )
 
     assert registry.get("icon").adapter == "windy_image_mosaic"
     assert registry.get("wrf").adapter == "windy_image_mosaic"
@@ -106,9 +110,9 @@ def test_temporal_config_writer_creates_geoserver_files(tmp_path: Path) -> None:
     assert "TimestampFileNameExtractorSPI" in (
         tmp_path / "indexer.properties"
     ).read_text(encoding="utf-8")
-    assert "format=yyyyMMddHH" in (
-        tmp_path / "timeregex.properties"
-    ).read_text(encoding="utf-8")
+    assert "format=yyyyMMddHH" in (tmp_path / "timeregex.properties").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_dataset_lock_is_reentrant_after_release(tmp_path: Path) -> None:
@@ -120,10 +124,14 @@ def test_dataset_lock_is_reentrant_after_release(tmp_path: Path) -> None:
 
 
 def test_gwc_invalidator_is_noop_when_disabled() -> None:
-    assert GWCInvalidator("http://geoserver", "user", "password", "meteohub").truncate("t2m")
+    assert GWCInvalidator("http://geoserver", "user", "password", "meteohub").truncate(
+        "t2m"
+    )
 
 
-def test_gwc_invalidator_adds_time_parameter_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gwc_invalidator_adds_time_parameter_filter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class Response:
         status_code = 200
         content = b"""<GeoServerLayer>
@@ -145,7 +153,9 @@ def test_gwc_invalidator_adds_time_parameter_filter(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(cache.requests, "get", fake_get)
     monkeypatch.setattr(cache.requests, "put", fake_put)
 
-    invalidator = GWCInvalidator("http://geoserver", "user", "password", "meteohub", enabled=True)
+    invalidator = GWCInvalidator(
+        "http://geoserver", "user", "password", "meteohub", enabled=True
+    )
 
     assert invalidator.ensure_time_parameter_filter("layer")
     assert put_calls[0][0][0] == "http://geoserver/gwc/rest/layers/meteohub:layer.xml"
@@ -154,7 +164,7 @@ def test_gwc_invalidator_adds_time_parameter_filter(monkeypatch: pytest.MonkeyPa
     assert b"<regex>.*</regex>" in payload
     assert b"<gridSetName>EPSG:900913_1024</gridSetName>" in payload
     assert b"<expireCache>86400</expireCache>" in payload
-    assert b"<expireClients>86400</expireClients>" in payload
+    assert b"<expireClients>300</expireClients>" in payload
 
 
 def test_gwc_invalidator_keeps_existing_time_parameter_filter(
@@ -164,7 +174,7 @@ def test_gwc_invalidator_keeps_existing_time_parameter_filter(
         status_code = 200
         content = b"""<GeoServerLayer><gridSubsets><gridSubset>
           <gridSetName>EPSG:900913_1024</gridSetName>
-        </gridSubset></gridSubsets><expireCache>86400</expireCache><expireClients>86400</expireClients><parameterFilters>
+        </gridSubset></gridSubsets><expireCache>86400</expireCache><expireClients>300</expireClients><parameterFilters>
           <regexParameterFilter><key>TIME</key><defaultValue/><regex>.*</regex></regexParameterFilter>
         </parameterFilters></GeoServerLayer>"""
 
@@ -175,7 +185,9 @@ def test_gwc_invalidator_keeps_existing_time_parameter_filter(
         lambda *args, **kwargs: pytest.fail("existing TIME filter must not be updated"),
     )
 
-    invalidator = GWCInvalidator("http://geoserver", "user", "password", "meteohub", enabled=True)
+    invalidator = GWCInvalidator(
+        "http://geoserver", "user", "password", "meteohub", enabled=True
+    )
 
     assert invalidator.ensure_time_parameter_filter("layer")
 
@@ -194,6 +206,9 @@ def test_dataset_file_path_is_confined_to_dataset_root(tmp_path: Path) -> None:
     )
     (tmp_path / "valid.tif").write_bytes(b"data")
 
-    assert safe_dataset_file_path(config, "valid.tif", lambda name, default: default) == (tmp_path / "valid.tif").resolve()
+    assert (
+        safe_dataset_file_path(config, "valid.tif", lambda name, default: default)
+        == (tmp_path / "valid.tif").resolve()
+    )
     with pytest.raises(ManifestError, match="invalid dataset file path"):
         safe_dataset_file_path(config, "../outside.tif", lambda name, default: default)

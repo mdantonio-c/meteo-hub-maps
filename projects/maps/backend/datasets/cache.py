@@ -1,6 +1,7 @@
 """GeoWebCache invalidation adapter."""
 
 import os
+import shutil
 import time
 import logging
 from dataclasses import dataclass
@@ -13,7 +14,9 @@ import requests
 log = logging.getLogger(__name__)
 
 SEED_ZOOM_START = 5
-SEED_ZOOM_STOP = 9
+# Temporal forecast layers follow the manifest-wide cache policy. Raster
+# sources such as radar pass their explicit 5-9 range to the invalidator.
+SEED_ZOOM_STOP = 8
 GWC_ENABLED_DEFAULT = os.environ.get("GEOSERVER_GWC_ENABLED", "1") == "1"
 # Caps how many TIME values get an individual seed/truncate request per call,
 # so a mosaic with a long history doesn't trigger hundreds of HTTP requests.
@@ -23,10 +26,13 @@ WEB_MERCATOR_GRID_SET = "EPSG:900913"
 GWC_GRID_SET = os.environ.get("GWC_GRID_SET", "EPSG:900913_1024")
 GWC_TILE_SIZE = int(os.environ.get("GWC_TILE_SIZE", "1024"))
 GWC_IMAGE_FORMAT = os.environ.get("GWC_IMAGE_FORMAT", "image/png")
+GWC_BLOBSTORE_ROOT = os.environ.get("GEOSERVER_DATA_PATH", "/geoserver_data")
 # Ingestion explicitly removes stale entries. Expiry is a safety net when an
 # ingestion fails before truncating its layer.
 GWC_CACHE_EXPIRE_SECONDS = int(os.environ.get("GWC_CACHE_EXPIRE_SECONDS", "86400"))
-GWC_CLIENT_EXPIRE_SECONDS = int(os.environ.get("GWC_CLIENT_EXPIRE_SECONDS", "3600"))
+# Forecast publication invalidates server-side tiles, but browsers cannot be
+# purged. Keep their copy below the five-minute radar update cadence.
+GWC_CLIENT_EXPIRE_SECONDS = int(os.environ.get("GWC_CLIENT_EXPIRE_SECONDS", "300"))
 # Max seconds to wait for GWC seed queue to drain (tile generation).
 GWC_SEED_WAIT_TIMEOUT = int(os.environ.get("GWC_SEED_WAIT_TIMEOUT", "1800"))
 # Seconds between seed queue polls.
@@ -108,8 +114,8 @@ class GWCInvalidator:
             seed_type,
             GWC_GRID_SET,
             GWC_IMAGE_FORMAT,
-             self.zoom_start,
-             self.zoom_stop,
+            self.zoom_start,
+            self.zoom_stop,
             thread_count,
             parameters_xml,
         )
@@ -130,10 +136,14 @@ class GWCInvalidator:
         """Get the style GeoServer resolves for an empty WMS STYLES parameter."""
         url = f"{self.base_url}/rest/layers/{self.workspace}:{layer_name}.json"
         try:
-            response = requests.get(url, auth=(self.username, self.password), timeout=self.timeout)
+            response = requests.get(
+                url, auth=(self.username, self.password), timeout=self.timeout
+            )
             if response.status_code != 200:
-                log.error(f"GeoServer default style lookup failed for {layer_name}: "
-                          f"HTTP {response.status_code} {response.text}")
+                log.error(
+                    f"GeoServer default style lookup failed for {layer_name}: "
+                    f"HTTP {response.status_code} {response.text}"
+                )
                 return None
             return response.json().get("layer", {}).get("defaultStyle", {}).get("name")
         except (requests.RequestException, ValueError):
@@ -141,7 +151,9 @@ class GWCInvalidator:
             return None
 
     def _wait_for_seed_completion(
-        self, layer_name: str, timeout: float = GWC_SEED_WAIT_TIMEOUT,
+        self,
+        layer_name: str,
+        timeout: float = GWC_SEED_WAIT_TIMEOUT,
         poll_interval: float = GWC_SEED_POLL_INTERVAL,
     ) -> bool:
         """Poll GWC seed queue until seeding completes or timeout.
@@ -167,25 +179,35 @@ class GWCInvalidator:
 
                 data = response.json()
 
-                # GWC 2.x returns a flat structure with inQueue/inProgress at top level
-                # Some versions wrap it under "seedQueue" key
-                if "seedQueue" in data:
-                    seed_queue = data["seedQueue"]
+                # GeoWebCache's native endpoint returns task arrays as
+                # [processed, total, remaining_seconds, id, status], where
+                # 0=pending, 1=running, 2=done, and -1=aborted. GeoServer
+                # versions may instead expose inQueue/inProgress metadata.
+                task_arrays = data.get("long-array-array")
+                if task_arrays is not None:
+                    active = any(
+                        len(task) >= 5 and task[4] in (0, 1) for task in task_arrays
+                    )
+                    if not active:
+                        return True
                 else:
-                    seed_queue = data
+                    # GWC 2.x returns a flat structure with inQueue/inProgress
+                    # at top level; some versions wrap it under seedQueue.
+                    seed_queue = data.get("seedQueue", data)
+                    in_queue = seed_queue.get("inQueue", False)
+                    in_progress = seed_queue.get("inProgress", False)
 
-                in_queue = seed_queue.get("inQueue", False)
-                in_progress = seed_queue.get("inProgress", False)
-
-                # If both are false, seeding is complete
-                if not in_queue and not in_progress:
-                    # Check for any failed tasks as a safety net
-                    tasks = seed_queue.get("tasks", [])
-                    if tasks:
-                        failed = any(t.get("status") == "failed" for t in tasks)
-                        if failed:
-                            return False
-                    return True
+                    # If both are false, seeding is complete.
+                    if not in_queue and not in_progress:
+                        # Check for any failed tasks as a safety net.
+                        tasks = seed_queue.get("tasks", [])
+                        if tasks:
+                            failed = any(
+                                task.get("status") == "failed" for task in tasks
+                            )
+                            if failed:
+                                return False
+                        return True
 
                 timeout -= poll_interval
                 time.sleep(poll_interval)
@@ -196,6 +218,39 @@ class GWCInvalidator:
 
         return False
 
+    def cancel_seed_tasks(self, layer_name: str) -> bool:
+        """Cancel pending and running GWC work for one layer.
+
+        GWC schedules seed and truncate requests in a shared FIFO queue.  A
+        newer publication must remove obsolete warming before its truncate is
+        submitted; otherwise a fresh cache invalidation can wait behind tiles
+        that are already stale.
+        """
+        if not self.enabled:
+            return True
+
+        layer_id = f"{self.workspace}:{layer_name}"
+        url = f"{self.base_url}/gwc/rest/seed/{layer_id}"
+        try:
+            response = requests.post(
+                url,
+                data={"kill_all": "all"},
+                auth=(self.username, self.password),
+                timeout=self.timeout,
+            )
+        except requests.RequestException:
+            log.exception("GWC seed cancellation failed for {}", layer_name)
+            return False
+        if response.status_code != 200:
+            log.error(
+                "GWC seed cancellation failed for {}: HTTP {} {}",
+                layer_name,
+                response.status_code,
+                response.text,
+            )
+            return False
+        return True
+
     def ensure_time_parameter_filter(self, layer_name: str) -> bool:
         """Configure GWC to cache distinct WMS TIME parameter values for a layer."""
         if not self.enabled:
@@ -204,10 +259,14 @@ class GWCInvalidator:
         layer_id = f"{self.workspace}:{layer_name}"
         url = f"{self.base_url}/gwc/rest/layers/{layer_id}.xml"
         try:
-            response = requests.get(url, auth=(self.username, self.password), timeout=self.timeout)
+            response = requests.get(
+                url, auth=(self.username, self.password), timeout=self.timeout
+            )
             if response.status_code != 200:
-                log.error(f"GWC layer configuration lookup failed for {layer_name}: "
-                          f"HTTP {response.status_code} {response.text}")
+                log.error(
+                    f"GWC layer configuration lookup failed for {layer_name}: "
+                    f"HTTP {response.status_code} {response.text}"
+                )
                 return False
             layer = ElementTree.fromstring(response.content)
         except (requests.RequestException, ElementTree.ParseError):
@@ -229,16 +288,24 @@ class GWCInvalidator:
 
         grid_subsets = layer.find("gridSubsets")
         current_grid_sets = (
-            [item.findtext("gridSetName") for item in grid_subsets] if grid_subsets is not None else []
+            [item.findtext("gridSetName") for item in grid_subsets]
+            if grid_subsets is not None
+            else []
         )
         cache_expiry = layer.find("expireCache")
         client_expiry = layer.find("expireClients")
-        cache_expiry_is_current = (
-            cache_expiry is not None and cache_expiry.text == str(GWC_CACHE_EXPIRE_SECONDS)
+        cache_expiry_is_current = cache_expiry is not None and cache_expiry.text == str(
+            GWC_CACHE_EXPIRE_SECONDS
         )
         client_expiry_is_current = (
-            client_expiry is not None and client_expiry.text == str(GWC_CLIENT_EXPIRE_SECONDS)
+            client_expiry is not None
+            and client_expiry.text == str(GWC_CLIENT_EXPIRE_SECONDS)
         )
+        # A layer can retain a gridset reference after its gridset was removed
+        # from GWC. Verify it before accepting the otherwise-current layer
+        # configuration; GWC then fails requests with a null GridSubset.
+        if not self._ensure_grid_set():
+            return False
         if (
             current_grid_sets == [GWC_GRID_SET]
             and not filter_added
@@ -246,8 +313,6 @@ class GWCInvalidator:
             and client_expiry_is_current
         ):
             return True
-        if not self._ensure_grid_set():
-            return False
         if grid_subsets is not None:
             layer.remove(grid_subsets)
         grid_subsets = ElementTree.SubElement(layer, "gridSubsets")
@@ -271,8 +336,10 @@ class GWCInvalidator:
             log.exception(f"GWC layer configuration update failed for {layer_name}")
             return False
         if response.status_code not in (200, 201):
-            log.error(f"GWC layer configuration update failed for {layer_name}: "
-                      f"HTTP {response.status_code} {response.text}")
+            log.error(
+                f"GWC layer configuration update failed for {layer_name}: "
+                f"HTTP {response.status_code} {response.text}"
+            )
         return response.status_code in (200, 201)
 
     def _ensure_grid_set(self) -> bool:
@@ -290,17 +357,16 @@ class GWCInvalidator:
         if response.status_code == 200:
             return True
         gridset_missing = response.status_code == 404 or (
-            response.status_code == 500
-            and "does not exist" in response.text.lower()
+            response.status_code == 500 and "does not exist" in response.text.lower()
         )
         if not gridset_missing:
-            log.error(f"GWC gridset lookup failed for {GWC_GRID_SET}: "
-                      f"HTTP {response.status_code} {response.text}")
+            log.error(
+                f"GWC gridset lookup failed for {GWC_GRID_SET}: "
+                f"HTTP {response.status_code} {response.text}"
+            )
             return False
 
-        resolutions = [
-            156543.03392804097 / (2**zoom) for zoom in range(23)
-        ]
+        resolutions = [156543.03392804097 / (2**zoom) for zoom in range(23)]
         resolution_xml = "".join(
             f"<double>{resolution}</double>" for resolution in resolutions
         )
@@ -334,8 +400,10 @@ class GWCInvalidator:
             log.exception(f"GWC gridset creation failed for {GWC_GRID_SET}")
             return False
         if response.status_code not in (200, 201):
-            log.error(f"GWC gridset creation failed for {GWC_GRID_SET}: "
-                      f"HTTP {response.status_code} {response.text}")
+            log.error(
+                f"GWC gridset creation failed for {GWC_GRID_SET}: "
+                f"HTTP {response.status_code} {response.text}"
+            )
         return response.status_code in (200, 201)
 
     def truncate(
@@ -343,14 +411,19 @@ class GWCInvalidator:
         layer_name: str,
         times: Optional[Iterable[str]] = None,
         style_name: Optional[str] = None,
+        wait_per_time: bool = True,
     ) -> bool:
         """Truncate one layer's GWC cache; disabled mode is an intentional no-op.
 
         Args:
             layer_name: Layer name without workspace prefix.
             times: Optional ISO8601 TIME dimension values to truncate individually.
-                   When omitted, removes every cache variant for the layer,
-                   including stale dates and styles no longer in the mosaic.
+                    When omitted, removes every cache variant for the layer,
+                    including stale dates and styles no longer in the mosaic.
+            wait_per_time: When False, submit all truncate requests before
+                    waiting once for GeoWebCache to drain. Use only while a
+                    controller lock prevents warm submissions from entering
+                    GWC between the truncate requests.
         """
         if not self.enabled:
             return True
@@ -358,20 +431,32 @@ class GWCInvalidator:
         time_values = list(times) if times else [None]
         for index, time_value in enumerate(time_values):
             if not self._seed_request(
-                layer_name, "truncate", time_value, thread_count=1, style_name=style_name
+                layer_name,
+                "truncate",
+                time_value,
+                thread_count=1,
+                style_name=style_name,
             ):
                 return False
+            if not wait_per_time:
+                continue
             # Truncation updates the file blob-store quota asynchronously.
-            # Waiting per TIME prevents multiple deletions from filling the
-            # quota update queue and blocking subsequent truncate tasks.
+            # Existing direct callers retain this conservative behavior.
             if not self._wait_for_seed_completion(layer_name):
                 log.error(
-                    "GWC truncate did not complete for %s (TIME %s/%s)",
+                    "GWC truncate did not complete for {} (TIME {}/{})",
                     layer_name,
                     index + 1,
                     len(time_values),
                 )
                 return False
+        if not wait_per_time and not self._wait_for_seed_completion(layer_name):
+            log.error(
+                "GWC batch truncate did not complete for {} ({} TIME values)",
+                layer_name,
+                len(time_values),
+            )
+            return False
         return True
 
     def seed(
@@ -408,8 +493,9 @@ class GWCInvalidator:
                 return False
         return True
 
-    def get_granule_times(self, layer_name: str, store_name: Optional[str] = None,
-                          all_times: bool = False) -> List[str]:
+    def get_granule_times(
+        self, layer_name: str, store_name: Optional[str] = None, all_times: bool = False
+    ) -> List[str]:
         """Fetch the ISO8601 TIME values currently present in a mosaic layer's granule index.
 
         Args:
@@ -428,13 +514,17 @@ class GWCInvalidator:
             f"{store}/coverages/{layer_name}/index/granules.json"
         )
         try:
-            response = requests.get(url, auth=(self.username, self.password), timeout=self.timeout)
+            response = requests.get(
+                url, auth=(self.username, self.password), timeout=self.timeout
+            )
         except requests.RequestException:
             log.exception(f"GWC granule lookup failed for {layer_name} at {store}")
             return []
         if response.status_code != 200:
-            log.error(f"GWC granule lookup failed for {layer_name} at {store}: "
-                      f"HTTP {response.status_code} {response.text}")
+            log.error(
+                f"GWC granule lookup failed for {layer_name} at {store}: "
+                f"HTTP {response.status_code} {response.text}"
+            )
             return []
 
         try:
@@ -453,6 +543,64 @@ class GWCInvalidator:
             return times
         return times[-GWC_MAX_TIMES_PER_SEED:]
 
+    def get_cached_times(self, layer_name: str) -> List[str]:
+        """Return TIME values represented by GWC's file-blobstore metadata.
+
+        GeoWebCache keeps one ``parameters-<hash>.properties`` file for each
+        parameter set.  On this GWC version an unparameterized truncate does
+        not reliably remove temporal variants, so full layer refreshes must
+        explicitly truncate every cached TIME value, including times no longer
+        available in the ImageMosaic.
+        """
+        layer_id = f"{self.workspace}_{layer_name}"
+        cache_dir = os.path.join(GWC_BLOBSTORE_ROOT, "gwc", layer_id)
+        try:
+            names = os.listdir(cache_dir)
+        except OSError:
+            return []
+
+        times = set()
+        for name in names:
+            if not name.startswith("parameters-") or not name.endswith(".properties"):
+                continue
+            try:
+                with open(
+                    os.path.join(cache_dir, name), encoding="utf-8"
+                ) as parameter_file:
+                    for line in parameter_file:
+                        if line.startswith("TIME="):
+                            times.add(
+                                line.partition("=")[2].strip().replace("\\:", ":")
+                            )
+                            break
+            except OSError:
+                continue
+        return sorted(times)
+
+    def purge_layer_cache(self, layer_name: str) -> bool:
+        """Remove every file-blobstore entry for a fully replaced layer.
+
+        Parameterized GWC truncates leave ``parameters-*.properties`` metadata
+        behind, and older GWC versions can retain orphaned parameter variants.
+        Call this only after cancelling and draining GWC work for a non-rolling
+        layer; radar uses targeted truncates and must retain its other times.
+        """
+        if not self.enabled:
+            return True
+
+        cache_dir = os.path.join(
+            GWC_BLOBSTORE_ROOT, "gwc", f"{self.workspace}_{layer_name}"
+        )
+        try:
+            shutil.rmtree(cache_dir)
+        except FileNotFoundError:
+            return True
+        except OSError:
+            log.exception("GWC blobstore purge failed for {}", layer_name)
+            return False
+        log.info("Purged every GWC blobstore entry for {}", layer_name)
+        return True
+
     def refresh_temporal_layer(self, layer: TemporalCacheLayer) -> bool:
         """Replace every cached tile for one temporal layer after publication.
 
@@ -470,7 +618,7 @@ class GWCInvalidator:
         )
         if not times:
             log.error(
-                "GWC found no granule times for %s using store %s",
+                "GWC found no granule times for {} using store {}",
                 layer.name,
                 layer.store_name or layer.name,
             )
@@ -489,9 +637,14 @@ class GWCInvalidator:
             log.error(f"GWC seed failed for {layer.name} at {times}")
         return seeded
 
-    def seed_new_times(self, layer_name: str, new_times: List[str],
-                       store_name: Optional[str] = None, wait: bool = True,
-                       style_name: Optional[str] = None) -> bool:
+    def seed_new_times(
+        self,
+        layer_name: str,
+        new_times: List[str],
+        store_name: Optional[str] = None,
+        wait: bool = True,
+        style_name: Optional[str] = None,
+    ) -> bool:
         """Seed only the given TIME values without truncating the layer cache.
 
         This is useful for incremental updates where only new granules have
@@ -538,13 +691,17 @@ class GWCInvalidator:
         if seeded_all:
             log.info(f"Seeded {len(new_times)} new TIME values for {layer_name}")
         else:
-            log.warning(f"Some TIME values failed to seed for {layer_name}: {new_times}")
+            log.warning(
+                f"Some TIME values failed to seed for {layer_name}: {new_times}"
+            )
         return seeded_all
 
     @staticmethod
     def _normalize_time(value: str) -> str:
         """Use JavaScript Date.toISOString() form for matching Leaflet cache keys."""
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        return parsed.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace(
-            "+00:00", "Z"
+        return (
+            parsed.astimezone(timezone.utc)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z")
         )
