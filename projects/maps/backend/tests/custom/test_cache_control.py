@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from maps.tasks import cache_control
 
 
@@ -35,7 +37,7 @@ def test_invalidation_discards_superseded_generation() -> None:
     task = MagicMock()
     with patch.object(cache_control, "_is_current", return_value=False), patch.object(
         cache_control, "_redis"
-    ) as redis_factory:
+    ) as redis_factory, pytest.raises(RuntimeError, match="superseded"):
         cache_control.invalidate_gwc_layer.run(
             task,
             layer_name="radar-sri",
@@ -49,18 +51,16 @@ def test_invalidation_discards_superseded_generation() -> None:
     redis_factory.assert_not_called()
 
 
-def test_invalidation_requeues_when_layer_lock_is_held() -> None:
+def test_invalidation_fails_when_layer_lock_is_held() -> None:
     task = MagicMock()
     redis_client = MagicMock()
     lock = MagicMock()
     lock.acquire.return_value = False
     redis_client.lock.return_value = lock
-    celery_app = MagicMock()
 
     with patch.object(cache_control, "_is_current", return_value=True), patch.object(
         cache_control, "_redis", return_value=redis_client
-    ), patch("maps.tasks.cache_control.celery.get_instance") as get_instance:
-        get_instance.return_value.celery_app = celery_app
+    ), pytest.raises(RuntimeError, match="could not acquire"):
         cache_control.invalidate_gwc_layer.run(
             task,
             layer_name="radar-sri",
@@ -70,10 +70,6 @@ def test_invalidation_requeues_when_layer_lock_is_held() -> None:
             workspace="meteohub",
             generation=1,
         )
-
-    assert celery_app.send_task.call_args.args == ("invalidate_gwc_layer",)
-    assert celery_app.send_task.call_args.kwargs["countdown"] == 5
-
 
 def test_warm_task_submits_only_the_next_time() -> None:
     task = MagicMock()
@@ -154,3 +150,60 @@ def test_invalidation_uses_explicit_warm_times(monkeypatch) -> None:
 
     invalidator.truncate.assert_called_once()
     assert celery_app.send_task.call_args.kwargs["kwargs"]["times"] == ["new"]
+
+
+def test_cache_refresh_chord_writes_marker_after_all_invalidations(tmp_path) -> None:
+    redis_client = MagicMock()
+    redis_client.incr.side_effect = [3, 4]
+    ready_file = tmp_path / "20260101.GEOSERVER.READY"
+    chord_result = MagicMock()
+
+    with patch.object(cache_control, "_redis", return_value=redis_client), patch(
+        "maps.tasks.cache_control.chord", return_value=chord_result
+    ) as chord_:
+        cache_control.schedule_cache_refresh_chord(
+            [
+                {
+                    "layer_name": "first",
+                    "geoserver_url": "http://geoserver",
+                    "username": "admin",
+                    "password": "password",
+                    "workspace": "meteohub",
+                },
+                {
+                    "layer_name": "second",
+                    "geoserver_url": "http://geoserver",
+                    "username": "admin",
+                    "password": "password",
+                    "workspace": "meteohub",
+                },
+            ],
+            ready_file=str(ready_file),
+            ready_contents="ready\n",
+        )
+
+    assert chord_.call_args.args[0][0].kwargs["generation"] == 3
+    assert chord_.call_args.args[0][1].kwargs["generation"] == 4
+    chord_result.assert_called_once()
+
+
+def test_write_geoserver_ready_writes_after_chord_completion(tmp_path) -> None:
+    ready_file = tmp_path / "current.GEOSERVER.READY"
+    obsolete_file = tmp_path / "stale.GEOSERVER.READY"
+    checked_file = tmp_path / "run.CELERY.CHECKED"
+    obsolete_file.touch()
+    checked_file.touch()
+
+    cache_control.write_geoserver_ready.run(
+        MagicMock(),
+        [],
+        str(ready_file),
+        "ready\n",
+        [str(obsolete_file)],
+        [str(checked_file)],
+        {},
+    )
+
+    assert ready_file.read_text() == "ready\n"
+    assert not obsolete_file.exists()
+    assert not checked_file.exists()

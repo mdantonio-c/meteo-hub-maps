@@ -12,7 +12,7 @@ from maps.tasks.geoserver_utils import (
     associate_sld_with_layer_generic,
     update_slds_from_local_folders,
 )
-from maps.tasks.cache_control import schedule_cache_refresh
+from maps.tasks.cache_control import schedule_cache_refresh_chord
 
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
@@ -68,32 +68,30 @@ def update_geoserver_sub_seasonal_layers(self, run_date, range_str):
                 layer_name = f"sub-seasonal-{var}-{val}"
                 cache_layers.append((layer_name, f"mosaic-{layer_name}"))
 
-    for layer_name, store_name in cache_layers:
-        schedule_cache_refresh(
-            layer_name,
-            GEOSERVER_URL,
-            USERNAME,
-            PASSWORD,
-            WORKSPACE,
-            store_name=store_name,
-        )
-
-    # Cleanup old GEOSERVER.READY files
-    for f in os.listdir(SUB_SEASONAL_BASE_PATH):
-        if f.endswith(".GEOSERVER.READY"):
-            try:
-                os.remove(os.path.join(SUB_SEASONAL_BASE_PATH, f))
-                log.info(f"Removed old status file: {f}")
-            except Exception as e:
-                log.warning(f"Failed to remove {f}: {e}")
-
-    # Create GEOSERVER.READY file
     ready_file = os.path.join(SUB_SEASONAL_BASE_PATH, f"{range_str}.GEOSERVER.READY")
-    with open(ready_file, "w") as f:
-        f.write(f"Processed by GeoServer at {datetime.now().isoformat()}\n")
-        f.write(f"Run: {run_date}\n")
-        f.write(f"Range: {range_str}\n")
-    log.info(f"Created {ready_file}")
+    schedule_cache_refresh_chord(
+        [
+            {
+                "layer_name": layer_name,
+                "geoserver_url": GEOSERVER_URL,
+                "username": USERNAME,
+                "password": PASSWORD,
+                "workspace": WORKSPACE,
+                "store_name": store_name,
+            }
+            for layer_name, store_name in cache_layers
+        ],
+        ready_file=ready_file,
+        ready_contents=(
+            f"Processed by GeoServer at {datetime.now().isoformat()}\n"
+            f"Run: {run_date}\nRange: {range_str}\n"
+        ),
+        obsolete_ready_files=[
+            os.path.join(SUB_SEASONAL_BASE_PATH, filename)
+            for filename in os.listdir(SUB_SEASONAL_BASE_PATH)
+            if filename.endswith(".GEOSERVER.READY") and filename != os.path.basename(ready_file)
+        ],
+    )
 
     # Cleanup CELERY.CHECKED
     for f in os.listdir(SUB_SEASONAL_BASE_PATH):

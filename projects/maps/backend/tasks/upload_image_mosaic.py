@@ -16,7 +16,7 @@ from maps.tasks.geoserver_utils import (
     process_sld_files,
     check_coverage_exists,
 )
-from maps.tasks.cache_control import schedule_cache_refresh
+from maps.tasks.cache_control import schedule_cache_refresh_chord
 
 sld_dir_mapping = {
     "hcc": ["cloud_hml-hcc"],
@@ -146,15 +146,6 @@ def _ingest_windy_image_mosaic(
     log.info(
         f"Ingestion complete: {len(layers)} layers processed for {dataset_folder} run {run}"
     )
-    for layer_name in layers:
-        schedule_cache_refresh(
-            layer_name,
-            GEOSERVER_URL,
-            GEOSERVER_USERNAME,
-            GEOSERVER_PASSWORD,
-            WORKSPACE,
-        )
-        log.info("Scheduled priority GWC invalidation for {}", layer_name)
     log.info(f"Final layer count for {dataset_folder}: {len(layers)}")
     return layers
 
@@ -189,7 +180,23 @@ def update_geoserver_image_mosaic(
         source_directory
         or f"{BASE_PATH}/Windy-{run}-{dataset_folder}.web/{WINDY_INGEST_AREA}"
     )
-    create_ready_file(tiff_dir, run, date)
+    identifier = f"{date}{run}"
+    schedule_cache_refresh_chord(
+        [
+            {
+                "layer_name": layer_name,
+                "geoserver_url": GEOSERVER_URL,
+                "username": GEOSERVER_USERNAME,
+                "password": GEOSERVER_PASSWORD,
+                "workspace": WORKSPACE,
+            }
+            for layer_name in layers
+        ],
+        ready_file=os.path.join(tiff_dir, f"{identifier}.GEOSERVER.READY"),
+        ready_contents=(
+            f"Data: {identifier}\nProcessed: {datetime.now().isoformat()}\n"
+        ),
+    )
 
 
 def update_styles(sld_directory: Optional[str] = None) -> None:

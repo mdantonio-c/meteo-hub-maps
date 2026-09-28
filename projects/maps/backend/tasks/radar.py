@@ -16,7 +16,7 @@ from maps.tasks.geoserver_utils import (
     check_style_exists,
 )
 from maps.datasets.cache import GWCInvalidator
-from maps.tasks.cache_control import schedule_cache_refresh
+from maps.tasks.cache_control import schedule_cache_refresh_chord
 
 # Configuration
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
@@ -235,31 +235,7 @@ def update_geoserver_radar_layers(
             for date_dt in date_dts
         }
         affected_times = sorted(set(stale_times) | set(new_times) | changed_times)
-        if affected_times:
-            schedule_cache_refresh(
-                layer_name,
-                geoserver_url,
-                username,
-                password,
-                WORKSPACE,
-                store_name=store_name,
-                times=affected_times,
-                warm_times=sorted(new_input_times),
-                zoom_start=(cache_config or {}).get("zoom_start"),
-                zoom_stop=(cache_config or {}).get("zoom_stop"),
-            )
-            log.info(
-                f"Scheduled priority GWC invalidation for {layer_name}: "
-                f"{len(affected_times)} affected time(s), "
-                f"{len(new_input_times)} new time(s) to warm"
-            )
-        else:
-            log.info(f"No new granule times detected for {layer_name}")
-
-    # Create single .GEOSERVER.READY file with date range if all files processed successfully
-    if all_success:
         var_path = os.path.join(RADAR_BASE_DIRECTORY, variable)
-        layer_name = f"radar-{variable}"
         copies_target_dir = os.path.join(COPIES_BASE_DIRECTORY, layer_name)
 
         # Determine the full time range of files available in GeoServer
@@ -290,72 +266,46 @@ def update_geoserver_radar_layers(
                 overall_max_date = max(file_dates)
 
                 date_range = f"{overall_min_date.strftime('%Y%m%d%H%M')}-{overall_max_date.strftime('%Y%m%d%H%M')}"
-                # Delete all existing .GEOSERVER.READY files before creating new one
-                existing_ready_files = [
-                    f
-                    for f in os.listdir(var_path)
-                    if f.endswith(".GEOSERVER.READY") and not f.startswith(date_range)
-                ]
-
-                # Create date range filename representing the full 72-hour window
                 geoserver_ready_path = os.path.join(
                     var_path, f"{date_range}.GEOSERVER.READY"
                 )
-                try:
-                    with open(geoserver_ready_path, "w") as f:
-                        f.write(
-                            f"Processed by GeoServer at {datetime.now().isoformat()}\n"
-                        )
-                        f.write(f"Files in batch: {len(filenames)}\n")
-                        f.write(f"Total files in GeoServer: {len(file_dates)}\n")
-                        f.write(
-                            f"Time range: {overall_min_date.isoformat()} to {overall_max_date.isoformat()}\n"
-                        )
-                        f.write(
-                            f"Coverage: {(overall_max_date - overall_min_date).total_seconds() / 3600:.1f} hours\n"
-                        )
-                    log.info(f"Created {geoserver_ready_path}")
-                    log.info(
-                        f"GeoServer time range: {overall_min_date} to {overall_max_date} ({len(file_dates)} files)"
-                    )
-
-                    # Debounce: create CELERY.CHECKED file to prevent re-triggering
-                    # by the minute-by-minute cron task until the next data arrival.
-                    checked_file = os.path.join(
-                        var_path,
-                        f"{overall_min_date.strftime('%Y%m%d%H%M')}.CELERY.CHECKED",
-                    )
-                    with open(checked_file, "w") as f:
-                        f.write(
-                            f"Checked by Celery task at {datetime.now().isoformat()}\n"
-                        )
-                        f.write(f"Run: {run_date}\n")
-                        log.info(f"Created {checked_file}")
-
-                    # Delete all .CELERY.CHECKED files now that processing is complete
-                    existing_checked_files = [
-                        f for f in os.listdir(var_path) if f.endswith(".CELERY.CHECKED")
+                schedule_cache_refresh_chord(
+                    [
+                        {
+                            "layer_name": layer_name,
+                            "geoserver_url": geoserver_url,
+                            "username": username,
+                            "password": password,
+                            "workspace": WORKSPACE,
+                            "store_name": store_name,
+                            "times": affected_times,
+                            "warm_times": sorted(new_input_times),
+                            "zoom_start": (cache_config or {}).get("zoom_start"),
+                            "zoom_stop": (cache_config or {}).get("zoom_stop"),
+                        }
                     ]
-                    for checked_file in existing_checked_files:
-                        try:
-                            os.remove(os.path.join(var_path, checked_file))
-                            log.info(f"Deleted CELERY.CHECKED file: {checked_file}")
-                        except Exception as e:
-                            log.warning(
-                                f"Failed to delete CELERY.CHECKED file {checked_file}: {e}"
-                            )
-
-                    for old_file in existing_ready_files:
-                        old_path = os.path.join(var_path, old_file)
-                        try:
-                            os.remove(old_path)
-                            log.info(f"Deleted old GEOSERVER.READY file: {old_file}")
-                        except Exception as e:
-                            log.warning(
-                                f"Failed to delete old GEOSERVER.READY file {old_file}: {e}"
-                            )
-                except Exception as e:
-                    log.error(f"Failed to create GEOSERVER.READY file: {e}")
+                    if affected_times
+                    else [],
+                    ready_file=geoserver_ready_path,
+                    ready_contents=(
+                        f"Processed by GeoServer at {datetime.now().isoformat()}\n"
+                        f"Files in batch: {len(filenames)}\n"
+                        f"Total files in GeoServer: {len(file_dates)}\n"
+                        f"Time range: {overall_min_date.isoformat()} to {overall_max_date.isoformat()}\n"
+                        f"Coverage: {(overall_max_date - overall_min_date).total_seconds() / 3600:.1f} hours\n"
+                    ),
+                    obsolete_ready_files=[
+                        os.path.join(var_path, filename)
+                        for filename in os.listdir(var_path)
+                        if filename.endswith(".GEOSERVER.READY")
+                        and filename != os.path.basename(geoserver_ready_path)
+                    ],
+                    checked_files=[
+                        os.path.join(var_path, filename)
+                        for filename in os.listdir(var_path)
+                        if filename.endswith(".CELERY.CHECKED")
+                    ],
+                )
             else:
                 log.warning(f"No valid dates found in .tif files for {variable}")
         else:

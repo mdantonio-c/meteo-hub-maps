@@ -17,7 +17,7 @@ from maps.tasks.geoserver_utils import (
     upload_sld_generic,
     associate_sld_with_layer_generic,
 )
-from maps.tasks.cache_control import schedule_cache_refresh
+from maps.tasks.cache_control import schedule_cache_refresh_chord
 
 # Thredds integration disabled.
 # from maps.tasks.thredds import (  # noqa: F401
@@ -838,29 +838,32 @@ def update_geoserver_mer_bolam_layer(
             )
             return
 
-    schedule_cache_refresh(
-        layer_name,
-        GEOSERVER_URL,
-        USERNAME,
-        PASSWORD,
-        GEOSERVER_WORKSPACE,
-        store_name=store_name,
-        zoom_start=int(Env.get("GEOSERVER_GWC_ZOOM_START", "5")),
-        zoom_stop=int(Env.get("GEOSERVER_GWC_ZOOM_STOP", "9")),
+    schedule_cache_refresh_chord(
+        [
+            {
+                "layer_name": layer_name,
+                "geoserver_url": GEOSERVER_URL,
+                "username": USERNAME,
+                "password": PASSWORD,
+                "workspace": GEOSERVER_WORKSPACE,
+                "store_name": store_name,
+                "zoom_start": int(Env.get("GEOSERVER_GWC_ZOOM_START", "5")),
+                "zoom_stop": int(Env.get("GEOSERVER_GWC_ZOOM_STOP", "9")),
+            }
+        ],
+        ready_file=ready_file,
+        ready_contents=(
+            f"Processed by GeoServer at {datetime.now().isoformat()}\n"
+            f"Run: {run_date}\nLayer: {layer_name}\nVariable: {variable_name}\n"
+        ),
+        checked_files=[checked_file],
+        completion={
+            "forcing_dir": forcing_dir,
+            "forcing_name": forcing_name,
+            "run_date": run_date,
+        },
     )
-
-    with open(ready_file, "w") as f:
-        f.write(f"Processed by GeoServer at {datetime.now().isoformat()}\n")
-        f.write(f"Run: {run_date}\n")
-        f.write(f"Layer: {layer_name}\n")
-        f.write(f"Variable: {variable_name}\n")
-
-    if os.path.exists(checked_file):
-        os.remove(checked_file)
-
-    _update_forcing_geoserver_ready_if_complete(forcing_dir, forcing_name, run_date)
-
-    log.info(f"MER ingestion completed for {layer_name}")
+    log.info("MER ingestion submitted for cache invalidation: {}", layer_name)
 
 
 @CeleryExt.task(idempotent=True)

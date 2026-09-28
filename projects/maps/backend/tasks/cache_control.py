@@ -6,8 +6,10 @@ per-layer GWC work before every truncate and uses Redis generations to make
 queued warm requests harmless after a newer publication.
 """
 
-from typing import Iterable, List, Optional
+import os
+from typing import Any, Iterable, List, Optional
 
+from celery import chord, signature
 from redis import Redis
 from restapi.connectors import celery
 from restapi.connectors.celery import CeleryExt
@@ -21,7 +23,6 @@ CACHE_WARM_QUEUE = "cache-warm"
 GENERATION_PREFIX = "gwc:generation"
 LOCK_PREFIX = "gwc:lock"
 LOCK_TIMEOUT_SECONDS = 3600
-LOCK_RETRY_DELAY_SECONDS = 5
 WARM_CONCURRENCY = max(1, int(Env.get("GWC_SEEDER_CORE_POOL_SIZE", "1")))
 
 
@@ -100,6 +101,7 @@ def schedule_cache_refresh(
 
     ``times`` is the truncate set; ``warm_times`` is the optional seed set.
     When both are unset, all current granules are truncated and warmed.
+    Returns the generation ID for tracking. This is async - returns immediately.
     """
     if Env.get("GEOSERVER_GWC_ENABLED", "1") != "1":
         return 0
@@ -124,6 +126,86 @@ def schedule_cache_refresh(
         routing_key=CACHE_CONTROL_QUEUE,
     )
     return generation
+
+
+def schedule_cache_refresh_chord(
+    requests: Iterable[dict[str, Any]],
+    ready_file: str,
+    ready_contents: str,
+    obsolete_ready_files: Optional[Iterable[str]] = None,
+    checked_files: Optional[Iterable[str]] = None,
+    completion: Optional[dict[str, str]] = None,
+) -> None:
+    """Create a ready marker only after every GWC truncate has completed.
+
+    Warming is deliberately scheduled by ``invalidate_gwc_layer`` outside the
+    chord.  A marker therefore means all stale cache entries were removed, not
+    that every replacement tile was eagerly generated.
+    """
+    header = []
+    for request in requests:
+        layer_name = request["layer_name"]
+        workspace = request["workspace"]
+        generation = int(_redis().incr(_key(GENERATION_PREFIX, workspace, layer_name)))
+        request = {**request, "generation": generation}
+        header.append(
+            signature(
+                "invalidate_gwc_layer",
+                kwargs=request,
+                queue=CACHE_CONTROL_QUEUE,
+                routing_key=CACHE_CONTROL_QUEUE,
+            )
+        )
+
+    callback = signature(
+        "write_geoserver_ready",
+        kwargs={
+            "ready_file": ready_file,
+            "ready_contents": ready_contents,
+            "obsolete_ready_files": list(obsolete_ready_files or []),
+            "checked_files": list(checked_files or []),
+            "completion": completion or {},
+        },
+        queue="ingest",
+        routing_key="ingest",
+    )
+    if not header:
+        callback.apply_async(args=[[]])
+        return
+    chord(header)(callback)
+
+
+@CeleryExt.task(idempotent=True)
+def write_geoserver_ready(
+    self,
+    results: List[Any],
+    ready_file: str,
+    ready_contents: str,
+    obsolete_ready_files: List[str],
+    checked_files: List[str],
+    completion: dict[str, str],
+) -> None:
+    """Write the marker after the cache-control chord succeeds."""
+    del results
+    directory = os.path.dirname(ready_file)
+    os.makedirs(directory, exist_ok=True)
+    with open(ready_file, "w", encoding="utf-8") as marker:
+        marker.write(ready_contents)
+    for path in obsolete_ready_files + checked_files:
+        if path != ready_file:
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+    if completion:
+        from maps.tasks.check_fs_data import _update_forcing_geoserver_ready_if_complete
+
+        _update_forcing_geoserver_ready_if_complete(
+            completion["forcing_dir"],
+            completion["forcing_name"],
+            completion["run_date"],
+        )
+    log.info("Created GeoServer ready marker after GWC invalidation: {}", ready_file)
 
 
 def _invalidator(
@@ -162,43 +244,19 @@ def invalidate_gwc_layer(
 ) -> None:
     """Cancel stale cache work, truncate, and schedule selected warming."""
     if not _is_current(workspace, layer_name, generation):
-        log.info("Skipping superseded GWC invalidation for {}", layer_name)
-        return
+        raise RuntimeError(f"GWC invalidation superseded for {layer_name}")
 
     client = _redis()
     lock = client.lock(
         _key(LOCK_PREFIX, workspace, layer_name),
         timeout=LOCK_TIMEOUT_SECONDS,
-        blocking_timeout=0,
+        blocking_timeout=30,
     )
     if not lock.acquire():
-        # A warm submission or another invalidation owns the layer briefly.
-        # Requeue instead of self.retry: RAPyDo logs self.retry as a failed
-        # task even though lock contention is expected control-flow.
-        log.info("Deferring GWC invalidation for {} while its lock is held", layer_name)
-        celery.get_instance().celery_app.send_task(
-            "invalidate_gwc_layer",
-            kwargs={
-                "layer_name": layer_name,
-                "geoserver_url": geoserver_url,
-                "username": username,
-                "password": password,
-                "workspace": workspace,
-                "store_name": store_name,
-                "times": times,
-                "warm_times": warm_times,
-                "generation": generation,
-                "zoom_start": zoom_start,
-                "zoom_stop": zoom_stop,
-            },
-            queue=CACHE_CONTROL_QUEUE,
-            routing_key=CACHE_CONTROL_QUEUE,
-            countdown=LOCK_RETRY_DELAY_SECONDS,
-        )
-        return
+        raise RuntimeError(f"could not acquire GWC invalidation lock for {layer_name}")
     try:
         if not _is_current(workspace, layer_name, generation):
-            return
+            raise RuntimeError(f"GWC invalidation superseded for {layer_name}")
         invalidator = _invalidator(
             geoserver_url, username, password, workspace, zoom_start, zoom_stop
         )

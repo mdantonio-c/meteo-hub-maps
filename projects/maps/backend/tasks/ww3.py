@@ -13,7 +13,7 @@ from maps.tasks.geoserver_utils import (
     associate_sld_with_layer_generic,
     update_slds_from_local_folders,
 )
-from maps.tasks.cache_control import schedule_cache_refresh
+from maps.tasks.cache_control import schedule_cache_refresh_chord
 
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
@@ -108,14 +108,6 @@ def update_geoserver_ww3_layers(self, run_date):
     for var in variables:
         process_ww3_variable(var)
 
-    # Cleanup old GEOSERVER.READY files
-    for f in os.listdir(WW3_BASE_PATH):
-        if f.endswith(".GEOSERVER.READY"):
-            try:
-                os.remove(os.path.join(WW3_BASE_PATH, f))
-            except Exception as e:
-                log.warning(f"Failed to remove {f}: {e}")
-
     # Calculate range for GEOSERVER.READY filename
     all_timestamps = []
     for var in variables:
@@ -143,31 +135,34 @@ def update_geoserver_ww3_layers(self, run_date):
     else:
         ready_filename = f"{run_date}.GEOSERVER.READY"
 
-    # Create GEOSERVER.READY file
     ready_file = os.path.join(WW3_BASE_PATH, ready_filename)
-    with open(ready_file, "w") as f:
-        f.write(f"Processed by GeoServer at {datetime.now().isoformat()}\n")
-        f.write(f"Run: {run_date}\n")
-    log.info(f"Created {ready_file}")
-
-    # Invalidate first on the priority queue; warming remains best-effort.
-    for var in variables:
-        layer_name = f"ww3_{var}"
-        schedule_cache_refresh(
-            layer_name,
-            GEOSERVER_URL,
-            USERNAME,
-            PASSWORD,
-            WORKSPACE,
-            store_name=f"mosaic_{layer_name}",
-        )
-    # Cleanup CELERY.CHECKED
-    for f in os.listdir(WW3_BASE_PATH):
-        if f.endswith(".CELERY.CHECKED"):
-            try:
-                os.remove(os.path.join(WW3_BASE_PATH, f))
-            except Exception as e:
-                log.warning(f"Failed to remove {f}: {e}")
+    schedule_cache_refresh_chord(
+        [
+            {
+                "layer_name": f"ww3_{var}",
+                "geoserver_url": GEOSERVER_URL,
+                "username": USERNAME,
+                "password": PASSWORD,
+                "workspace": WORKSPACE,
+                "store_name": f"mosaic_ww3_{var}",
+            }
+            for var in variables
+        ],
+        ready_file=ready_file,
+        ready_contents=(
+            f"Processed by GeoServer at {datetime.now().isoformat()}\nRun: {run_date}\n"
+        ),
+        obsolete_ready_files=[
+            os.path.join(WW3_BASE_PATH, filename)
+            for filename in os.listdir(WW3_BASE_PATH)
+            if filename.endswith(".GEOSERVER.READY") and filename != ready_filename
+        ],
+        checked_files=[
+            os.path.join(WW3_BASE_PATH, filename)
+            for filename in os.listdir(WW3_BASE_PATH)
+            if filename.endswith(".CELERY.CHECKED")
+        ],
+    )
 
 
 def process_ww3_variable(var):

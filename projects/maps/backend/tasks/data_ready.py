@@ -20,7 +20,7 @@ from maps.tasks.geoserver_utils import (
 )
 from .upload_image_mosaic import enable_time_dimension
 from maps.datasets.cache import TemporalCacheLayer
-from maps.tasks.cache_control import schedule_cache_refresh
+from maps.tasks.cache_control import schedule_cache_refresh_chord
 
 # Get GeoServer credentials for seasonal task
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
@@ -532,15 +532,20 @@ def update_geoserver_seasonal_layers(
     cache_layers = process_seasonal_tiff_files(
         SEASONAL_BASE_DIRECTORY, sld_directory, geoserver_url, username, password, date
     )
-    for layer in cache_layers:
-        schedule_cache_refresh(
-            layer.name,
-            geoserver_url,
-            username,
-            password,
-            WORKSPACE,
-            store_name=layer.store_name,
-        )
-
-    # Create final ready file
-    create_seasonal_ready_file(SEASONAL_BASE_DIRECTORY, date)
+    schedule_cache_refresh_chord(
+        [
+            {
+                "layer_name": layer.name,
+                "geoserver_url": geoserver_url,
+                "username": username,
+                "password": password,
+                "workspace": WORKSPACE,
+                "store_name": layer.store_name,
+            }
+            for layer in cache_layers
+        ],
+        ready_file=os.path.join(SEASONAL_BASE_DIRECTORY, f"{date}.GEOSERVER.READY"),
+        ready_contents=(
+            f"Seasonal Data: {date}\nProcessed: {datetime.now().isoformat()}\n"
+        ),
+    )
