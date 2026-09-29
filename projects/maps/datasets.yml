@@ -404,6 +404,8 @@ datasets:
       cache:
         eligible: true
         require_explicit_time: true
+        zoom_start: 5
+        zoom_stop: 9
       variables:
         wl:
           layer_name_pattern: SHYFEM-{forcing}-wl

@@ -17,10 +17,51 @@ class TestGWCSeedCompletion:
             workspace="meteohub",
         )
 
-    def test_default_zoom_range_matches_temporal_cache_policy(self):
-        """Unset ranges use the 5-8 forecast policy, not the raster range."""
-        assert self.invalidator.zoom_start == 5
-        assert self.invalidator.zoom_stop == 8
+    def test_default_zoom_range_comes_from_manifest(self):
+        """Unset ranges use the configured manifest-wide cache policy."""
+        from maps.datasets.manifest import load_cache_defaults
+
+        cache_config = load_cache_defaults()
+        assert self.invalidator.zoom_start == cache_config["zoom_start"]
+        assert self.invalidator.zoom_stop == cache_config["zoom_stop"]
+
+    def test_default_zoom_range_can_be_changed_in_manifest(self, tmp_path, monkeypatch):
+        manifest_path = tmp_path / "datasets.yml"
+        manifest_path.write_text(
+            """version: 1
+geoserver:
+  cache:
+    zoom_start: 2
+    zoom_stop: 6
+datasets:
+  - id: test
+    kind: forecast
+    discovery: {}
+    ingestion:
+      adapter: windy_image_mosaic
+    temporal:
+      filename_regex: '.*'
+      filename_format: yyyyMMdd
+      timezone: UTC
+    geoserver:
+      workspace: meteohub
+      store_type: ImageMosaic
+    endpoint:
+      route: /test
+""",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("DATASET_CONFIG_PATH", str(manifest_path))
+
+        invalidator = GWCInvalidator(
+            geoserver_url="http://localhost:8080/geoserver",
+            username="admin",
+            password="password",
+            workspace="meteohub",
+        )
+
+        assert invalidator.zoom_start == 2
+        assert invalidator.zoom_stop == 6
 
     def test_explicit_raster_zoom_range_overrides_default(self):
         invalidator = GWCInvalidator(

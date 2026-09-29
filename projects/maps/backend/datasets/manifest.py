@@ -227,6 +227,22 @@ def validate_manifest(document: Any) -> Tuple[DatasetConfig, ...]:
 def load_manifest(path: Optional[Union[str, os.PathLike]] = None) -> Tuple[DatasetConfig, ...]:
     """Load and validate a manifest from an explicit path or environment variable."""
 
+    document = _load_document(path)
+    return validate_manifest(document)
+
+
+def load_cache_defaults(path: Optional[Union[str, os.PathLike]] = None) -> Dict[str, Any]:
+    """Return the manifest-wide GeoServer cache defaults after validation."""
+
+    document = _load_document(path)
+    validate_manifest(document)
+    geoserver = document.get("geoserver", {})
+    cache = geoserver.get("cache", {}) if isinstance(geoserver, Mapping) else {}
+    return dict(cache)
+
+
+def _load_document(path: Optional[Union[str, os.PathLike]] = None) -> Any:
+    """Read the raw manifest document from a path or DATASET_CONFIG_PATH."""
     configured_path = path or os.environ.get("DATASET_CONFIG_PATH")
     if not configured_path:
         raise ManifestError("DATASET_CONFIG_PATH is not configured")
@@ -242,4 +258,4 @@ def load_manifest(path: Optional[Union[str, os.PathLike]] = None) -> Tuple[Datas
     except yaml.YAMLError as exc:
         raise ManifestError(f"cannot parse dataset manifest {manifest_path}: {exc}") from exc
 
-    return validate_manifest(document)
+    return document

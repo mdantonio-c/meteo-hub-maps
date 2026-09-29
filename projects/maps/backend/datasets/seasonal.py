@@ -43,6 +43,8 @@ class SeasonalIngestionAdapter:
                 password,
                 str(self.config.geoserver.get("workspace", "meteohub")),
                 enabled=True,
+                zoom_start=self.config.geoserver.get("cache", {}).get("zoom_start"),
+                zoom_stop=self.config.geoserver.get("cache", {}).get("zoom_stop"),
             )
             ok = True
             for layer in layers:

@@ -80,6 +80,7 @@ Comprehensive documentation is available in the [`docs/`](docs/) directory:
 - **[Tiles Data](docs/TILES_DATA.md)** - Static tile serving
 - **[GeoServer Integration](docs/GEOSERVER.md)** - WMS/WCS configuration
 - **[Architecture](docs/ARCHITECTURE.md)** - System design and components
+- **[Dataset manifest configuration](docs/DATASET_CONFIGURATION.md)** - How to define datasets and configure discovery, ingestion, GeoServer, cache, and endpoint behavior
 
 ## Key Features
 

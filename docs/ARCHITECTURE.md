@@ -339,6 +339,7 @@ rapydo shell geoserver
 ### Health Checks
 
 - **API:** `GET /api/status` - Returns "Server is alive"
+- **System status:** `GET /api/service/status` - Returns operator-managed maintenance and incident status from the shared status file; update it with `scripts/toggle_maintenance.py` or `scripts/set_status.py`.
 - **GeoServer:** `GET /geoserver/rest/about/status`
 - **Celery:** Monitor task queue depth in Redis
 

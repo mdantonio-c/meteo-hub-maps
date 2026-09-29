@@ -845,6 +845,13 @@ def update_geoserver_mer_bolam_layer(
             )
             return
 
+    from maps.datasets.registry import load_registry
+
+    manifest_path = Env.get("DATASET_CONFIG_PATH", "/etc/meteohub/datasets.yml")
+    cache_config = load_registry(manifest_path).get("marine").geoserver.get(
+        "cache", {}
+    )
+
     schedule_cache_refresh_chord(
         [
             {
@@ -854,8 +861,8 @@ def update_geoserver_mer_bolam_layer(
                 "password": PASSWORD,
                 "workspace": GEOSERVER_WORKSPACE,
                 "store_name": store_name,
-                "zoom_start": int(Env.get("GEOSERVER_GWC_ZOOM_START", "5")),
-                "zoom_stop": int(Env.get("GEOSERVER_GWC_ZOOM_STOP", "9")),
+                "zoom_start": cache_config.get("zoom_start"),
+                "zoom_stop": cache_config.get("zoom_stop"),
             }
         ],
         ready_file=ready_file,

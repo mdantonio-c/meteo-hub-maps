@@ -689,7 +689,7 @@ or
 
 ### Health Check
 
-Check if the API service is running.
+Check if the API service is running. This liveness check is separate from the operator-managed system status endpoint documented below.
 
 **Endpoint:** `GET /api/status`
 
@@ -729,9 +729,9 @@ When `platform` parameter is not specified for maps endpoints, the service autom
 
 ### Get System Status
 
-Retrieve the current system status and any scheduled maintenance information. Clients can use this endpoint to check if the system is operational or if maintenance is planned.
+Retrieve the operator-managed system status and any scheduled maintenance information. The response is read from the persisted status JSON file; if that file does not exist or cannot be parsed, the endpoint reports `operational` by default.
 
-**Endpoint:** `GET /api/status`
+**Endpoint:** `GET /api/service/status`
 
 **Response:** `200 OK`
 
@@ -742,17 +742,17 @@ Retrieve the current system status and any scheduled maintenance information. Cl
   "scheduled_start": null,
   "scheduled_end": null,
   "affected_services": [],
-  "updated_at": "2025-01-14T10:00:00Z"
+  "updated_at": "2026-09-29T10:00:00Z"
 }
 ```
 
-**Status Values:**
+**Status values:**
 - `operational` - All systems functioning normally
 - `maintenance` - Scheduled maintenance in progress or planned
 - `degraded` - System experiencing partial issues
 - `outage` - System unavailable
 
-**Response Fields:**
+**Response fields:**
 - `status` (string): Current system state
 - `message` (string, optional): Human-readable description
 - `scheduled_start` (string, optional): ISO 8601 timestamp for planned maintenance start
@@ -762,56 +762,28 @@ Retrieve the current system status and any scheduled maintenance information. Cl
 
 ### Update System Status
 
-Update the system status to signal maintenance windows or operational changes.
+There is currently no `POST /api/service/status` (or `POST /api/status`) operation. Update the persisted status file using the operator scripts, then read the new value with `GET /api/service/status`.
 
-**Endpoint:** `POST /api/status`
+For a quick maintenance toggle or to restore normal service:
 
-**Request Body:**
-```json
-{
-  "status": "maintenance",
-  "message": "Scheduled database upgrade",
-  "scheduled_start": "2025-01-15T02:00:00Z",
-  "scheduled_end": "2025-01-15T06:00:00Z",
-  "affected_services": ["maps", "windy", "radar"]
-}
+```bash
+rapydo shell backend 'python scripts/toggle_maintenance.py on "Database upgrade"'
+rapydo shell backend 'python scripts/toggle_maintenance.py off'
+rapydo shell backend 'python scripts/toggle_maintenance.py status'
 ```
 
-**Required Fields:**
-- `status` - Must be one of: `operational`, `maintenance`, `degraded`, `outage`
+To set all status fields interactively—including `degraded` or `outage`—run:
 
-**Optional Fields:**
-- `message` - Descriptive text
-- `scheduled_start` - Planned start time (ISO 8601)
-- `scheduled_end` - Planned end time (ISO 8601)
-- `affected_services` - Array of affected service identifiers
-
-**Response:** `200 OK`
-
-```json
-{
-  "success": true,
-  "status": {
-    "status": "maintenance",
-    "message": "Scheduled database upgrade",
-    "scheduled_start": "2025-01-15T02:00:00Z",
-    "scheduled_end": "2025-01-15T06:00:00Z",
-    "affected_services": ["maps", "windy", "radar"],
-    "updated_at": "2025-01-14T10:00:00Z"
-  }
-}
+```bash
+rapydo shell backend 'python scripts/set_status.py'
 ```
 
-**Error Response:** `400 Bad Request`
+The scripts write `status.json` at `STATUS_FILE_PATH`; the backend and Celery containers share the configured status volume. The default in-container path is `/var/lib/meteohub/status.json`, backed by `${DATA_DIR}/status/status.json` on the host. After updating, verify via:
 
-```json
-{
-  "error": "Invalid status. Must be one of: operational, maintenance, degraded, outage"
-}
+```bash
+curl http://localhost:8080/api/service/status
 ```
 
-**Configuration:**
+`GET /api/status` is a separate API liveness check and returns the plain-text response `Server is alive`; it does not report maintenance state. The status file path is configurable with `STATUS_FILE_PATH` (default: `/var/lib/meteohub/status.json`).
 
-The status file location can be configured via the `STATUS_FILE_PATH` environment variable (default: `/etc/meteohub/status.json`).
-
-For detailed usage examples, see [STATUS_API.md](STATUS_API.md).
+For setup and operational details, see [STATUS_SETUP.md](STATUS_SETUP.md) and [STATUS_API.md](STATUS_API.md).

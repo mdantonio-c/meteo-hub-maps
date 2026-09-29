@@ -1,88 +1,48 @@
-# Status Endpoint - Quick Reference
+# System Status Quick Reference
 
-## 🚀 Quick Commands
+## Routes
 
 ```bash
-# Enable maintenance
-rapydo shell backend 'python scripts/toggle_maintenance.py on "Maintenance message"'
+# Maintenance / incident status (JSON)
+curl http://localhost:8080/api/service/status
 
-# Disable maintenance  
-rapydo shell backend 'python scripts/toggle_maintenance.py off'
-
-# Check status
-rapydo shell backend 'python scripts/toggle_maintenance.py status'
-
-# Interactive setup
-rapydo shell backend 'python scripts/set_status.py'
-```
-
-## 🌐 API Endpoints
-
-### GET /api/status
-```bash
+# API liveness check (plain text: "Server is alive")
 curl http://localhost:8080/api/status
 ```
 
-### POST /api/status
-```bash
-curl -X POST http://localhost:8080/api/status \
-  -H "Content-Type: application/json" \
-  -d '{"status": "maintenance", "message": "Upgrading database"}'
-```
-
-## 📊 Status Values
-
-- `operational` - All systems normal (default)
-- `maintenance` - Scheduled maintenance
-- `degraded` - Partial issues  
-- `outage` - System unavailable
-
-## 📁 Files
-
-- **Endpoint**: `projects/maps/backend/endpoints/status.py`
-- **Scripts**: `scripts/toggle_maintenance.py`, `scripts/set_status.py`
-- **Config**: `projects/maps/confs/commons.yml` (volume mounts)
-- **Data**: `data/status/status.json` (persisted)
-- **Docs**: `docs/STATUS_API.md`, `docs/STATUS_SETUP.md`
-
-## 🔧 Configuration
-
-```yaml
-# project_configuration.yaml
-STATUS_FILE_PATH: /var/lib/meteohub/status.json
-HOST_STATUS_DIR: ${DATA_DIR}/status
-
-# commons.yml (volume mounts)
-- ${HOST_STATUS_DIR}:/var/lib/meteohub
-```
-
-## ✅ Setup (One-time)
+`GET /api/service/status` is read-only. There is no status-update POST endpoint. Update the shared status file with the operator scripts:
 
 ```bash
-bash scripts/setup_status_dir.sh
+# Maintenance mode
+rapydo shell backend 'python scripts/toggle_maintenance.py on "Maintenance message"'
+
+# Return to normal service
+rapydo shell backend 'python scripts/toggle_maintenance.py off'
+
+# Read status in the terminal
+rapydo shell backend 'python scripts/toggle_maintenance.py status'
+
+# Full status editor (all status values, schedule, affected services)
+rapydo shell backend 'python scripts/set_status.py'
 ```
 
-## 🧪 Testing
+## Status values and data
 
-```bash
-rapydo shell backend 'pytest projects/maps/backend/tests/custom/test_api_status.py -v'
-```
+- `operational` — normal service
+- `maintenance` — planned maintenance
+- `degraded` — partial issue
+- `outage` — service unavailable
 
-## 📝 Example Response
+The JSON response includes `status`, `message`, `scheduled_start`, `scheduled_end`, `affected_services`, and `updated_at`.
 
-```json
-{
-  "status": "maintenance",
-  "message": "Scheduled upgrade",
-  "scheduled_start": "2025-01-15T02:00:00Z",
-  "scheduled_end": "2025-01-15T06:00:00Z",
-  "affected_services": ["maps", "windy"],
-  "updated_at": "2025-01-14T10:00:00Z"
-}
-```
+## Implementation and persistence
 
-## 🔗 Full Documentation
+- Endpoint: `projects/maps/backend/endpoints/status.py`
+- Management scripts: `scripts/toggle_maintenance.py`, `scripts/set_status.py`
+- Container file: `/var/lib/meteohub/status.json` (`STATUS_FILE_PATH`)
+- Host directory: `${DATA_DIR}/status` (`HOST_STATUS_DIR`)
+- Volume mounts: `projects/maps/confs/commons.yml` (backend and Celery)
+- Initialize directory: `bash scripts/setup_status_dir.sh`
+- Tests: `rapydo shell backend 'pytest projects/maps/backend/tests/custom/test_api_status.py -v'`
 
-- [STATUS_API.md](STATUS_API.md) - Complete API reference
-- [STATUS_SETUP.md](STATUS_SETUP.md) - Setup and usage guide
-- [README_STATUS.md](../scripts/README_STATUS.md) - Scripts reference
+See [STATUS_API.md](STATUS_API.md) for endpoint behavior and [STATUS_SETUP.md](STATUS_SETUP.md) for setup and troubleshooting.

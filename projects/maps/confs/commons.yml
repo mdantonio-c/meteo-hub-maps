@@ -241,7 +241,7 @@ services:
       args:
         GEOSERVER_UID: ${CURRENT_UID}
         GEOSERVER_GID: ${CURRENT_GID}
-        IMAGE_VERSION: 9.0-jdk11-openjdk-slim-buster
+        # IMAGE_VERSION: 9.0-jdk11-openjdk-slim-buster
     # image: docker.osgeo.org/geoserver:2.26.1
     # build:
     #   context: ${PROJECT_DIR}/builds/geoserver

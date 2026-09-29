@@ -1,148 +1,72 @@
 # System Status API
 
-The System Status API allows MeteoHub Maps to signal maintenance windows, outages, or operational state changes to clients.
+MeteoHub exposes two distinct status routes. Use the system status route for operator-set maintenance and incident information; use the health route only to check whether the API process is responding.
 
-## Endpoint
+## System status and maintenance
 
-### GET /api/status
+### `GET /api/service/status`
 
-Retrieves the current system status and any scheduled maintenance information.
+Returns the contents of the persisted system status file as JSON. If the file is missing or invalid, the endpoint returns the default `operational` status. This endpoint is read-only: there is currently no `POST` route for changing status.
 
-**Response Fields:**
-- `status` (string): Current system state
-  - `operational` - All systems functioning normally
-  - `maintenance` - Scheduled maintenance in progress or planned
-  - `degraded` - System experiencing partial issues
-  - `outage` - System unavailable
-- `message` (string, optional): Human-readable description of current status
-- `scheduled_start` (string, optional): ISO 8601 timestamp for planned maintenance start
-- `scheduled_end` (string, optional): ISO 8601 timestamp for planned maintenance end
-- `affected_services` (array): List of affected service names (e.g., ["maps", "windy", "radar"])
-- `updated_at` (string): ISO 8601 timestamp of last status update
+Example response:
 
-**Example Response:**
 ```json
 {
   "status": "maintenance",
   "message": "Scheduled database upgrade",
-  "scheduled_start": "2025-01-15T02:00:00Z",
-  "scheduled_end": "2025-01-15T06:00:00Z",
-  "affected_services": ["maps", "windy", "radar"],
-  "updated_at": "2025-01-14T10:00:00Z"
+  "scheduled_start": "2026-09-30T02:00:00Z",
+  "scheduled_end": "2026-09-30T06:00:00Z",
+  "affected_services": ["maps", "windy"],
+  "updated_at": "2026-09-29T10:00:00Z"
 }
 ```
 
-### POST /api/status
+Response fields:
 
-Updates the system status. This endpoint should be called by administrators or automation systems.
+- `status`: `operational`, `maintenance`, `degraded`, or `outage`.
+- `message`: Human-readable status detail, or `null`.
+- `scheduled_start`, `scheduled_end`: Optional ISO 8601 timestamps (UTC recommended).
+- `affected_services`: Array of affected service names, or an empty array.
+- `updated_at`: Timestamp when the status file was last updated.
 
-**Request Body:**
-```json
-{
-  "status": "maintenance",
-  "message": "Scheduled maintenance window",
-  "scheduled_start": "2025-01-15T02:00:00Z",
-  "scheduled_end": "2025-01-15T06:00:00Z",
-  "affected_services": ["maps", "windy"]
-}
-```
+### Update the status
 
-**Required Fields:**
-- `status` - Must be one of: `operational`, `maintenance`, `degraded`, `outage`
-
-**Optional Fields:**
-- `message` - Descriptive text about the status
-- `scheduled_start` - Planned start time (ISO 8601)
-- `scheduled_end` - Planned end time (ISO 8601)
-- `affected_services` - Array of service identifiers
-
-**Success Response (200):**
-```json
-{
-  "success": true,
-  "status": {
-    "status": "maintenance",
-    "message": "Scheduled maintenance window",
-    "scheduled_start": "2025-01-15T02:00:00Z",
-    "scheduled_end": "2025-01-15T06:00:00Z",
-    "affected_services": ["maps", "windy"],
-    "updated_at": "2025-01-14T10:00:00Z"
-  }
-}
-```
-
-**Error Response (400):**
-```json
-{
-  "error": "Invalid status. Must be one of: operational, maintenance, degraded, outage"
-}
-```
-
-## Configuration
-
-The status file is stored at `/var/lib/meteohub/status.json` by default (configured via `STATUS_FILE_PATH` environment variable).
-
-**Volume Mount:** The directory `/var/lib/meteohub` is mounted from `${DATA_DIR}/status` on the host to persist status across container restarts.
-
-**Custom Location:**
-```bash
-export STATUS_FILE_PATH=/custom/path/status.json
-```
-
-## Usage Examples
-
-### Check System Status (Client)
+Update status from the backend container using the included scripts. For a quick maintenance toggle:
 
 ```bash
-curl http://localhost:8080/api/status
+# Set maintenance mode (optional message)
+rapydo shell backend 'python scripts/toggle_maintenance.py on "Database upgrade"'
+
+# Return to operational
+rapydo shell backend 'python scripts/toggle_maintenance.py off'
+
+# Display current status in the terminal
+rapydo shell backend 'python scripts/toggle_maintenance.py status'
 ```
 
-### Set Maintenance Window (Admin)
+For a complete status entry, including scheduled times and affected services, run the interactive editor:
 
 ```bash
-curl -X POST http://localhost:8080/api/status \
-  -H "Content-Type: application/json" \
-  -d '{
-    "status": "maintenance",
-    "message": "Planned system upgrade",
-    "scheduled_start": "2025-01-15T02:00:00Z",
-    "scheduled_end": "2025-01-15T06:00:00Z",
-    "affected_services": ["all"]
-  }'
+rapydo shell backend 'python scripts/set_status.py'
 ```
 
-### Clear Status (Return to Operational)
+The interactive editor supports all four status values. After writing a change, read the public status response to verify it:
 
 ```bash
-curl -X POST http://localhost:8080/api/status \
-  -H "Content-Type: application/json" \
-  -d '{
-    "status": "operational"
-  }'
+curl http://localhost:8080/api/service/status
 ```
 
-### Client-Side Integration (JavaScript)
+## API liveness check
 
-```javascript
-async function checkSystemStatus() {
-  const response = await fetch('/api/status');
-  const status = await response.json();
-  
-  if (status.status === 'maintenance') {
-    showMaintenanceNotice(status.message, status.scheduled_start);
-  } else if (status.status === 'outage') {
-    showOutageNotice(status.message);
-  } else if (status.status === 'degraded') {
-    showDegradedNotice(status.message);
-  }
-  
-  return status.status === 'operational';
-}
-```
+### `GET /api/status`
 
-## Status File Format
+This is a separate health check. It returns the plain-text response `Server is alive` when the API is running. It does not return system maintenance information.
 
-The status is persisted as JSON:
+## Persistence and configuration
+
+The backend reads `/var/lib/meteohub/status.json` by default. `STATUS_FILE_PATH` can override this in-container file path. The default volume maps the host directory `${DATA_DIR}/status` to `/var/lib/meteohub` in the backend and Celery containers, so changes persist across container restarts. See [STATUS_SETUP.md](STATUS_SETUP.md) for volume configuration and troubleshooting.
+
+Example status file:
 
 ```json
 {
@@ -151,32 +75,14 @@ The status is persisted as JSON:
   "scheduled_start": null,
   "scheduled_end": null,
   "affected_services": [],
-  "updated_at": "2025-01-14T10:00:00Z"
+  "updated_at": "2026-09-29T10:00:00Z"
 }
 ```
 
-## Automation
+## Related documentation and code
 
-You can automate status updates using cron jobs or CI/CD pipelines:
-
-```bash
-# Start maintenance
-curl -X POST http://localhost:8080/api/status \
-  -H "Content-Type: application/json" \
-  -d '{"status": "maintenance", "message": "Deploying new version"}'
-
-# ... perform maintenance ...
-
-# Return to operational
-curl -X POST http://localhost:8080/api/status \
-  -H "Content-Type: application/json" \
-  -d '{"status": "operational"}'
-```
-
-## Testing
-
-Run the test suite:
-
-```bash
-rapydo shell backend 'pytest projects/maps/backend/tests/custom/test_api_status.py -v'
-```
+- [API reference](API.md)
+- [Setup and operations](STATUS_SETUP.md)
+- Endpoint implementation: `projects/maps/backend/endpoints/status.py`
+- Status management scripts: `scripts/toggle_maintenance.py`, `scripts/set_status.py`
+- Endpoint tests: `projects/maps/backend/tests/custom/test_api_status.py`

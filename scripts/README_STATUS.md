@@ -40,31 +40,18 @@ This interactive script will ask you:
 
 ## API Usage
 
-You can also use the REST API directly:
+The REST API exposes a read-only system status endpoint. It does not accept status updates; use the scripts above to write status changes.
 
-### Get Status
+### Get system status
 ```bash
-curl http://localhost:8080/api/status
+curl http://localhost:8080/api/service/status
 ```
 
-### Set Status
-```bash
-curl -X POST http://localhost:8080/api/status \
-  -H "Content-Type: application/json" \
-  -d '{
-    "status": "maintenance",
-    "message": "Scheduled maintenance",
-    "scheduled_start": "2025-01-15T02:00:00Z",
-    "scheduled_end": "2025-01-15T06:00:00Z",
-    "affected_services": ["all"]
-  }'
-```
+`GET /api/status` is a separate liveness check that returns `Server is alive`.
 
-### Clear Status
+### Set a detailed status
 ```bash
-curl -X POST http://localhost:8080/api/status \
-  -H "Content-Type: application/json" \
-  -d '{"status": "operational"}'
+rapydo shell backend 'python scripts/set_status.py'
 ```
 
 ## Status File Location

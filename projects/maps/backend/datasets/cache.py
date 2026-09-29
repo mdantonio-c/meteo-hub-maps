@@ -6,18 +6,16 @@ import time
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Iterable, List, Optional, Tuple, Union
 from xml.etree import ElementTree
 
 import requests
 from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
+from .manifest import load_cache_defaults
 
 log = logging.getLogger(__name__)
 
-SEED_ZOOM_START = 5
-# Temporal forecast layers follow the manifest-wide cache policy. Raster
-# sources such as radar pass their explicit 5-9 range to the invalidator.
-SEED_ZOOM_STOP = 8
 GWC_ENABLED_DEFAULT = os.environ.get("GEOSERVER_GWC_ENABLED", "1") == "1"
 # Caps how many TIME values get an individual seed/truncate request per call,
 # so a mosaic with a long history doesn't trigger hundreds of HTTP requests.
@@ -68,8 +66,26 @@ class GWCInvalidator:
         self.workspace = workspace
         self.enabled = enabled if enabled is not None else GWC_ENABLED_DEFAULT
         self.timeout = timeout if timeout is not None else GEOSERVER_REQUEST_TIMEOUT
-        self.zoom_start = SEED_ZOOM_START if zoom_start is None else zoom_start
-        self.zoom_stop = SEED_ZOOM_STOP if zoom_stop is None else zoom_stop
+        manifest_path = os.environ.get("DATASET_CONFIG_PATH") or str(
+            Path(__file__).resolve().parents[2] / "datasets.yml"
+        )
+        cache_defaults = (
+            load_cache_defaults(manifest_path)
+            if zoom_start is None or zoom_stop is None
+            else {}
+        )
+        self.zoom_start = (
+            cache_defaults.get("zoom_start") if zoom_start is None else zoom_start
+        )
+        self.zoom_stop = (
+            cache_defaults.get("zoom_stop") if zoom_stop is None else zoom_stop
+        )
+        if self.zoom_start is None or self.zoom_stop is None:
+            raise ValueError(
+                "GeoWebCache zoom range must be set with geoserver.cache.zoom_start "
+                "and geoserver.cache.zoom_stop in the dataset manifest, or passed "
+                "explicitly to GWCInvalidator"
+            )
 
     def _seed_request(
         self,
