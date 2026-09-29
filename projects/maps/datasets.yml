@@ -109,8 +109,13 @@ datasets:
           layer_name: tot_prec-tp
           style_name: prec_tot
     endpoint:
-      route: /datasets/{dataset}
-      operations: [metadata, file_download]
+      operations:
+        metadata:
+          route: /datasets/{dataset}
+        file_download:
+          route: /datasets/{dataset}/files/<path:relative_path>
+        status:
+          route: /datasets/{dataset}/status
 
   - id: wrf
     display_name: WRF
@@ -215,8 +220,13 @@ datasets:
           layer_name: WRF-tot_prec-tp
           style_name: prec_tot
     endpoint:
-      route: /datasets/{dataset}
-      operations: [metadata, file_download]
+      operations:
+        metadata:
+          route: /datasets/{dataset}
+        file_download:
+          route: /datasets/{dataset}/files/<path:relative_path>
+        status:
+          route: /datasets/{dataset}/status
 
   - id: radar
     display_name: Radar observations
@@ -262,8 +272,9 @@ datasets:
           layer_name: radar-srt
           style_name: radar_srt
     endpoint:
-      route: /radar/{radar_type}/status
-      operations: [status]
+      operations:
+        status:
+          route: /radar/{radar_type}/status
 
   - id: ww3
     display_name: WW3 wave model
@@ -298,8 +309,11 @@ datasets:
         require_explicit_time: true
       variables: {}
     endpoint:
-      route: /ww3/vectors
-      operations: [metadata, file_download]
+      operations:
+        metadata:
+          route: /datasets/ww3
+        status:
+          route: /ww3/status
 
   - id: seasonal
     display_name: Seasonal forecast
@@ -351,8 +365,11 @@ datasets:
           layer_name: seasonal_sum_P
           style_name: precip_sum
     endpoint:
-      route: /seasonal/latest
-      operations: [metadata]
+      operations:
+        metadata:
+          route: /datasets/seasonal
+        status:
+          route: /seasonal/latest
 
   - id: sub-seasonal
     display_name: Sub-seasonal forecast
@@ -386,8 +403,9 @@ datasets:
         require_explicit_time: true
       variables: {}
     endpoint:
-      route: /sub-seasonal/status
-      operations: [status]
+      operations:
+        status:
+          route: /sub-seasonal/status
 
   - id: marine
     display_name: SHYFEM marine forcing
@@ -428,5 +446,10 @@ datasets:
           layer_name_pattern: SHYFEM-{forcing}-wl
           style_name: water_level
     endpoint:
-      route: /marine/shyfem/status
-      operations: [status, stations, file_download]
+      operations:
+        status:
+          route: /marine/shyfem/status
+        stations:
+          route: /marine/shyfem/stations
+        file_download:
+          route: /marine/shyfem/files/<path:relative_path>

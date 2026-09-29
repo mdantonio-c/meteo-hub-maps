@@ -14,6 +14,7 @@ from maps.datasets.markers import MarkerStore
 from maps.datasets.paths import safe_dataset_file_path
 from maps.datasets.registry import DatasetRegistry
 from maps.datasets.temporal import write_temporal_config
+from maps.endpoints import datasets_dynamic
 
 
 def test_loads_windy_and_radar_manifest() -> None:
@@ -36,6 +37,7 @@ def test_loads_windy_and_radar_manifest() -> None:
 
 
 def test_allows_duplicate_route_templates() -> None:
+    """Test that multiple datasets can have the same route template."""
     document = {
         "version": 1,
         "datasets": [
@@ -58,7 +60,11 @@ def test_allows_duplicate_route_templates() -> None:
                     "timezone": "UTC",
                 },
                 "geoserver": {"workspace": "meteohub", "store_type": "ImageMosaic"},
-                "endpoint": {"route": "/datasets/{dataset}"},
+                "endpoint": {
+                    "operations": {
+                        "metadata": {"route": "/datasets/{dataset}"}
+                    }
+                },
             },
             {
                 "id": "second",
@@ -79,7 +85,11 @@ def test_allows_duplicate_route_templates() -> None:
                     "timezone": "UTC",
                 },
                 "geoserver": {"workspace": "meteohub", "store_type": "ImageMosaic"},
-                "endpoint": {"route": "/datasets/{dataset}"},
+                "endpoint": {
+                    "operations": {
+                        "metadata": {"route": "/datasets/{dataset}"}
+                    }
+                },
             },
         ],
     }
@@ -88,6 +98,83 @@ def test_allows_duplicate_route_templates() -> None:
     assert len(datasets) == 2
     assert datasets[0].route == "/datasets/{dataset}"
     assert datasets[1].route == "/datasets/{dataset}"
+
+
+def test_validates_new_endpoint_operations_format() -> None:
+    """Test validation of the new endpoint.operations format."""
+    document = {
+        "version": 1,
+        "datasets": [
+            {
+                "id": "test-dataset",
+                "kind": "forecast",
+                "discovery": {
+                    "task": "discover_dataset",
+                    "base_path_env": "TEST_PATH",
+                    "base_path_default": "/test",
+                    "markers": {"ready_suffix": ".READY"},
+                },
+                "ingestion": {"behaviour": "bulk_override", "task": "ingest_dataset"},
+                "temporal": {
+                    "filename_regex": "(.*)",
+                    "filename_format": "yyyyMMddHH",
+                    "timezone": "UTC",
+                },
+                "geoserver": {"workspace": "meteohub", "store_type": "ImageMosaic"},
+                "endpoint": {
+                    "operations": {
+                        "metadata": {"route": "/test/{dataset}"},
+                        "status": {"route": "/test/{dataset}/status"},
+                    }
+                },
+            }
+        ],
+    }
+
+    datasets = validate_manifest(document)
+    assert len(datasets) == 1
+    config = datasets[0]
+    
+    # Check that operations are preserved
+    ops = config.endpoint.get("operations", {})
+    assert "metadata" in ops
+    assert "status" in ops
+    assert ops["metadata"]["route"] == "/test/{dataset}"
+    assert ops["status"]["route"] == "/test/{dataset}/status"
+
+
+def test_validates_old_endpoint_format_still_works() -> None:
+    """Test backward compatibility with old endpoint.format."""
+    document = {
+        "version": 1,
+        "datasets": [
+            {
+                "id": "legacy-dataset",
+                "kind": "forecast",
+                "discovery": {
+                    "task": "discover_dataset",
+                    "base_path_env": "LEGACY_PATH",
+                    "base_path_default": "/legacy",
+                    "markers": {"ready_suffix": ".READY"},
+                },
+                "ingestion": {"behaviour": "bulk_override", "task": "ingest_dataset"},
+                "temporal": {
+                    "filename_regex": "(.*)",
+                    "filename_format": "yyyyMMddHH",
+                    "timezone": "UTC",
+                },
+                "geoserver": {"workspace": "meteohub", "store_type": "ImageMosaic"},
+                "endpoint": {
+                    "route": "/legacy/{dataset}",
+                    "operations": ["metadata"],
+                },
+            }
+        ],
+    }
+
+    datasets = validate_manifest(document)
+    assert len(datasets) == 1
+    assert datasets[0].route == "/legacy/{dataset}"
 
 
 def test_registry_rejects_unknown_dataset() -> None:
@@ -231,3 +318,85 @@ def test_dataset_file_path_is_confined_to_dataset_root(tmp_path: Path) -> None:
     )
     with pytest.raises(ManifestError, match="invalid dataset file path"):
         safe_dataset_file_path(config, "../outside.tif", lambda name, default: default)
+
+
+def test_dynamic_endpoint_generation_from_manifest() -> None:
+    """Test that dynamic endpoints are generated from datasets.yml."""
+    endpoints = datasets_dynamic.generate_dataset_endpoints()
+    
+    # Should have endpoints for all configured datasets
+    assert len(endpoints) > 0
+    
+    # Check that icon dataset has metadata and file_download endpoints
+    assert "icon_metadata" in endpoints
+    assert "icon_file_download" in endpoints
+    
+    # Check that wrf dataset has metadata and file_download endpoints
+    assert "wrf_metadata" in endpoints
+    assert "wrf_file_download" in endpoints
+    
+    # Check that radar has status endpoint
+    assert "radar_status" in endpoints
+    
+    # Check that marine has multiple operations
+    assert "marine_status" in endpoints
+    assert "marine_stations" in endpoints
+    assert "marine_file_download" in endpoints
+
+
+def test_dynamic_endpoint_classes_have_correct_labels() -> None:
+    """Test that generated endpoint classes have proper labels."""
+    endpoints = datasets_dynamic.generate_dataset_endpoints()
+    
+    # Check metadata endpoint labels
+    metadata_class = endpoints.get("icon_metadata")
+    assert metadata_class is not None
+    assert "datasets" in metadata_class.labels
+    assert "dataset-icon" in metadata_class.labels
+    
+    # Check status endpoint labels
+    status_class = endpoints.get("radar_status")
+    assert status_class is not None
+    assert "datasets" in status_class.labels
+    assert "dataset-radar" in status_class.labels
+
+
+def test_dynamic_endpoint_generation_with_custom_manifest(tmp_path) -> None:
+    """Test endpoint generation with a custom manifest."""
+    from maps.datasets.manifest import validate_manifest
+    
+    manifest = {
+        "version": 1,
+        "datasets": [
+            {
+                "id": "test-dataset",
+                "kind": "forecast",
+                "discovery": {
+                    "base_path_env": "TEST_PATH",
+                    "base_path_default": "/test",
+                    "markers": {"ready_suffix": ".READY"},
+                },
+                "ingestion": {"behaviour": "bulk_override", "task": "test"},
+                "temporal": {
+                    "filename_regex": "(.*)",
+                    "filename_format": "yyyyMMddHH",
+                    "timezone": "UTC",
+                },
+                "geoserver": {"workspace": "meteohub", "store_type": "ImageMosaic"},
+                "endpoint": {
+                    "operations": {
+                        "metadata": {"route": "/test/{dataset}"},
+                        "status": {"route": "/test/{dataset}/status"},
+                    }
+                },
+            }
+        ],
+    }
+    
+    datasets = validate_manifest(manifest)
+    assert len(datasets) == 1
+    assert datasets[0].identifier == "test-dataset"
+    
+    endpoint_config = datasets[0].raw.get("endpoint", {})
+    assert "metadata" in endpoint_config.get("operations", {})
+    assert "status" in endpoint_config.get("operations", {})

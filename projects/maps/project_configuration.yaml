@@ -7,10 +7,13 @@ project:
 
 variables:
   env:
+    # Dynamic endpoints enabled by default - set to 0 to use legacy endpoints
+    ACTIVATE_DYNAMIC_DATASETS: 1
     ACTIVATE_AUTH: 0
     ACTIVATE_REDIS: 1
     ACTIVATE_CELERY: 1
     ACTIVATE_CELERYBEAT: 1
+    API_AUTOSTART: 1
     CELERY_ENABLE_CONNECTOR: 1
     CELERY_BROKER: REDIS
     CELERY_BACKEND: REDIS

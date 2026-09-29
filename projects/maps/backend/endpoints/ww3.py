@@ -95,6 +95,7 @@ class WW3FileEndpoint(EndpointResource):
 
 class WW3StatusEndpoint(EndpointResource):
     labels = ["ww3"]
+    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/ww3/status",

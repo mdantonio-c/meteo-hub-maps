@@ -79,6 +79,7 @@ class SeasonalEndpoint(EndpointResource):
 
 class SeasonalBoxplotListEndpoint(EndpointResource):
     labels = ["seasonal"]
+    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/seasonal/json",
@@ -99,6 +100,7 @@ class SeasonalBoxplotListEndpoint(EndpointResource):
 
 class SeasonalFileEndpoint(EndpointResource):
     labels = ["seasonal"]
+    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/seasonal/json/<filename>",

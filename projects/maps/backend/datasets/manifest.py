@@ -34,7 +34,24 @@ class DatasetConfig:
 
     @property
     def route(self) -> str:
-        return str(self.endpoint.get("route", ""))
+        """Return the primary route for backward compatibility.
+        
+        For new format (operations dict), returns the first operation's route.
+        For old format (route string), returns the route.
+        """
+        endpoint = self.endpoint
+        route = endpoint.get("route", "")
+        if route:
+            return str(route)
+        
+        # New format: get first operation's route
+        operations = endpoint.get("operations", {})
+        if isinstance(operations, dict):
+            for op_config in operations.values():
+                if isinstance(op_config, dict) and "route" in op_config:
+                    return str(op_config["route"])
+        
+        return ""
 
     def resolve_sld(
         self,
@@ -261,9 +278,32 @@ def _validate_dataset(
 
     adapter = _validate_ingestion_behaviour(identifier, sections, path, errors)
 
-    route = _require_string(sections["endpoint"], "route", f"{path}.endpoint", errors)
-    if route and not route.startswith("/"):
-        errors.append(f"{path}.endpoint.route must start with '/'")
+    # Support both old and new endpoint formats
+    # New format: endpoint.operations = {operation: {route: ...}}
+    # Old format: endpoint.route = string, endpoint.operations = list
+    endpoint_section = sections["endpoint"]
+    
+    if "operations" in endpoint_section:
+        operations = endpoint_section.get("operations", {})
+        if isinstance(operations, dict):
+            # New format: validate each operation's route
+            for op_name, op_config in operations.items():
+                if isinstance(op_config, dict):
+                    op_route = op_config.get("route", "")
+                    if op_route and not op_route.startswith("/"):
+                        errors.append(
+                            f"{path}.endpoint.operations.{op_name}.route must start with '/'"
+                        )
+        elif isinstance(operations, list):
+            # Old format: operations is a list, route should be a string
+            route = _require_string(sections["endpoint"], "route", f"{path}.endpoint", errors)
+            if route and not route.startswith("/"):
+                errors.append(f"{path}.endpoint.route must start with '/'")
+    else:
+        # Old format: route is required
+        route = _require_string(sections["endpoint"], "route", f"{path}.endpoint", errors)
+        if route and not route.startswith("/"):
+            errors.append(f"{path}.endpoint.route must start with '/'")
 
     for field in ("filename_regex", "filename_format", "timezone"):
         _require_string(sections["temporal"], field, f"{path}.temporal", errors)

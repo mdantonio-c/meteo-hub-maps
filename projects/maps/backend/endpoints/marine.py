@@ -21,6 +21,7 @@ class ShyfemStatusEndpoint(EndpointResource):
     """Get metadata about the latest ingested SHYFEM data for each forcing provider."""
 
     labels = ["marine"]
+    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/marine/shyfem/status",
@@ -111,6 +112,7 @@ class ShyfemStationsEndpoint(EndpointResource):
     """List available SHYFEM station JSON files."""
 
     labels = ["marine"]
+    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/marine/shyfem/data/stations",
@@ -156,6 +158,7 @@ class ShyfemStationFileEndpoint(EndpointResource):
     """Get a specific SHYFEM station JSON file for a given forcing provider."""
 
     labels = ["marine"]
+    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/marine/shyfem/data/stations/<forcing>/<filename>",
