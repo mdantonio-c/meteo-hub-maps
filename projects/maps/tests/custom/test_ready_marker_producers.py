@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 from maps.datasets.cache import TemporalCacheLayer
-from maps.datasets import discovery as check_fs_data
+from maps.datasets import marine_processing as check_fs_data
 from maps.datasets import seasonal_processing as data_ready
 from maps.datasets import radar_processing as radar
 from maps.datasets import sub_seasonal_processing as sub_seasonal

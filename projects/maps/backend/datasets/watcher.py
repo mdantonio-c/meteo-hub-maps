@@ -1,10 +1,30 @@
 """READY-marker watchers for dataset ingestion."""
 
-from restapi.utilities.logs import log
-from restapi.connectors import celery
-from datetime import datetime, timedelta
 import os
-from typing import List, Optional, Union, Callable, Any, Tuple
+from datetime import datetime, timedelta
+from typing import Any, Callable, List, Optional, Tuple, Union
+
+from restapi.connectors import celery
+from restapi.utilities.logs import log
+
+
+def read_retry_count(path: str) -> int:
+    """Read the most recent retry count from a CELERY.CHECKED marker."""
+    try:
+        with open(path) as marker:
+            for line in reversed(marker.readlines()):
+                if line.startswith("Retry:"):
+                    return int(line.split(":", 1)[1].strip())
+    except (OSError, ValueError) as exc:
+        log.warning(f"Failed to read retry count from {path}: {exc}")
+    return 0
+
+
+def mark_ingestion_unhealthy(message: str) -> None:
+    with open("/status/health_check_failure", "w") as marker:
+        marker.write(f"{message}\n")
+        marker.write(f"Timestamp: {datetime.now().isoformat()}\n")
+
 
 class DataWatcher:
     def __init__(
@@ -21,7 +41,13 @@ class DataWatcher:
         self.processed_suffix = processed_suffix
         self.debounce_seconds = debounce_seconds
         self.sort_key = sort_key
-        self.identifier_extractor = identifier_extractor or (lambda f: f.split(self.ready_suffix)[0] if f.endswith(self.ready_suffix) else f.split(".")[0])
+        self.identifier_extractor = identifier_extractor or (
+            lambda f: (
+                f.split(self.ready_suffix)[0]
+                if f.endswith(self.ready_suffix)
+                else f.split(".")[0]
+            )
+        )
 
     def check_and_trigger(
         self,
@@ -33,7 +59,7 @@ class DataWatcher:
         custom_action: Optional[Callable[[str, str, str], None]] = None,
         skip_debounce: bool = False,
     ) -> None:
-        
+
         ready_files = []
         # log.info(f"Checking latest data in {self.paths}")
         for path in self.paths:
@@ -42,7 +68,7 @@ class DataWatcher:
                 continue
             log.info(os.listdir(path))
             files = [f for f in os.listdir(path) if f.endswith(self.ready_suffix)]
-            
+
             for f in files:
                 # Avoid picking up the processed file if suffixes overlap (e.g. .READY and .GEOSERVER.READY)
                 if f.endswith(self.processed_suffix):
@@ -67,10 +93,12 @@ class DataWatcher:
         latest = ready_files[-1]
         latest_path = latest["path"]
         latest_file = latest["file"]
-        
+
         identifier = self.identifier_extractor(latest_file)
-        
-        processed_path = os.path.join(latest_path, f"{identifier}{self.processed_suffix}")
+
+        processed_path = os.path.join(
+            latest_path, f"{identifier}{self.processed_suffix}"
+        )
         debounce_path = os.path.join(latest_path, f"{identifier}.CELERY.CHECKED")
 
         is_processed = False
@@ -80,49 +108,49 @@ class DataWatcher:
             is_processed = True
         else:
             # Check if there's a date-range file, if yes, consider it processed (SHOULD be handled in custom check ideally)
-            files_with_suffix = [f for f in os.listdir(latest_path) if f.endswith(self.processed_suffix)]
+            files_with_suffix = [
+                f for f in os.listdir(latest_path) if f.endswith(self.processed_suffix)
+            ]
             for f in files_with_suffix:
                 if "-" in f:
                     is_processed = True
                     break
 
         if is_processed:
-            log.info(f"{self.processed_suffix} already exists for {latest_file} (or custom check passed)")
+            log.info(
+                f"{self.processed_suffix} already exists for {latest_file} (or custom check passed)"
+            )
             return
 
         retry = 0
         if not skip_debounce:
             if os.path.exists(debounce_path):
-                age = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(debounce_path))).total_seconds()
-                # Read the retry count from the file
-                try:
-                    with open(debounce_path, "r") as f:
-                        lines = f.readlines()
-                        for line in reversed(lines):
-                            if line.startswith("Retry:"):
-                                retry = int(line.split(":")[1].strip())
-                                break
-                            else :
-                                retry = 0
-                except Exception as e:
-                    log.warning(f"Failed to read retry count from {debounce_path}: {e}")
-                    retry = 0
-                
+                age = (
+                    datetime.now()
+                    - datetime.fromtimestamp(os.path.getmtime(debounce_path))
+                ).total_seconds()
+                retry = read_retry_count(debounce_path)
+
                 if age > self.debounce_seconds:
-                    log.info(f"Identifier {identifier} pending for {age:.0f}s (> 300s), removing and re-triggering")
+                    log.info(
+                        f"Identifier {identifier} pending for {age:.0f}s (> 300s), removing and re-triggering"
+                    )
                     retry += 1
                     if retry > 1:
-                        log.error(f"Identifier {identifier} has been retried {retry} times, marking container as unhealthy")
+                        log.error(
+                            f"Identifier {identifier} has been retried {retry} times, marking container as unhealthy"
+                        )
                         # Mark container as unhealthy by creating/touching the health check failure file
-                        health_check_file = "/status/health_check_failure"
-                        with open(health_check_file, "w") as hf:
-                            hf.write(f"DataWatcher processing stuck for identifier {identifier} after {retry} retries\n")
-                            hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                        mark_ingestion_unhealthy(
+                            f"DataWatcher processing stuck for identifier {identifier} after {retry} retries"
+                        )
                         os.remove(debounce_path)
                         return
                     os.remove(debounce_path)
                 else:
-                    log.info(f"Skipping {latest_file} - already checked within last {self.debounce_seconds}s")
+                    log.info(
+                        f"Skipping {latest_file} - already checked within last {self.debounce_seconds}s"
+                    )
                     return
 
             # Create debounce file
@@ -146,12 +174,13 @@ class DataWatcher:
             args = task_args
             if callable(task_args):
                 args = task_args(identifier, latest_file, latest_path)
-            
+
             c.celery_app.send_task(task_name, args=args)
             log.info(f"Triggered task {task_name} for {identifier}")
-        
+
         if on_marker_creation:
-             on_marker_creation(processed_path, identifier)
+            on_marker_creation(processed_path, identifier)
+
 
 class DataWatcherStream(DataWatcher):
     def __init__(
@@ -159,7 +188,7 @@ class DataWatcherStream(DataWatcher):
         retention_hours: int = 72,
         time_format: str = "%Y%m%d%H%M",
         file_time_format: str = "%d-%m-%Y-%H-%M.tif",
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.retention_hours = retention_hours
@@ -174,8 +203,10 @@ class DataWatcherStream(DataWatcher):
             return False
 
         # Find all date-range .GEOSERVER.READY files
-        geoserver_ready_files = [f for f in os.listdir(path) if f.endswith(self.processed_suffix)]
-        
+        geoserver_ready_files = [
+            f for f in os.listdir(path) if f.endswith(self.processed_suffix)
+        ]
+
         if geoserver_ready_files:
             for gf in geoserver_ready_files:
                 try:
@@ -194,7 +225,14 @@ class DataWatcherStream(DataWatcher):
                     log.warning(f"Could not parse {self.processed_suffix} file: {gf}")
         return False
 
-    def _perform_action(self, identifier: str, latest_file: str, path: str, task_name: str, var_name: str) -> None:
+    def _perform_action(
+        self,
+        identifier: str,
+        latest_file: str,
+        path: str,
+        task_name: str,
+        var_name: str,
+    ) -> None:
         try:
             current_ready_dt = datetime.strptime(identifier, self.time_format)
         except ValueError:
@@ -202,7 +240,9 @@ class DataWatcherStream(DataWatcher):
             return
 
         # Custom Debounce Check using range-based CELERY.CHECKED files
-        celery_checked_files = [f for f in os.listdir(path) if f.endswith(".CELERY.CHECKED")]
+        celery_checked_files = [
+            f for f in os.listdir(path) if f.endswith(".CELERY.CHECKED")
+        ]
         for cf in celery_checked_files:
             try:
                 date_range = cf.split(".")[0]
@@ -211,74 +251,73 @@ class DataWatcherStream(DataWatcher):
                     end_dt = datetime.strptime(to_date, self.time_format)
                     if current_ready_dt <= end_dt:
                         cf_path = os.path.join(path, cf)
-                        age = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(cf_path))).total_seconds()
-                        retry = 0
-                        # Read the retry count from the file
-                        try:
-                            with open(cf_path, "r") as f:
-                                lines = f.readlines()
-                                for line in reversed(lines):
-                                    if line.startswith("Retry:"):
-                                        retry = int(line.split(":")[1].strip())
-                                        break
-                        except Exception as e:
-                            log.warning(f"Failed to read retry count from {cf_path}: {e}")
-                            retry = 0
-                        
+                        age = (
+                            datetime.now()
+                            - datetime.fromtimestamp(os.path.getmtime(cf_path))
+                        ).total_seconds()
+                        retry = read_retry_count(cf_path)
+
                         if age > 300:
-                            log.info(f"File range {date_range} pending for {age:.0f}s (> 300s), removing and re-triggering")
+                            log.info(
+                                f"File range {date_range} pending for {age:.0f}s (> 300s), removing and re-triggering"
+                            )
                             retry += 1
                             if retry > 1:
-                                log.error(f"File range {date_range} has been retried {retry} times, marking container as unhealthy")
+                                log.error(
+                                    f"File range {date_range} has been retried {retry} times, marking container as unhealthy"
+                                )
                                 # Mark container as unhealthy by creating/touching the health check failure file
-                                health_check_file = "/status/health_check_failure"
-                                with open(health_check_file, "w") as hf:
-                                    hf.write(f"DataWatcher {var_name} processing stuck for range {date_range} after {retry} retries\n")
-                                    hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                                mark_ingestion_unhealthy(
+                                    f"DataWatcher {var_name} processing stuck for range {date_range} after {retry} retries"
+                                )
                                 return
                             try:
                                 os.remove(cf_path)
                                 log.info(f"Deleted stale debounce file {cf}")
                             except OSError as e:
-                                log.warning(f"Failed to delete stale debounce file {cf}: {e}")
+                                log.warning(
+                                    f"Failed to delete stale debounce file {cf}: {e}"
+                                )
                         else:
-                            log.info(f"Skipping {latest_file} - covered by {cf} (checked {age:.0f}s ago)")
+                            log.info(
+                                f"Skipping {latest_file} - covered by {cf} (checked {age:.0f}s ago)"
+                            )
                             return
             except ValueError:
                 continue
 
         start_dt = current_ready_dt - timedelta(hours=self.retention_hours)
-        
+
         pending_filenames = []
         pending_dates = []
-        
+
         temp_dt = start_dt
         while temp_dt <= current_ready_dt:
             expected_filename = temp_dt.strftime(self.file_time_format)
-            expected_path = os.path.join(path, 'files', expected_filename)
-            
+            expected_path = os.path.join(path, "files", expected_filename)
+
             if os.path.exists(expected_path):
                 pending_filenames.append(expected_filename)
                 pending_dates.append(temp_dt)
-            
+
             temp_dt += timedelta(minutes=1)
-        
+
         if not pending_filenames:
             log.info(f"No pending files found for {var_name}")
             return
-        
+
         log.info(f"Found {len(pending_filenames)} pending file(s) for {var_name}")
-        
+
         min_date = min(pending_dates)
         max_date = max(pending_dates)
         date_range_str = f"{min_date.strftime(self.time_format)}-{max_date.strftime(self.time_format)}"
         celery_checked_path = os.path.join(path, f"{date_range_str}.CELERY.CHECKED")
-        
+
         os.makedirs(os.path.dirname(celery_checked_path), exist_ok=True)
         with open(celery_checked_path, "w") as f:
             f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
             f.write(f"Files: {len(pending_filenames)}\n")
-            f.write(f"Retry: 0\n")
+            f.write("Retry: 0\n")
         log.info(f"Created {celery_checked_path}")
 
         if task_name:
@@ -289,21 +328,25 @@ class DataWatcherStream(DataWatcher):
                     var_name,
                     pending_filenames,
                     pending_dates,
-                )
+                ),
             )
-            log.info(f"Triggered batch task {task_name} for {var_name} with {len(pending_filenames)} file(s)")
+            log.info(
+                f"Triggered batch task {task_name} for {var_name} with {len(pending_filenames)} file(s)"
+            )
 
     def check_and_trigger(
         self,
         task_name: Optional[str] = None,
         var_name: Optional[str] = None,
         skip_debounce: bool = True,
-        **kwargs
+        **kwargs,
     ) -> None:
         super().check_and_trigger(
-            task_name=None, # We handle triggering manually in _perform_action
+            task_name=None,  # We handle triggering manually in _perform_action
             custom_processed_check=self._check_processed,
-            custom_action=lambda id, f, p: self._perform_action(id, f, p, task_name, var_name),
+            custom_action=lambda id, f, p: self._perform_action(
+                id, f, p, task_name, var_name
+            ),
             skip_debounce=skip_debounce,
-            **kwargs
+            **kwargs,
         )

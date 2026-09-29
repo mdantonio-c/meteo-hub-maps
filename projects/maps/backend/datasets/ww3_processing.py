@@ -1,20 +1,22 @@
 """WW3 mosaic publication and cache orchestration."""
-from restapi.utilities.logs import log
-from restapi.env import Env
+
 import os
 import shutil
-import requests
 from datetime import datetime
-from typing import Any
-from .geoserver_utils import (
-    upload_geotiff_generic,
-    publish_layer_generic,
-    create_workspace_generic,
-    associate_sld_with_layer_generic,
-    update_slds_from_local_folders,
-)
+
+import requests
 from maps.tasks.cache_control import schedule_cache_refresh_chord
 from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
+from restapi.env import Env
+from restapi.utilities.logs import log
+
+from .geoserver_utils import (
+    associate_sld_with_layer_generic,
+    create_workspace_generic,
+    publish_layer_generic,
+    update_slds_from_local_folders,
+    upload_geotiff_generic,
+)
 
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
@@ -22,43 +24,6 @@ PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
 WORKSPACE = "meteohub"
 WW3_BASE_PATH = os.path.join(Env.get("WW3_DATA_PATH", "/ww3"), "Mediterraneo")
 COPIES_BASE_DIRECTORY = "/geoserver_data/copies"
-
-
-def _ingest_ww3_layers(run_date: str, config: Any = None) -> list:
-    log.info(f"Starting WW3 ingestion for run {run_date}")
-
-    if not os.path.exists(WW3_BASE_PATH):
-        log.warning(f"WW3 base path not found: {WW3_BASE_PATH}")
-        return []
-
-    if config is not None:
-        try:
-            variables = config.datasets.get("ww3", {}).get("variables", [])
-            if not variables:
-                variables = [
-                    d
-                    for d in os.listdir(WW3_BASE_PATH)
-                    if os.path.isdir(os.path.join(WW3_BASE_PATH, d)) and d != "dir-dir"
-                ]
-        except AttributeError:
-            variables = [
-                d
-                for d in os.listdir(WW3_BASE_PATH)
-                if os.path.isdir(os.path.join(WW3_BASE_PATH, d)) and d != "dir-dir"
-            ]
-    else:
-        variables = [
-            d
-            for d in os.listdir(WW3_BASE_PATH)
-            if os.path.isdir(os.path.join(WW3_BASE_PATH, d)) and d != "dir-dir"
-        ]
-
-    layers = []
-    for var in variables:
-        process_ww3_variable(var)
-        layers.append(f"ww3_{var}")
-
-    return layers
 
 
 def update_geoserver_ww3_layers(self, run_date, cache_config=None):
@@ -215,11 +180,11 @@ def process_ww3_variable(var):
 
 def create_mock_sld(var, sld_path):
     content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<StyledLayerDescriptor version="1.0.0" 
- xsi:schemaLocation="http://www.opengis.net/sld StyledLayerDescriptor.xsd" 
- xmlns="http://www.opengis.net/sld" 
- xmlns:ogc="http://www.opengis.net/ogc" 
- xmlns:xlink="http://www.w3.org/1999/xlink" 
+<StyledLayerDescriptor version="1.0.0"
+ xsi:schemaLocation="http://www.opengis.net/sld StyledLayerDescriptor.xsd"
+ xmlns="http://www.opengis.net/sld"
+ xmlns:ogc="http://www.opengis.net/ogc"
+ xmlns:xlink="http://www.w3.org/1999/xlink"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <NamedLayer>
     <Name>ww3_{var}</Name>

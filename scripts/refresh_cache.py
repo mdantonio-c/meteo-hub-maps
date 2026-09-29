@@ -7,23 +7,32 @@ Examples:
 """
 
 import argparse
+import importlib.util
 import os
 import sys
 from pathlib import Path
 from typing import List, Optional
 
 
-BACKEND = Path(__file__).resolve().parents[1] / "projects" / "maps" / "backend"
-sys.path.insert(0, str(BACKEND))
+PROJECT = Path(__file__).resolve().parents[1] / "projects" / "maps"
+BACKEND = PROJECT / "backend"
+# RAPyDo mounts backend/ as the `maps` package inside its containers.
+package = importlib.util.spec_from_file_location(
+    "maps", BACKEND / "__init__.py", submodule_search_locations=[str(BACKEND)]
+)
+assert package is not None and package.loader is not None
+maps = importlib.util.module_from_spec(package)
+sys.modules["maps"] = maps
+package.loader.exec_module(maps)
 
-from datasets.cache import GWCInvalidator, TemporalCacheLayer  # noqa: E402
-from datasets.manifest import load_manifest  # noqa: E402
+from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer  # noqa: E402
+from maps.datasets.manifest import load_manifest  # noqa: E402
 
 
 def _dataset_config(dataset_id: str):
     path = os.environ.get(
         "DATASET_CONFIG_PATH",
-        str(BACKEND.parent / "datasets.yml"),
+        str(PROJECT / "datasets.yml"),
     )
     for dataset in load_manifest(path):
         if dataset.identifier == dataset_id:

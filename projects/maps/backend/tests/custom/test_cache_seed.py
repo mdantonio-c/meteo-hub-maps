@@ -38,7 +38,7 @@ datasets:
     kind: forecast
     discovery: {}
     ingestion:
-      adapter: windy_image_mosaic
+       behaviour: bulk_override
     temporal:
       filename_regex: '.*'
       filename_format: yyyyMMdd

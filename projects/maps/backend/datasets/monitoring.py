@@ -1,22 +1,31 @@
-"""Periodic discovery task names shared by startup and monitoring controls."""
+"""Periodic discovery schedules shared by startup and monitoring controls."""
 
+from .manifest import ManifestError
 from .registry import load_registry
 
 
+def discovery_schedules() -> tuple[tuple[str, str, tuple[str, ...]], ...]:
+    configs = load_registry().list()
+    if any(not config.discovery.get("task") for config in configs):
+        raise ManifestError("each scheduled dataset needs a discovery.task")
+    schedules = {}
+    for config in configs:
+        task = config.discovery["task"]
+        name = f"discover-{config.identifier}" if task == "discover_dataset" else task
+        schedules[name] = (
+            name,
+            task,
+            (config.identifier,) if task == "discover_dataset" else (),
+        )
+    return tuple(schedules.values())
+
+
 def discovery_tasks() -> tuple[str, ...]:
-    tasks = {
-        "windy_image_mosaic": "check_latest_data_and_trigger_geoserver_import_windy",
-        "seasonal_mosaic": "check_latest_data_and_trigger_geoserver_import_seasonal",
-        "radar_stream": "check_latest_data_and_trigger_geoserver_import_radar",
-        "sub_seasonal_mosaic": "check_latest_data_and_trigger_geoserver_import_sub_seasonal",
-        "ww3_mosaic": "check_latest_data_and_trigger_geoserver_import_ww3",
-        "marine_mosaic": "check_latest_data_and_trigger_geoserver_import_mer_bolam",
-    }
-    return tuple(dict.fromkeys(tasks[config.adapter] for config in load_registry().list()))
+    return tuple(name for name, _, _ in discovery_schedules())
 
 
 def start_monitoring(celery_instance) -> None:
-    for name in discovery_tasks():
+    for name, task, args in discovery_schedules():
         celery_instance.create_crontab_task(
             name=name,
             hour="*",
@@ -24,8 +33,8 @@ def start_monitoring(celery_instance) -> None:
             day_of_week="*",
             day_of_month="*",
             month_of_year="*",
-            task=name,
-            args=[],
+            task=task,
+            args=list(args),
         )
 
 

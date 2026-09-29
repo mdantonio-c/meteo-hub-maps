@@ -1,30 +1,30 @@
-"""Dataset READY discovery and marine publication."""
-from restapi.utilities.logs import log
+"""Marine forcing discovery and publication."""
+
 import os
 import re
 import shutil
-import requests
 from datetime import datetime
-from restapi.connectors import celery
-from restapi.env import Env
-from maps.datasets.watcher import DataWatcher
+
+import requests
 from maps.datasets.geoserver_utils import (
-    create_workspace_generic,
-    upload_geotiff_generic,
-    publish_layer_generic,
-    check_style_exists,
-    upload_sld_generic,
     associate_sld_with_layer_generic,
+    check_style_exists,
+    create_workspace_generic,
+    publish_layer_generic,
+    upload_geotiff_generic,
+    upload_sld_generic,
 )
 from maps.tasks.cache_control import schedule_cache_refresh_chord
 from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
+from restapi.connectors import celery
+from restapi.env import Env
+from restapi.utilities.logs import log
 
+from .watcher import mark_ingestion_unhealthy, read_retry_count
 
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"  # TODO: get from env
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
 PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
-SUB_SEASONAL_BASE_PATH = Env.get("SUB_SEASONAL_AIM_PATH", "/sub-seasonal-aim")
-WW3_BASE_PATH = os.path.join(Env.get("WW3_DATA_PATH", "/ww3"), "Mediterraneo")
 MER_BASE_PATH = Env.get("MER_DATA_PATH", "/shyfem")
 MER_FORCINGS = [
     forcing.strip().upper()
@@ -133,19 +133,6 @@ def _get_latest_mer_ready_run(forcing_dir: str) -> str | None:
     return None
 
 
-def _read_run_from_marker(marker_path: str) -> str | None:
-    if not os.path.exists(marker_path):
-        return None
-    try:
-        with open(marker_path, "r") as f:
-            for line in f:
-                if line.startswith("Run:"):
-                    return line.split(":", 1)[1].strip()
-    except Exception as e:
-        log.warning(f"Failed reading marker {marker_path}: {e}")
-    return None
-
-
 def _update_forcing_geoserver_ready_if_complete(
     forcing_dir: str, forcing_name: str, run_date: str
 ) -> None:
@@ -204,252 +191,7 @@ def _ensure_mer_wl_style() -> bool:
     return False
 
 
-def check_latest_data_and_trigger_geoserver_import_sub_seasonal(
-    self,
-    sub_seasonal_path: str = SUB_SEASONAL_BASE_PATH,
-) -> None:
-    """
-    Check the latest sub-seasonal data in the given path.
-    """
-    log.info("Checking latest sub-seasonal data")
-
-    def custom_action(identifier, latest_file, path):
-        run_date = identifier
-        retry = 0
-
-        # Calculate range from files in t2m/quintile_1
-        # Get a random variable folder instead of hardcoding t2m
-        var_dirs = [
-            d
-            for d in os.listdir(path)
-            if os.path.isdir(os.path.join(path, d)) and d not in [".", ".."]
-        ]
-        if not var_dirs:
-            log.warning(f"No variable directories found in {path}")
-            return
-
-        sample_var = (
-            var_dirs[0] if var_dirs[0] != "json_weekly" else var_dirs[1]
-        )  # Use first available variable folder
-        var_path = os.path.join(path, sample_var)
-
-        child_dirs = [
-            d
-            for d in os.listdir(var_path)
-            if os.path.isdir(os.path.join(var_path, d)) and d not in [".", ".."]
-        ]
-        if not child_dirs:
-            log.warning(f"No child directories found in {var_path}")
-            return
-
-        sample_child = child_dirs[0]  # Use first available child folder
-        sample_dir = os.path.join(var_path, sample_child)
-        if not os.path.exists(sample_dir):
-            log.warning(f"Sample directory {sample_dir} not found for run {run_date}")
-            return
-
-        files = [
-            f
-            for f in os.listdir(sample_dir)
-            if f.endswith(".tiff") or f.endswith(".tif")
-        ]
-        if not files:
-            log.warning(f"No files found in {sample_dir}")
-            return
-
-        dates = []
-        for f in files:
-            try:
-                d_str = f.split(".")[0]
-                dates.append(datetime.strptime(d_str, "%Y-%m-%d"))
-            except ValueError:
-                continue
-
-        if not dates:
-            log.warning("No valid dates found in files")
-            return
-
-        min_date = min(dates)
-        max_date = max(dates)
-        range_str = f"{min_date.strftime('%Y%m%d')}-{max_date.strftime('%Y%m%d')}"
-
-        # Check if processed
-        geoserver_ready_file = os.path.join(path, f"{range_str}.GEOSERVER.READY")
-        if os.path.exists(geoserver_ready_file):
-            # Check if the run date inside matches the current run date
-            try:
-                with open(geoserver_ready_file, "r") as f:
-                    content = f.read()
-                    if f"Run: {run_date}" in content:
-                        log.info(
-                            f"Range {range_str} already processed for run {run_date}"
-                        )
-                        return
-                    else:
-                        log.info(
-                            f"Range {range_str} exists but for a different run. Re-processing."
-                        )
-            except Exception as e:
-                log.warning(f"Failed to read {geoserver_ready_file}: {e}")
-                # If we can't read it, assume we need to re-process or at least check pending
-
-        # Check if pending (debounce)
-        checked_file = os.path.join(path, f"{range_str}.CELERY.CHECKED")
-        if os.path.exists(checked_file):
-            # Check if pending for more than 300 seconds
-            file_mtime = os.path.getmtime(checked_file)
-            age_seconds = (
-                datetime.now() - datetime.fromtimestamp(file_mtime)
-            ).total_seconds()
-            # Read the retry count from the file
-            try:
-                with open(checked_file, "r") as f:
-                    lines = f.readlines()
-                    for line in reversed(lines):
-                        if line.startswith("Retry:"):
-                            retry = int(line.split(":")[1].strip())
-                            break
-            except Exception as e:
-                log.warning(f"Failed to read retry count from {checked_file}: {e}")
-                retry = 0
-            if age_seconds > 300:
-                log.info(
-                    f"Range {range_str} pending for {age_seconds:.0f}s (> 300s), removing and re-triggering"
-                )
-                retry += 1
-                if retry > 1:
-                    log.error(
-                        f"Range {range_str} has been retried {retry} times, marking container as unhealthy"
-                    )
-                    # Mark container as unhealthy by creating/touching the health check failure file
-                    health_check_file = "/status/health_check_failure"
-                    with open(health_check_file, "w") as hf:
-                        hf.write(
-                            f"Sub-seasonal processing stuck for range {range_str} after {retry} retries\n"
-                        )
-                        hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
-                    os.remove(checked_file)
-                    return
-                os.remove(checked_file)
-            else:
-                log.info(
-                    f"Range {range_str} already checked (pending for {age_seconds:.0f}s)"
-                )
-                return
-        if os.path.exists(checked_file):
-            log.info(f"Range {range_str} already checked (pending)")
-            return
-
-        # Create CELERY.CHECKED
-        with open(checked_file, "w") as f:
-            f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
-            f.write(f"Run: {run_date}\n")
-            f.write(f"Range: {range_str}\n")
-            f.write(f"Retry: {retry}\n")
-        log.info(f"Created {checked_file}")
-
-        # Trigger task
-        c = celery.get_instance()
-        from .registry import load_registry
-
-        c.celery_app.send_task(
-            load_registry().ingestion_task("sub-seasonal"), args=(run_date, range_str)
-        )
-        log.info(
-            f"Triggered update_geoserver_sub_seasonal_layers for {run_date} range {range_str}"
-        )
-
-    watcher = DataWatcher(
-        paths=sub_seasonal_path,
-        ready_suffix=".READY",
-        processed_suffix=".GEOSERVER.READY",
-    )
-
-    watcher.check_and_trigger(custom_action=custom_action, skip_debounce=True)
-    log.info("Finished checking sub-seasonal data")
-
-
-def check_latest_data_and_trigger_geoserver_import_ww3(
-    self,
-    ww3_path: str = WW3_BASE_PATH,
-) -> None:
-    """
-    Check the latest ww3 data in the given path.
-    """
-    log.info("Checking latest ww3 data")
-
-    def custom_action(identifier, latest_file, path):
-        run_date = identifier
-        # retry = 0
-
-        # # Check if processed
-        # # If there's any GEOSERVER.READY file, return and we're okay
-        # if any(f.endswith(".GEOSERVER.READY") for f in os.listdir(path)):
-        #     log.info(f"GEOSERVER.READY file found in {path}, assuming run {run_date} is processed")
-        #     return
-
-        # # Check if pending (debounce)
-        # checked_file = os.path.join(path, f"{run_date}.CELERY.CHECKED")
-        # if os.path.exists(checked_file):
-        #     # Check if pending for more than 300 seconds
-        #     file_mtime = os.path.getmtime(checked_file)
-        #     age_seconds = (datetime.now() - datetime.fromtimestamp(file_mtime)).total_seconds()
-        #     # Read the retry count from the file
-        #     try:
-        #         with open(checked_file, "r") as f:
-        #             lines = f.readlines()
-        #             for line in reversed(lines):
-        #                 if line.startswith("Retry:"):
-        #                     retry = int(line.split(":")[1].strip())
-        #                     break
-        #     except Exception as e:
-        #         log.warning(f"Failed to read retry count from {checked_file}: {e}")
-        #         retry = 0
-        #     if age_seconds > 300:
-        #         log.info(f"Run {run_date} pending for {age_seconds:.0f}s (> 300s), removing and re-triggering")
-        #         retry += 1
-        #         if retry > 1:
-        #             log.error(f"Run {run_date} has been retried {retry} times, marking container as unhealthy")
-        #             # Mark container as unhealthy by creating/touching the health check failure file
-        #             health_check_file = "/status/health_check_failure"
-        #             with open(health_check_file, "w") as hf:
-        #                 hf.write(f"WW3 processing stuck for run {run_date} after {retry} retries\n")
-        #                 hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
-        #             os.remove(checked_file)
-        #             return
-        #         os.remove(checked_file)
-        #     else:
-        #         log.info(f"Run {run_date} already checked (pending for {age_seconds:.0f}s)")
-        #         return
-        # if os.path.exists(checked_file):
-        #     log.info(f"Run {run_date} already checked (pending)")
-        #     return
-
-        # # Create CELERY.CHECKED
-        # with open(checked_file, "w") as f:
-        #     f.write(f"Checked by Celery task at {datetime.now().isoformat()}\n")
-        #     f.write(f"Run: {run_date}\n")
-        #     f.write(f"Retry: {retry}\n")
-        # log.info(f"Created {checked_file}")
-
-        # Trigger task
-        from .registry import load_registry
-
-        celery.get_instance().celery_app.send_task(
-            load_registry().ingestion_task("ww3"), args=(run_date,)
-        )
-        log.info(f"Triggered update_geoserver_ww3_layers for {run_date}")
-
-    watcher = DataWatcher(
-        paths=ww3_path, ready_suffix=".READY", processed_suffix=".GEOSERVER.READY"
-    )
-
-    watcher.check_and_trigger(custom_action=custom_action, skip_debounce=False)
-    log.info("Finished checking ww3 data")
-
-
 def check_latest_data_and_trigger_geoserver_import_mer_bolam(
-    self,
     mer_base_path: str = MER_BASE_PATH,
 ) -> None:
     """
@@ -507,16 +249,7 @@ def check_latest_data_and_trigger_geoserver_import_mer_bolam(
                     datetime.now()
                     - datetime.fromtimestamp(os.path.getmtime(checked_file))
                 ).total_seconds()
-                try:
-                    with open(checked_file, "r") as f:
-                        lines = f.readlines()
-                        for line in reversed(lines):
-                            if line.startswith("Retry:"):
-                                retry = int(line.split(":", 1)[1].strip())
-                                break
-                except Exception as e:
-                    log.warning(f"Failed to read retry count from {checked_file}: {e}")
-                    retry = 0
+                retry = read_retry_count(checked_file)
 
                 if age_seconds > 300:
                     retry += 1
@@ -524,11 +257,9 @@ def check_latest_data_and_trigger_geoserver_import_mer_bolam(
                         log.error(
                             f"MER processing stuck for {layer_name} after {retry} retries"
                         )
-                        with open("/status/health_check_failure", "w") as hf:
-                            hf.write(
-                                f"MER processing stuck for {layer_name} after {retry} retries\n"
-                            )
-                            hf.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                        mark_ingestion_unhealthy(
+                            f"MER processing stuck for {layer_name} after {retry} retries"
+                        )
                         os.remove(checked_file)
                         continue
                     os.remove(checked_file)

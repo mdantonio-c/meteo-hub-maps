@@ -202,7 +202,7 @@ def write_geoserver_ready(
             except FileNotFoundError:
                 pass
     if completion:
-        from maps.datasets.discovery import _update_forcing_geoserver_ready_if_complete
+        from maps.datasets.marine_processing import _update_forcing_geoserver_ready_if_complete
 
         _update_forcing_geoserver_ready_if_complete(
             completion["forcing_dir"],

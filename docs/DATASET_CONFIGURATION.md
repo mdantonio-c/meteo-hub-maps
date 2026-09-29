@@ -4,7 +4,7 @@ Dataset definitions live in `projects/maps/datasets.yml`. The backend and Celery
 
 This manifest describes dataset discovery, ingestion adapter selection, temporal parsing, GeoServer publication/cache settings, and REST endpoint capabilities. It is not a list of individual forecast files or runtime data values.
 
-**Ingestion flow:** periodic Celery tasks load an adapter from `datasets/registry.py` and call `discover()`. The dataset watcher submits a dataset's registered ingestion task, whose Celery wrapper loads the same adapter and calls `ingest()`. Dataset modules own scanning, publication, cache-request construction and marker naming. Cache invalidation is asynchronous: `.GEOSERVER.READY` is written by the cache-control chord callback after invalidation succeeds; tile warming may continue afterward. Task names remain stable for existing schedules and external callers.
+**Ingestion flow:** monitoring schedules each dataset's `discovery.task`. `ingestion.behaviour` chooses `bulk_override` (replace a run's mosaic) or `fifo_granules` (keep newest timestamped granules under the configured retention limits). The registry selects a dataset-id specialization when available for that behaviour, otherwise the corresponding default implementation. The manifest never names a Python implementation. The discovery task submits `ingestion.task`; publication runs synchronously, then asynchronous cache invalidation writes `.GEOSERVER.READY` only after it succeeds. Warming may continue afterward. Existing task names remain available.
 
 ## Top-level structure
 
@@ -47,8 +47,10 @@ Describes where source data is found and how its files/runs are recognized. Typi
 
 | Option | Purpose |
 | --- | --- |
-| `base_path_env` | Environment variable that overrides the source root. |
+| `task` | Optional Celery discovery task. Defaults to `discover_dataset`, which schedules one task per dataset, passing its id. Existing dataset-specific task names remain supported. |
+| `base_path_env` | Optional environment variable that overrides the source root. |
 | `base_path_default` | Fallback source root inside the container. |
+| `path_suffix` | Optional relative folder below the source root for the default behaviour implementations (e.g. `Mediterraneo`). |
 | `folder_pattern` | Source folder template; `{run}` and other adapter-defined values are substituted. |
 | `area` | Area/subdirectory within a source folder. |
 | `runs` | Forecast run identifiers to discover, e.g. `["00", "12"]`. |
@@ -57,16 +59,19 @@ Describes where source data is found and how its files/runs are recognized. Typi
 | `forcings_env` | Environment variable naming marine forcings. |
 | `markers` | READY, debounce/check, and ingestion-complete filename suffixes. |
 
-Exact path-template substitutions and run handling are adapter-specific. Use a current dataset with the same adapter as a starting point rather than assuming every option works for every data type.
+Default implementations read direct variable folders and parse TIFF timestamps from `temporal.filename_regex` (capture group 1). Specialized datasets can use their own folder and marker conventions.
 
 ### `ingestion`
 
 | Option | Purpose |
 | --- | --- |
-| `adapter` | Required adapter identifier. Supported values: `windy_image_mosaic`, `radar_stream`, `ww3_mosaic`, `seasonal_mosaic`, `sub_seasonal_mosaic`, `marine_mosaic`. The registry resolves the corresponding dataset adapter and ingestion task. |
+| `behaviour` | Required for ingestion: `bulk_override` replaces a run's mosaic; `fifo_granules` retains timestamped granules using the limits below. The registry selects a dataset-id implementation when registered, otherwise the behaviour's default. |
+| `task` | Optional Celery ingestion task. Defaults to `ingest_dataset` (run and dataset id are passed); existing task names can be retained for external callers. |
+| `retention.hours` | For `fifo_granules`: retain granules within this many hours of the newest timestamp. |
+| `retention.max_granules` | For `fifo_granules`: keep at most this many newest granules per variable. Both limits apply if supplied; at least one is required. |
 | `trigger` | Declares the expected trigger, commonly `ready_marker`; adapter/task code determines the actual trigger behavior. |
 | `batch_mode` | Describes input grouping, e.g. `run`, `time_range`, `replacement`, or `forcing_variable`. It is currently declarative; adapter/task code implements the behavior. |
-| `rolling_window_hours` | Declares the radar rolling retention window. The runtime retention value is currently controlled by `RADAR_RETENTION_HOURS`. |
+| `rolling_window_hours` | Legacy radar metadata; prefer `retention.hours` for new FIFO datasets. |
 
 ### `temporal`
 
@@ -107,7 +112,7 @@ Ingestion adapters pass dataset cache zoom ranges through when configured. The m
 
 ## Example: add an ImageMosaic forecast
 
-Copy an existing forecast using the `windy_image_mosaic` adapter, then change the identifier, discovery path/pattern, variables, temporal format, and layer/style mapping to match the new source. For example:
+For a run-based forecast, provide a publication function in `maps.datasets` and configure its READY directory and task names. For example:
 
 ```yaml
 - id: example-model
@@ -117,15 +122,13 @@ Copy an existing forecast using the `windy_image_mosaic` adapter, then change th
   discovery:
     base_path_env: EXAMPLE_DATA_PATH
     base_path_default: /example
-    folder_pattern: "Example-{run}.web"
-    area: Italia
-    runs: ["00", "12"]
+    path_suffix: Italia
     markers:
       ready_suffix: .READY
       checked_suffix: .CELERY.CHECKED
       completed_suffix: .GEOSERVER.READY
   ingestion:
-    adapter: windy_image_mosaic
+    behaviour: bulk_override
     trigger: ready_marker
     batch_mode: run
   temporal:
@@ -149,7 +152,7 @@ Copy an existing forecast using the `windy_image_mosaic` adapter, then change th
     operations: [metadata, file_download]
 ```
 
-This illustrates the manifest shape; the example values and path conventions must match the intended dataset and data producer. Adding a new adapter requires registering its class, discovery task and ingestion task in the registry/monitoring modules, plus the Celery entry points. Source paths may also require environment and Docker volume configuration. Adding only a YAML entry cannot implement a new ingestion protocol.
+This illustrates a bulk replacement dataset: `ingestion.behaviour: bulk_override` is the only required ingestion choice; the shared discovery and ingestion tasks are defaults. Use `fifo_granules` with `retention.hours` and/or `retention.max_granules` for a rolling mosaic. The default implementations watch the latest READY marker, publish direct variable folders as temporal mosaics, and schedule cache invalidation before writing a completion marker. For nonstandard layouts, register a dataset-id specialization in `datasets/registry.py`; there is no dotted implementation path in YAML. Source paths may also require environment and Docker volume configuration.
 
 ## Inheritance and overrides
 

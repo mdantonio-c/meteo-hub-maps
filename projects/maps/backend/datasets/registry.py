@@ -4,25 +4,26 @@ from dataclasses import dataclass
 from importlib import import_module
 from typing import Optional, Tuple
 
-from .manifest import DatasetConfig, ManifestError, load_manifest
-
+from .manifest import (
+    DatasetConfig,
+    ManifestError,
+    _SPECIALIZED_BEHAVIOURS,
+    load_manifest,
+)
 
 _ADAPTERS = {
-    "windy_image_mosaic": "maps.datasets.windy.WindyIngestionAdapter",
-    "radar_stream": "maps.datasets.radar.RadarIngestionAdapter",
-    "ww3_mosaic": "maps.datasets.ww3.WW3IngestionAdapter",
-    "seasonal_mosaic": "maps.datasets.seasonal.SeasonalIngestionAdapter",
-    "sub_seasonal_mosaic": "maps.datasets.sub_seasonal.SubSeasonalIngestionAdapter",
-    "marine_mosaic": "maps.datasets.marine.MarineIngestionAdapter",
+    "bulk_override": "maps.datasets.behaviours.BulkOverrideAdapter",
+    "fifo_granules": "maps.datasets.behaviours.FifoGranulesAdapter",
 }
 
-_ADAPTER_TASKS = {
-    "windy_image_mosaic": "update_geoserver_image_mosaic",
-    "radar_stream": "update_geoserver_radar_layers",
-    "ww3_mosaic": "update_geoserver_ww3_layers",
-    "seasonal_mosaic": "update_geoserver_seasonal_layers",
-    "sub_seasonal_mosaic": "update_geoserver_sub_seasonal_layers",
-    "marine_mosaic": "update_geoserver_mer_bolam_layer",
+_SPECIALIZATIONS = {
+    "icon": "maps.datasets.windy.WindyIngestionAdapter",
+    "wrf": "maps.datasets.windy.WindyIngestionAdapter",
+    "radar": "maps.datasets.radar.RadarIngestionAdapter",
+    "ww3": "maps.datasets.specialized.WW3Adapter",
+    "seasonal": "maps.datasets.specialized.SeasonalAdapter",
+    "sub-seasonal": "maps.datasets.sub_seasonal.SubSeasonalIngestionAdapter",
+    "marine": "maps.datasets.marine.MarineIngestionAdapter",
 }
 
 
@@ -33,7 +34,9 @@ class DatasetRegistry:
     datasets: Tuple[DatasetConfig, ...]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "_by_id", {dataset.identifier: dataset for dataset in self.datasets})
+        object.__setattr__(
+            self, "_by_id", {dataset.identifier: dataset for dataset in self.datasets}
+        )
 
     def get(self, identifier: str) -> DatasetConfig:
         try:
@@ -45,9 +48,16 @@ class DatasetRegistry:
         return self.datasets
 
     def adapter_path(self, identifier: str) -> str:
-        adapter = self.get(identifier).adapter
+        config = self.get(identifier)
+        adapter = config.adapter
         try:
-            return _ADAPTERS[adapter]
+            default = _ADAPTERS[adapter]
+            specialized = _SPECIALIZATIONS.get(identifier)
+            return (
+                specialized
+                if _SPECIALIZED_BEHAVIOURS.get(identifier) == adapter
+                else default
+            )
         except KeyError as exc:
             raise ManifestError(f"no adapter registered for {adapter!r}") from exc
 
@@ -57,10 +67,10 @@ class DatasetRegistry:
         return getattr(import_module(module_name), class_name)(self.get(identifier))
 
     def ingestion_task(self, identifier: str) -> str:
-        try:
-            return _ADAPTER_TASKS[self.get(identifier).adapter]
-        except KeyError as exc:
-            raise ManifestError(f"no ingestion task registered for {identifier!r}") from exc
+        task = self.get(identifier).ingestion.get("task")
+        if not task:
+            raise ManifestError(f"no ingestion task configured for {identifier!r}")
+        return task
 
 
 def load_registry(path: Optional[str] = None) -> DatasetRegistry:

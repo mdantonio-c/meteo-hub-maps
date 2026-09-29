@@ -4,9 +4,29 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from celery.exceptions import Ignore
-from restapi.connectors.celery import CeleryRetryTask
-
+from flask import Flask
 from maps.tasks import cache_control
+from restapi.connectors.celery import CeleryExt, CeleryRetryTask
+
+
+@pytest.fixture(autouse=True)
+def celery_app_context(monkeypatch):
+    monkeypatch.setattr(CeleryExt, "app", Flask(__name__))
+    monkeypatch.setattr(
+        cache_control.invalidate_gwc_layer.request,
+        "task",
+        "invalidate_gwc_layer",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        cache_control.invalidate_gwc_layer.request,
+        "id",
+        "test-invalidation",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        cache_control.invalidate_gwc_layer, "update_state", lambda **_kwargs: None
+    )
 
 
 def test_chord_assigns_generations_and_waits_for_all_layers(tmp_path) -> None:
@@ -92,7 +112,9 @@ def test_chord_callback_runs_without_invalidations_when_gwc_is_disabled(
         cache_control, "_redis"
     ) as redis_factory, patch(
         "maps.tasks.cache_control.chord", side_effect=AssertionError("no chord")
-    ), patch("maps.tasks.cache_control.signature", return_value=callback):
+    ), patch(
+        "maps.tasks.cache_control.signature", return_value=callback
+    ):
         cache_control.schedule_cache_refresh_chord(
             [
                 {
@@ -129,6 +151,29 @@ def test_ready_marker_is_written_only_by_successful_chord_callback(tmp_path) -> 
 
     assert ready_file.read_text() == "ready\n"
     assert not stale_file.exists()
+    assert not checked_file.exists()
+
+
+def test_marine_completion_writes_forcing_marker_after_cache_callback(tmp_path) -> None:
+    forcing_dir = tmp_path / "BOLAM"
+    forcing_dir.mkdir()
+    checked_file = forcing_dir / "20260928.wl.CELERY.CHECKED"
+    checked_file.touch()
+
+    cache_control.write_geoserver_ready.run(
+        [],
+        str(forcing_dir / "20260928.GEOSERVER.READY"),
+        "ready\n",
+        [],
+        [str(checked_file)],
+        {
+            "forcing_dir": str(forcing_dir),
+            "forcing_name": "BOLAM",
+            "run_date": "20260928",
+        },
+    )
+
+    assert "Forcing: BOLAM" in (forcing_dir / "20260928.GEOSERVER.READY").read_text()
     assert not checked_file.exists()
 
 
@@ -183,7 +228,9 @@ def test_truncate_failure_fails_the_header_and_does_not_schedule_warming() -> No
         cache_control, "_redis", return_value=redis_client
     ), patch.object(cache_control, "_invalidator", return_value=invalidator), patch(
         "maps.tasks.cache_control.celery.get_instance"
-    ) as get_instance, pytest.raises(Ignore, match="could not truncate"):
+    ) as get_instance, pytest.raises(
+        Ignore, match="could not truncate"
+    ):
         cache_control.invalidate_gwc_layer.run(
             layer_name="radar-sri",
             geoserver_url="http://geoserver",
