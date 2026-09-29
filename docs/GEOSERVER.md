@@ -358,6 +358,18 @@ Check GeoServer health:
 GET /geoserver/rest/about/status
 ```
 
+The container health check uses GeoServer's lightweight web UI asset endpoint. It
+checks that the application is answering without rendering a raster on every
+probe. In the production profile, `healthwatch` restarts only GeoServer when its
+health check remains unhealthy; Celery's ingestion-failure marker is handled by
+restarting the Celery worker, so ingestion problems do not unnecessarily interrupt
+map requests. Docker itself does not restart a running container solely because
+it becomes unhealthy, which is why the healthwatch service is kept enabled.
+The published `8081` port is bound to loopback; external clients should use the
+TLS reverse proxy, while services on the Compose network continue to use the
+internal GeoServer hostname and port. GeoServer is allowed two minutes to shut
+down cleanly so in-flight requests have time to finish during a restart.
+
 ### Layer Status
 
 Verify layer exists:
@@ -407,6 +419,28 @@ curl -u admin:password \
 4. Monitor GeoServer memory usage
 
 ## Best Practices
+
+### Production Capacity and Availability
+
+- The production JVM heap is configured through the OSGeo image's
+  `EXTRA_JAVA_OPTS` with a 4 GiB initial and 8 GiB maximum
+  heap. Size the host for the heap plus JVM native memory, raster/rendering
+  buffers, the OS, and other containers; do not deploy this profile on a host
+  with less than 12 GiB available to GeoServer and its runtime overhead.
+- Avoid setting a CPU or memory limit below the JVM's configured requirements.
+  Watch heap occupancy, GC pauses, CPU saturation, open file descriptors, and
+  request latency under representative concurrent WMS load before increasing
+  worker or cache-seeding concurrency.
+- A single GeoServer container on one host is not highly available: host, disk,
+  network, or shared data-directory failures still take the service offline. For
+  host-level HA, deploy multiple GeoServer instances behind a load balancer with
+  health-based routing, use a supported shared GeoServer data directory and
+  coordinated configuration updates, and keep the GeoWebCache strategy consistent
+  across instances. Never let independent instances concurrently mutate an
+  unsupported shared catalog/data directory.
+- Use durable, monitored storage for `/opt/geoserver_data` and maintain tested
+  backups of the catalog and data. Container restart recovery cannot recover a
+  lost or corrupt data volume.
 
 ### Granule Management
 

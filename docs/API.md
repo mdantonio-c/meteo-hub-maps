@@ -722,3 +722,96 @@ The availability of data depends on:
 ### Platform Selection
 
 When `platform` parameter is not specified for maps endpoints, the service automatically selects the platform with the most recent available data, checking in order: G100 (default), leonardo.
+
+---
+
+## System Status Endpoint
+
+### Get System Status
+
+Retrieve the current system status and any scheduled maintenance information. Clients can use this endpoint to check if the system is operational or if maintenance is planned.
+
+**Endpoint:** `GET /api/status`
+
+**Response:** `200 OK`
+
+```json
+{
+  "status": "operational",
+  "message": null,
+  "scheduled_start": null,
+  "scheduled_end": null,
+  "affected_services": [],
+  "updated_at": "2025-01-14T10:00:00Z"
+}
+```
+
+**Status Values:**
+- `operational` - All systems functioning normally
+- `maintenance` - Scheduled maintenance in progress or planned
+- `degraded` - System experiencing partial issues
+- `outage` - System unavailable
+
+**Response Fields:**
+- `status` (string): Current system state
+- `message` (string, optional): Human-readable description
+- `scheduled_start` (string, optional): ISO 8601 timestamp for planned maintenance start
+- `scheduled_end` (string, optional): ISO 8601 timestamp for planned maintenance end
+- `affected_services` (array): List of affected services (e.g., `["maps", "windy"]`)
+- `updated_at` (string): ISO 8601 timestamp of last update
+
+### Update System Status
+
+Update the system status to signal maintenance windows or operational changes.
+
+**Endpoint:** `POST /api/status`
+
+**Request Body:**
+```json
+{
+  "status": "maintenance",
+  "message": "Scheduled database upgrade",
+  "scheduled_start": "2025-01-15T02:00:00Z",
+  "scheduled_end": "2025-01-15T06:00:00Z",
+  "affected_services": ["maps", "windy", "radar"]
+}
+```
+
+**Required Fields:**
+- `status` - Must be one of: `operational`, `maintenance`, `degraded`, `outage`
+
+**Optional Fields:**
+- `message` - Descriptive text
+- `scheduled_start` - Planned start time (ISO 8601)
+- `scheduled_end` - Planned end time (ISO 8601)
+- `affected_services` - Array of affected service identifiers
+
+**Response:** `200 OK`
+
+```json
+{
+  "success": true,
+  "status": {
+    "status": "maintenance",
+    "message": "Scheduled database upgrade",
+    "scheduled_start": "2025-01-15T02:00:00Z",
+    "scheduled_end": "2025-01-15T06:00:00Z",
+    "affected_services": ["maps", "windy", "radar"],
+    "updated_at": "2025-01-14T10:00:00Z"
+  }
+}
+```
+
+**Error Response:** `400 Bad Request`
+
+```json
+{
+  "error": "Invalid status. Must be one of: operational, maintenance, degraded, outage"
+}
+```
+
+**Configuration:**
+
+The status file location can be configured via the `STATUS_FILE_PATH` environment variable (default: `/etc/meteohub/status.json`).
+
+For detailed usage examples, see [STATUS_API.md](STATUS_API.md).

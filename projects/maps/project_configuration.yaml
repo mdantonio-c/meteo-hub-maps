@@ -49,3 +49,5 @@ variables:
     GWC_CLIENT_EXPIRE_SECONDS: 0
     GEOSERVER_DATA_PATH: /geoserver_data
     HOST_GEOSERVER_DATA_DIR: ${DATA_DIR}/geoserver_data
+    STATUS_FILE_PATH: /var/lib/meteohub/status.json
+    HOST_STATUS_DIR: ${DATA_DIR}/status

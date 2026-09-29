@@ -35,6 +35,7 @@ services:
       - ${HOST_MER_DIR}:${MER_DATA_PATH}
       - ${PROJECT_DIR}/datasets.yml:${DATASET_CONFIG_PATH}:ro
       - ${PROJECT_DIR}/tests/custom:/code/tests/custom
+      - ${HOST_STATUS_DIR}:/var/lib/meteohub
       # - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
   celery:
     build: ${PROJECT_DIR}/builds/backend
@@ -87,6 +88,7 @@ services:
       - ${HOST_MER_DIR}:${MER_DATA_PATH}
       - ${PROJECT_DIR}/datasets.yml:${DATASET_CONFIG_PATH}:ro
       - ${PROJECT_DIR}/tests/custom:/code/tests/custom
+      - ${HOST_STATUS_DIR}:/var/lib/meteohub
       # - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
       - ${DATA_DIR}/celery_health:/status
   gwc_cache_control:
@@ -249,6 +251,7 @@ services:
     #     IMAGE_VERSION: 9.0-jdk11-openjdk-slim-buster
     ports:
       - "8081:8080"
+    stop_grace_period: 2m
     environment:
       ACTIVATE: ${ACTIVATE_GEOSERVER}
       # STABLE_EXTENSIONS: netcdf-plugin
@@ -264,14 +267,13 @@ services:
       - ${DATA_DIR}/geoserver_data:/opt/geoserver_data
       # - ${DATA_DIR}/geoserver/settings:/settings
     healthcheck:
-      test: 
+      test:
         - "CMD-SHELL"
-        - "curl -f 'http://localhost:8080/geoserver/wms?service=WMS&request=GetMap&layers=meteohub:t2m-t2m&styles=&format=image/png&version=1.1.1&width=256&height=256&srs=EPSG:3857&bbox=0,5009377.085697314,2504688.5428486555,7514065.628545967' | if grep -q 'ServiceException'; then exit 1; else exit 0; fi"
+        - "curl -fsS --max-time 8 http://localhost:8080/geoserver/web/wicket/resource/org.geoserver.web.GeoServerBasePage/img/logo.png -o /dev/null"
       interval: 30s
-          # curl -f "$(cat $$CATALINA_HOME/conf/healthcheck_url.txt)" && \
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 180s
     logging:
       driver: "json-file"
       options:
@@ -285,6 +287,7 @@ services:
   healthwatch:
     image: docker:cli
     container_name: healthwatch
+    restart: unless-stopped
     environment:
       ACTIVATE: ${ACTIVATE_GEOSERVER}
 
@@ -295,20 +298,28 @@ services:
       - ${DATA_DIR}/celery_health:/celery/status
     command: |
       sh -c '
+      if [ "$$ACTIVATE" != "1" ]; then
+        echo "GeoServer healthwatch disabled"
+        exec sleep infinity
+      fi
       echo "Waiting for maps-geoserver-1..."
       until docker ps > /dev/null 2>&1; do sleep 1; done
       sleep 30
       while true; do
-        STATUS=$$(docker inspect --format="{{.State.Health.Status}}" maps-geoserver-1 2>/dev/null)
-        echo "Geoserver status: $$STATUS"
-        if [ "$$STATUS" = "unhealthy" ] || [ -n "$$(ls -A /celery/status 2>/dev/null)" ]; then
+        for CONTAINER_ID in $$(docker ps -q --filter label=com.docker.compose.service=geoserver); do
+          STATUS=$$(docker inspect --format="{{.State.Health.Status}}" $$CONTAINER_ID 2>/dev/null)
+          if [ "$$STATUS" = "unhealthy" ]; then
+            echo "Restarting unhealthy GeoServer container $$CONTAINER_ID" >&2
+            docker restart $$CONTAINER_ID
+          fi
+        done
+        if [ -n "$$(ls -A /celery/status 2>/dev/null)" ]; then
           rm -f /celery/status/*
-          echo "Restarting geoserver due to unhealthy status..." >&2
-          docker stop maps-celery-1
-          docker restart maps-geoserver-1
-          sleep 120
-          docker restart maps-celery-1
+          for CONTAINER_ID in $$(docker ps -q --filter label=com.docker.compose.service=celery); do
+            echo "Restarting stuck Celery worker $$CONTAINER_ID" >&2
+            docker restart $$CONTAINER_ID
+          done
         fi
-        sleep 10
+        sleep 15
       done
       '
