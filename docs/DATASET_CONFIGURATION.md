@@ -4,7 +4,7 @@ Dataset definitions live in `projects/maps/datasets.yml`. The backend and Celery
 
 This manifest describes dataset discovery, ingestion adapter selection, temporal parsing, GeoServer publication/cache settings, and REST endpoint capabilities. It is not a list of individual forecast files or runtime data values.
 
-**Ingestion integration status:** the adapter classes and registry are an in-progress migration seam. The registry validates configuration and can map an adapter name to a class path, but current scheduled ingestion tasks still dispatch directly to legacy task functions; they do not resolve `adapter_path`, instantiate an adapter, or call its `ingest()` method. Therefore, adding or changing a dataset entry does not by itself register a new automated ingestion flow. The manifest is currently consumed by generic dataset metadata/file endpoints and selected configuration paths, while ingestion remains wired in the existing Celery tasks and schedules.
+**Ingestion flow:** periodic Celery tasks load an adapter from `datasets/registry.py` and call `discover()`. The dataset watcher submits a dataset's registered ingestion task, whose Celery wrapper loads the same adapter and calls `ingest()`. Dataset modules own scanning, publication, cache-request construction and marker naming. Cache invalidation is asynchronous: `.GEOSERVER.READY` is written by the cache-control chord callback after invalidation succeeds; tile warming may continue afterward. Task names remain stable for existing schedules and external callers.
 
 ## Top-level structure
 
@@ -63,7 +63,7 @@ Exact path-template substitutions and run handling are adapter-specific. Use a c
 
 | Option | Purpose |
 | --- | --- |
-| `adapter` | Required adapter identifier. Supported values: `windy_image_mosaic`, `radar_stream`, `ww3_mosaic`, `seasonal_mosaic`, `sub_seasonal_mosaic`, `marine_mosaic`. Each maps to a backend adapter class in `datasets/registry.py`, but current scheduled ingestion does not yet dispatch through those classes. |
+| `adapter` | Required adapter identifier. Supported values: `windy_image_mosaic`, `radar_stream`, `ww3_mosaic`, `seasonal_mosaic`, `sub_seasonal_mosaic`, `marine_mosaic`. The registry resolves the corresponding dataset adapter and ingestion task. |
 | `trigger` | Declares the expected trigger, commonly `ready_marker`; adapter/task code determines the actual trigger behavior. |
 | `batch_mode` | Describes input grouping, e.g. `run`, `time_range`, `replacement`, or `forcing_variable`. It is currently declarative; adapter/task code implements the behavior. |
 | `rolling_window_hours` | Declares the radar rolling retention window. The runtime retention value is currently controlled by `RADAR_RETENTION_HOURS`. |
@@ -149,7 +149,7 @@ Copy an existing forecast using the `windy_image_mosaic` adapter, then change th
     operations: [metadata, file_download]
 ```
 
-This illustrates the manifest shape; the example values and path conventions must match the intended dataset and data producer. Adding a new adapter requires registering and implementing it in the backend, then wiring ingestion scheduling/tasks to resolve and call it. Source paths may also require environment and Docker volume configuration. Until that dispatch is wired, an entry alone supplies metadata/configuration but will not trigger ingestion.
+This illustrates the manifest shape; the example values and path conventions must match the intended dataset and data producer. Adding a new adapter requires registering its class, discovery task and ingestion task in the registry/monitoring modules, plus the Celery entry points. Source paths may also require environment and Docker volume configuration. Adding only a YAML entry cannot implement a new ingestion protocol.
 
 ## Inheritance and overrides
 

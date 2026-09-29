@@ -3,6 +3,11 @@ from kombu import Exchange, Queue
 from maps.tasks import cache_control  # noqa: F401
 from maps.tasks import ww3  # noqa: F401
 from maps.tasks import startup  # noqa: F401
+from maps.tasks import check_fs_data  # noqa: F401
+from maps.tasks import data_ready  # noqa: F401
+from maps.tasks import radar  # noqa: F401
+from maps.tasks import sub_seasonal  # noqa: F401
+from maps.tasks import upload_image_mosaic  # noqa: F401
 
 instance = celery.get_instance()
 app = instance.celery_app

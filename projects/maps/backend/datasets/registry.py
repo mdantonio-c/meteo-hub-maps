@@ -1,6 +1,7 @@
 """Dataset registry used by endpoint and ingestion adapters."""
 
 from dataclasses import dataclass
+from importlib import import_module
 from typing import Optional, Tuple
 
 from .manifest import DatasetConfig, ManifestError, load_manifest
@@ -13,6 +14,15 @@ _ADAPTERS = {
     "seasonal_mosaic": "maps.datasets.seasonal.SeasonalIngestionAdapter",
     "sub_seasonal_mosaic": "maps.datasets.sub_seasonal.SubSeasonalIngestionAdapter",
     "marine_mosaic": "maps.datasets.marine.MarineIngestionAdapter",
+}
+
+_ADAPTER_TASKS = {
+    "windy_image_mosaic": "update_geoserver_image_mosaic",
+    "radar_stream": "update_geoserver_radar_layers",
+    "ww3_mosaic": "update_geoserver_ww3_layers",
+    "seasonal_mosaic": "update_geoserver_seasonal_layers",
+    "sub_seasonal_mosaic": "update_geoserver_sub_seasonal_layers",
+    "marine_mosaic": "update_geoserver_mer_bolam_layer",
 }
 
 
@@ -41,6 +51,22 @@ class DatasetRegistry:
         except KeyError as exc:
             raise ManifestError(f"no adapter registered for {adapter!r}") from exc
 
+    def adapter(self, identifier: str):
+        """Build the configured ingestion adapter for a dataset."""
+        module_name, class_name = self.adapter_path(identifier).rsplit(".", 1)
+        return getattr(import_module(module_name), class_name)(self.get(identifier))
+
+    def ingestion_task(self, identifier: str) -> str:
+        try:
+            return _ADAPTER_TASKS[self.get(identifier).adapter]
+        except KeyError as exc:
+            raise ManifestError(f"no ingestion task registered for {identifier!r}") from exc
+
 
 def load_registry(path: Optional[str] = None) -> DatasetRegistry:
     return DatasetRegistry(load_manifest(path))
+
+
+def load_adapter(identifier: str):
+    """Resolve the dataset and its ingestion implementation at task execution time."""
+    return load_registry().adapter(identifier)

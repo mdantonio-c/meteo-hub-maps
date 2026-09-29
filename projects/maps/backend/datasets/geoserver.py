@@ -77,7 +77,7 @@ class GeoServerPublisher:
         self.workspace = workspace
 
     def ensure_workspace(self) -> bool:
-        from maps.tasks.geoserver_utils import create_workspace_generic
+        from .geoserver_utils import create_workspace_generic
 
         return create_workspace_generic(
             self.url, self.username, self.password, self.workspace
@@ -90,7 +90,7 @@ class GeoServerPublisher:
         layer_name: str,
         style_name: Optional[str] = None,
     ) -> bool:
-        from maps.tasks.geoserver_utils import (
+        from .geoserver_utils import (
             associate_sld_with_layer_generic,
             publish_layer_generic,
             upload_geotiff_generic,
@@ -134,7 +134,7 @@ class GeoServerPublisher:
 
         Returns True when all applicable associations succeed (or no SLDs given).
         """
-        from maps.tasks.geoserver_utils import associate_sld_with_layer_generic
+        from .geoserver_utils import associate_sld_with_layer_generic
 
         if not sld_names:
             return True

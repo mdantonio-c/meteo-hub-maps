@@ -1,67 +1,22 @@
-"""Sub-seasonal forecast mosaic adapter."""
+"""Sub-seasonal discovery and ingestion entry points."""
 
-from pathlib import Path
-
-from .cache import GWCInvalidator, TemporalCacheLayer
-from .locking import DatasetLock
 from .manifest import DatasetConfig
-from .markers import MarkerStore
 
 
 class SubSeasonalIngestionAdapter:
-    """Run sub-seasonal variable/value ingestion and publish readiness last."""
-
     def __init__(self, config: DatasetConfig) -> None:
         self.config = config
 
-    def ingest(
-        self,
-        run_date: str,
-        range_str: str,
-        geoserver_url: str,
-        username: str,
-        password: str,
-        sld_directory: str,
-    ) -> None:
-        from restapi.env import Env
-        from maps.tasks.sub_seasonal import _ingest_sub_seasonal_layers
+    def discover(self, sub_seasonal_path=None) -> None:
+        from .discovery import check_latest_data_and_trigger_geoserver_import_sub_seasonal, SUB_SEASONAL_BASE_PATH
 
-        base_path = Path(Env.get("SUB_SEASONAL_DATA_PATH", "/sub-seasonal-aim"))
-        copy_path = Path(Env.get("GEOSERVER_COPIES_PATH", "/geoserver_data/copies"))
-        with DatasetLock(copy_path, "sub-seasonal"):
-            layers = _ingest_sub_seasonal_layers(
-                run_date=run_date,
-                range_str=range_str,
-                base_path=str(base_path),
-                geoserver_url=geoserver_url,
-                username=username,
-                password=password,
-                sld_directory=sld_directory,
-                config=self.config,
-            )
-            invalidator = GWCInvalidator(
-                geoserver_url,
-                username,
-                password,
-                str(self.config.geoserver.get("workspace", "meteohub")),
-                enabled=True,
-                zoom_start=self.config.geoserver.get("cache", {}).get("zoom_start"),
-                zoom_stop=self.config.geoserver.get("cache", {}).get("zoom_stop"),
-            )
-            ok = True
-            for layer in layers:
-                ok = invalidator.refresh_temporal_layer(
-                    TemporalCacheLayer(layer, store_name=f"mosaic-{layer}")
-                ) and ok
-            if not ok:
-                import warnings
+        check_latest_data_and_trigger_geoserver_import_sub_seasonal(
+            None, sub_seasonal_path or SUB_SEASONAL_BASE_PATH
+        )
 
-                warnings.warn(
-                    "GeoWebCache truncation/seed failed for sub-seasonal layers",
-                    RuntimeWarning,
-                )
-            MarkerStore(base_path).create(
-                range_str,
-                ".GEOSERVER.READY",
-                f"Run: {run_date}\nRange: {range_str}\n",
-            )
+    def ingest(self, run_date, range_str) -> None:
+        from .sub_seasonal_processing import update_geoserver_sub_seasonal_layers
+
+        update_geoserver_sub_seasonal_layers(
+            None, run_date, range_str, cache_config=self.config.geoserver.get("cache", {})
+        )

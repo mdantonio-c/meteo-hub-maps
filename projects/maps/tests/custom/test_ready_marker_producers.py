@@ -3,7 +3,12 @@
 from unittest.mock import MagicMock, patch
 
 from maps.datasets.cache import TemporalCacheLayer
-from maps.tasks import check_fs_data, data_ready, radar, sub_seasonal, ww3
+from maps.datasets import discovery as check_fs_data
+from maps.datasets import seasonal_processing as data_ready
+from maps.datasets import radar_processing as radar
+from maps.datasets import sub_seasonal_processing as sub_seasonal
+from maps.datasets import ww3_processing as ww3
+from maps.datasets import windy_processing as windy
 
 
 def _assert_chord_request(chord_mock, expected_layers):
@@ -22,7 +27,7 @@ def test_seasonal_ingestion_chords_all_published_layers(tmp_path, monkeypatch):
     with patch.object(data_ready, "process_seasonal_tiff_files", return_value=layers), patch.object(
         data_ready, "schedule_cache_refresh_chord"
     ) as schedule:
-        data_ready.update_geoserver_seasonal_layers.run(
+        data_ready.update_geoserver_seasonal_layers(
             date="20260928", sld_directory=str(tmp_path / "missing-slds")
         )
 
@@ -41,7 +46,7 @@ def test_subseasonal_ingestion_chords_published_variables(tmp_path, monkeypatch)
     with patch.object(sub_seasonal, "update_slds_from_local_folders"), patch.object(
         sub_seasonal, "schedule_cache_refresh_chord"
     ) as schedule:
-        sub_seasonal.update_geoserver_sub_seasonal_layers.run(
+        sub_seasonal.update_geoserver_sub_seasonal_layers(None,
             run_date="20260928", range_str="20260928-20261004"
         )
 
@@ -66,7 +71,7 @@ def test_ww3_ingestion_chords_each_variable(tmp_path, monkeypatch):
     )
 
     with patch.object(ww3, "schedule_cache_refresh_chord") as schedule:
-        ww3.update_geoserver_ww3_layers.run(run_date="20260928")
+        ww3.update_geoserver_ww3_layers(None, run_date="20260928")
 
     requests = schedule.call_args.args[0]
     assert sorted(request["layer_name"] for request in requests) == [
@@ -89,7 +94,7 @@ def test_radar_ingestion_chords_affected_cache_times(tmp_path, monkeypatch):
     filename = "28-09-2026-09-30.tif"
     monkeypatch.setattr(radar, "RADAR_BASE_DIRECTORY", str(radar_root))
     monkeypatch.setattr(radar, "COPIES_BASE_DIRECTORY", str(copies_root))
-    monkeypatch.setattr(radar, "_radar_cache_config", lambda: {"eligible": True})
+    cache_config = {"eligible": True}
     def process_file(_variable, input_filename, *_args):
         (copy_layer / input_filename).touch()
         return True
@@ -115,11 +120,12 @@ def test_radar_ingestion_chords_affected_cache_times(tmp_path, monkeypatch):
     monkeypatch.setattr(radar, "GWCInvalidator", lambda *_args, **_kwargs: invalidator)
 
     with patch.object(radar, "schedule_cache_refresh_chord") as schedule:
-        radar.update_geoserver_radar_layers.run(
+        radar.update_geoserver_radar_layers(None,
             variable="sri",
             filenames=[filename],
             dates=["202609280930"],
             sld_directory=sld_directory,
+            cache_config=cache_config,
         )
 
     _assert_chord_request(schedule, ["radar-sri"])
@@ -142,7 +148,7 @@ def test_mer_ingestion_chords_layer_before_ready(tmp_path, monkeypatch):
     ), patch.object(check_fs_data, "_enable_mer_time_dimension"), patch.object(
         check_fs_data, "schedule_cache_refresh_chord"
     ) as schedule:
-        check_fs_data.update_geoserver_mer_bolam_layer.run(
+        check_fs_data.update_geoserver_mer_bolam_layer(None,
             source_dir=str(source_dir),
             forcing_dir=str(forcing_dir),
             forcing_name="BOLAM",
@@ -164,15 +170,14 @@ def test_mer_ingestion_chords_layer_before_ready(tmp_path, monkeypatch):
 def test_windy_ingestion_chords_layers_and_defers_ready_marker(monkeypatch):
     source_directory = "/windy/Windy-12-WRF.web/Italia"
     monkeypatch.setattr(
-        "maps.tasks.upload_image_mosaic._ingest_windy_image_mosaic",
+        "maps.datasets.windy_processing._ingest_windy_image_mosaic",
         lambda **_kwargs: ["t2m-t2m", "wind-10u"],
     )
     with patch(
         "maps.tasks.cache_control.schedule_cache_refresh_chord"
     ) as schedule:
-        from maps.tasks.upload_image_mosaic import update_geoserver_image_mosaic
-
-        update_geoserver_image_mosaic.run(
+        windy.update_geoserver_image_mosaic(
+            None,
             "http://geoserver",
             "12",
             "20260928",

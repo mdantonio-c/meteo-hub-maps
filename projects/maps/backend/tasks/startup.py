@@ -17,7 +17,7 @@ from celery.signals import worker_init
 from typing import List, Optional
 
 from maps.datasets.cache import GWCInvalidator
-from maps.tasks.geoserver_utils import update_slds_from_local_folders
+from maps.datasets.geoserver_utils import update_slds_from_local_folders
 from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
 
 GEOSERVER_URL = Env.get("GEOSERVER_URL", "http://geoserver.dockerized.io:8080/geoserver")
