@@ -3,6 +3,8 @@
 import os
 import re
 from datetime import datetime
+from functools import lru_cache
+from typing import Any
 
 from restapi.connectors import celery
 from restapi.env import Env
@@ -12,28 +14,53 @@ from .manifest import DatasetConfig
 from .watcher import DataWatcher
 
 
+@lru_cache(maxsize=1)
+def _get_env_getter() -> callable:
+    """Return a cached Env.get function for path resolution."""
+    return Env.get
+
+
 class WindyIngestionAdapter:
     def __init__(self, config: DatasetConfig) -> None:
         self.config = config
 
+    def _get_base_path(self) -> str:
+        """Resolve base path from manifest config with env var fallback."""
+        discovery = self.config.discovery
+        env_name = discovery.get("base_path_env")
+        default = discovery.get("base_path_default", "/windy")
+        env_get = _get_env_getter()
+        if env_name:
+            return env_get(env_name, default)
+        return default
+
+    def _get_area(self) -> str:
+        """Resolve area from manifest config."""
+        return self.config.discovery.get("area", "Italia")
+
+    def _get_ingest_folders(self) -> list[str]:
+        """Resolve ingest folders from manifest folder_pattern."""
+        folder_pattern = self.config.discovery.get("folder_pattern", "Windy-{run}-ICON_2I_all2km.web")
+        runs = self.config.discovery.get("runs", ["00", "12"])
+        folders = []
+        for run in runs:
+            folders.append(folder_pattern.format(run=run))
+        return folders
+
     def discover(self, paths=None) -> None:
         from .registry import load_registry
 
-        base_path = Env.get("WINDY_INGEST_BASE_PATH", "/windy")
-        area = Env.get("WINDY_INGEST_AREA", "Italia")
-        icon_folders = Env.get(
-            "WINDY_INGEST_FOLDERS",
-            "Windy-00-ICON_2I_all2km.web,Windy-12-ICON_2I_all2km.web",
-        ).split(",")
-        wrf_folders = Env.get(
-            "WINDY_WRF_INGEST_FOLDERS", "Windy-00-WRF.web,Windy-12-WRF.web"
-        ).split(",")
+        base_path = self._get_base_path()
+        area = self._get_area()
+        icon_folders = self._get_ingest_folders()
+        
         if paths is None:
             paths = [os.path.join(base_path, folder.strip(), area) for folder in icon_folders if folder.strip()]
         wrf_paths = [path for path in paths if _is_wrf_path(path)]
         icon_paths = [path for path in paths if not _is_wrf_path(path)]
-        for folder in wrf_folders:
-            if folder.strip():
+        
+        for folder in icon_folders:
+            if folder.strip() and "WRF" in folder.upper():
                 path = os.path.join(base_path, folder.strip(), area)
                 if path not in wrf_paths:
                     wrf_paths.append(path)
@@ -60,12 +87,20 @@ class WindyIngestionAdapter:
 
         # Retain the additional MER scan for stale/missing periodic entries.
         try:
+            from .registry import load_registry as load_dataset_registry
+            mer_config = load_dataset_registry().get("marine")
+            mer_base_path = self._resolve_dataset_path(mer_config)
             celery.get_instance().celery_app.send_task(
                 "check_latest_data_and_trigger_geoserver_import_mer_bolam",
-                args=(Env.get("MER_DATA_PATH", "/shyfem"),),
+                args=(str(mer_base_path),),
             )
         except Exception as exc:
             log.error(f"Failed to enqueue chained MER check from windy task: {exc}")
+
+    def _resolve_dataset_path(self, config: DatasetConfig) -> str:
+        """Resolve dataset base path from manifest config."""
+        from .paths import dataset_base_path
+        return dataset_base_path(config, Env.get)
 
     def ingest(
         self, geoserver_url, run, date, sld_directory="/SLDs",

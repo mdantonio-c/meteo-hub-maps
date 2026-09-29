@@ -23,7 +23,7 @@ from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
 GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
 PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
-
+WORKSPACE = "meteohub"
 
 # Mapping of seasonal directories to their corresponding names in copies
 seasonal_to_copies_mapping = {
@@ -35,9 +35,6 @@ seasonal_to_copies_mapping = {
     "sum_P": "seasonal-sum-P",
 }
 
-WORKSPACE = "meteohub"
-SEASONAL_BASE_DIRECTORY: str = "/seasonal-aim"
-
 
 def create_seasonal_ready_file(base_path, date_identifier: str) -> None:
     """Create a ready file to indicate that the seasonal process is complete."""
@@ -45,9 +42,18 @@ def create_seasonal_ready_file(base_path, date_identifier: str) -> None:
 
 
 def process_seasonal_tiff_files(
-    base_path, sld_directory, geoserver_url, username, password, date_identifier
+    base_path: str, sld_directory, geoserver_url, username, password, date_identifier
 ) -> list:
-    """Iterate over seasonal TIFF files and upload them to GeoServer with temporal dimension."""
+    """Iterate over seasonal TIFF files and upload them to GeoServer with temporal dimension.
+    
+    Args:
+        base_path: Base path for seasonal data directory
+        sld_directory: SLD directory path
+        geoserver_url: GeoServer URL
+        username: GeoServer admin username
+        password: GeoServer admin password
+        date_identifier: Date identifier for the run
+    """
     create_workspace_generic(geoserver_url, username, password)
 
     # Clean up old seasonal stores first
@@ -356,8 +362,22 @@ def update_geoserver_seasonal_layers(
     password: str = PASSWORD,
     sld_directory: Optional[str] = None,
     cache_config=None,
+    base_path: Optional[str] = None,
 ) -> None:
-    """Update GeoServer with seasonal layers following the same pattern as windy layers."""
+    """Update GeoServer with seasonal layers following the same pattern as windy layers.
+    
+    Args:
+        date: Run date identifier
+        geoserver_url: GeoServer URL
+        username: GeoServer admin username
+        password: GeoServer admin password
+        sld_directory: SLD directory path
+        cache_config: GeoServer cache configuration
+        base_path: Base path for seasonal data. If None, uses env var or default.
+    """
+    if base_path is None:
+        base_path = Env.get("SEASONAL_DATA_PATH", "/seasonal-aim")
+    
     log.info(
         f"Updating GeoServer seasonal layers with temporal dimension for date: {date}"
     )
@@ -391,7 +411,7 @@ def update_geoserver_seasonal_layers(
 
     # Process seasonal TIFF files with temporal dimension
     cache_layers = process_seasonal_tiff_files(
-        SEASONAL_BASE_DIRECTORY, sld_directory, geoserver_url, username, password, date
+        base_path, sld_directory, geoserver_url, username, password, date
     )
     schedule_cache_refresh_chord(
         [
@@ -407,7 +427,7 @@ def update_geoserver_seasonal_layers(
             }
             for layer in cache_layers
         ],
-        ready_file=os.path.join(SEASONAL_BASE_DIRECTORY, f"{date}.GEOSERVER.READY"),
+        ready_file=os.path.join(base_path, f"{date}.GEOSERVER.READY"),
         ready_contents=(
             f"Seasonal Data: {date}\nProcessed: {datetime.now().isoformat()}\n"
         ),

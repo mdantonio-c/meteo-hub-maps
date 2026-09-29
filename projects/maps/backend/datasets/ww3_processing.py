@@ -3,6 +3,8 @@
 import os
 import shutil
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
 
 import requests
 from maps.tasks.cache_control import schedule_cache_refresh_chord
@@ -22,24 +24,28 @@ GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
 PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
 WORKSPACE = "meteohub"
-WW3_BASE_PATH = os.path.join(Env.get("WW3_DATA_PATH", "/ww3"), "Mediterraneo")
 COPIES_BASE_DIRECTORY = "/geoserver_data/copies"
 
 
-def update_geoserver_ww3_layers(self, run_date, cache_config=None):
+def update_geoserver_ww3_layers(self, run_date, cache_config=None, base_path: Optional[str] = None):
+    """Update GeoServer with WW3 layers.
+    
+    Args:
+        run_date: Run date identifier
+        cache_config: GeoServer cache configuration
+        base_path: Base path for WW3 data. If None, uses env var or default.
+    """
+    if base_path is None:
+        base_path = os.path.join(Env.get("WW3_DATA_PATH", "/ww3"), "Mediterraneo")
+    
     log.info(f"Starting ww3 ingestion for run {run_date}")
 
     create_workspace_generic(GEOSERVER_URL, USERNAME, PASSWORD, WORKSPACE)
 
-    # Identify variables from directories, excluding 'dir-dir'
-    if not os.path.exists(WW3_BASE_PATH):
-        log.warning(f"WW3 base path not found: {WW3_BASE_PATH}")
-        return
-
     variables = [
         d
-        for d in os.listdir(WW3_BASE_PATH)
-        if os.path.isdir(os.path.join(WW3_BASE_PATH, d)) and d != "dir-dir"
+        for d in os.listdir(base_path)
+        if os.path.isdir(os.path.join(base_path, d)) and d != "dir-dir"
     ]
 
     # Handle SLDs
@@ -71,12 +77,12 @@ def update_geoserver_ww3_layers(self, run_date, cache_config=None):
         log.warning("SLD root directory not found, skipping SLD creation/update")
 
     for var in variables:
-        process_ww3_variable(var)
+        process_ww3_variable(var, base_path)
 
     # Calculate range for GEOSERVER.READY filename
     all_timestamps = []
     for var in variables:
-        source_dir = os.path.join(WW3_BASE_PATH, var)
+        source_dir = os.path.join(base_path, var)
         if os.path.exists(source_dir):
             for f in os.listdir(source_dir):
                 try:
@@ -100,7 +106,7 @@ def update_geoserver_ww3_layers(self, run_date, cache_config=None):
     else:
         ready_filename = f"{run_date}.GEOSERVER.READY"
 
-    ready_file = os.path.join(WW3_BASE_PATH, ready_filename)
+    ready_file = os.path.join(base_path, ready_filename)
     schedule_cache_refresh_chord(
         [
             {
@@ -120,23 +126,23 @@ def update_geoserver_ww3_layers(self, run_date, cache_config=None):
             f"Processed by GeoServer at {datetime.now().isoformat()}\nRun: {run_date}\n"
         ),
         obsolete_ready_files=[
-            os.path.join(WW3_BASE_PATH, filename)
-            for filename in os.listdir(WW3_BASE_PATH)
+            os.path.join(base_path, filename)
+            for filename in os.listdir(base_path)
             if filename.endswith(".GEOSERVER.READY") and filename != ready_filename
         ],
         checked_files=[
-            os.path.join(WW3_BASE_PATH, filename)
-            for filename in os.listdir(WW3_BASE_PATH)
+            os.path.join(base_path, filename)
+            for filename in os.listdir(base_path)
             if filename.endswith(".CELERY.CHECKED")
         ],
     )
 
 
-def process_ww3_variable(var):
+def process_ww3_variable(var, base_path: str):
     layer_name = f"ww3_{var}"
     store_name = f"mosaic_{layer_name}"
 
-    source_dir = os.path.join(WW3_BASE_PATH, var)
+    source_dir = os.path.join(base_path, var)
     target_dir = os.path.join(COPIES_BASE_DIRECTORY, layer_name)
 
     if not os.path.exists(source_dir):

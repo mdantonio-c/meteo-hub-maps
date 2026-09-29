@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 from datetime import datetime
+from typing import Optional
 
 import requests
 from maps.datasets.geoserver_utils import (
@@ -22,15 +23,9 @@ from restapi.utilities.logs import log
 
 from .watcher import mark_ingestion_unhealthy, read_retry_count
 
-GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"  # TODO: get from env
+GEOSERVER_URL = "http://geoserver.dockerized.io:8080/geoserver"
 USERNAME = Env.get("GEOSERVER_ADMIN_USER", None)
 PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
-MER_BASE_PATH = Env.get("MER_DATA_PATH", "/shyfem")
-MER_FORCINGS = [
-    forcing.strip().upper()
-    for forcing in Env.get("MER_FORCINGS", "BOLAM,ECMWF,ICON").split(",")
-    if forcing.strip()
-]
 GEOSERVER_WORKSPACE = "meteohub"
 GEOSERVER_COPIES_BASE_DIRECTORY = "/geoserver_data/copies"
 MER_WL_STYLE_NAME = "water_level"
@@ -192,21 +187,35 @@ def _ensure_mer_wl_style() -> bool:
 
 
 def check_latest_data_and_trigger_geoserver_import_mer_bolam(
-    mer_base_path: str = MER_BASE_PATH,
+    mer_base_path: Optional[str] = None,
+    mer_forcings: Optional[list[str]] = None,
 ) -> None:
     """
     Scan MER forcing directories and trigger ingestion per variable folder.
 
     Layer names are built as SHYFEM-<FORCING>-<variable>,
     for example BOLAM/wl -> SHYFEM-BOLAM-wl.
+    
+    Args:
+        mer_base_path: Base path for MER data. If None, uses env var or default.
+        mer_forcings: List of forcing names to process. If None, uses env var or default.
     """
+    if mer_base_path is None:
+        mer_base_path = Env.get("MER_DATA_PATH", "/shyfem")
+    if mer_forcings is None:
+        mer_forcings = [
+            forcing.strip().upper()
+            for forcing in Env.get("MER_FORCINGS", "BOLAM,ECMWF,ICON").split(",")
+            if forcing.strip()
+        ]
+    
     log.info(f"Checking latest MER data in {mer_base_path}")
 
     if not os.path.exists(mer_base_path):
         log.warning(f"MER base path does not exist: {mer_base_path}")
         return
 
-    for forcing_name in MER_FORCINGS:
+    for forcing_name in mer_forcings:
         forcing_dir = os.path.join(mer_base_path, forcing_name)
         if not os.path.exists(forcing_dir):
             log.info(f"Forcing directory not found, skipping: {forcing_dir}")

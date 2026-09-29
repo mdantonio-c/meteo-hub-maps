@@ -2,6 +2,8 @@
 
 import os
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
 
 from restapi.connectors import celery
 from restapi.env import Env
@@ -10,12 +12,19 @@ from restapi.utilities.logs import log
 from .registry import load_registry
 from .watcher import DataWatcher, mark_ingestion_unhealthy, read_retry_count
 
-SUB_SEASONAL_BASE_PATH = Env.get("SUB_SEASONAL_AIM_PATH", "/sub-seasonal-aim")
-
 
 def check_latest_data_and_trigger_geoserver_import_sub_seasonal(
-    sub_seasonal_path: str = SUB_SEASONAL_BASE_PATH,
+    sub_seasonal_path: Optional[str] = None,
 ) -> None:
+    """Trigger publication for the newest READY run and its TIFF date range.
+    
+    Args:
+        sub_seasonal_path: Base path for sub-seasonal data. If None, uses
+            default fallback for backward compatibility. Caller should pass
+            path resolved from manifest config.
+    """
+    if sub_seasonal_path is None:
+        sub_seasonal_path = Env.get("SUB_SEASONAL_AIM_PATH", "/sub-seasonal-aim")
     """Trigger publication for the newest READY run and its TIFF date range."""
     log.info("Checking latest sub-seasonal data")
 
