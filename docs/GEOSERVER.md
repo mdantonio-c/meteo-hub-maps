@@ -20,6 +20,29 @@ Configured via environment variables:
 - `GEOSERVER_ADMIN_USER`
 - `GEOSERVER_ADMIN_PASSWORD`
 
+### HTTPS login behind Nginx
+
+The host proxy configurations are `projects/maps/builds/host_nginx.config`
+(production) and `projects/maps/builds/host_nginx_dev.config` (development).
+Deploy the appropriate configuration to the host's active Nginx site, then run
+`sudo nginx -t && sudo systemctl reload nginx`.
+
+Both the HTML form action and the authentication response's `Location` header
+must stay on the public HTTPS origin. `sub_filter` rewrites HTML URLs;
+`proxy_redirect` rewrites redirect headers. Rewriting only the HTML is
+insufficient: Spring Security can redirect an HTTPS login POST to HTTP, which
+the browser blocks under `form-action 'self'`.
+
+Check the development site's redirect without following it:
+
+```bash
+curl -sSI https://meteohub-maps.hpc.cineca.it/geoserver/web/
+```
+
+Its `Location` must be HTTPS (or a relative URL), never
+`http://meteohub-maps.hpc.cineca.it/...`. After reloading the site, use the browser
+Network panel to check that the login POST's redirect also stays on HTTPS.
+
 ### Workspace
 
 All layers are published in the `meteohub` workspace.
