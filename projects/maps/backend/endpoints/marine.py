@@ -112,7 +112,7 @@ class ShyfemStationsEndpoint(EndpointResource):
     """List available SHYFEM station JSON files."""
 
     labels = ["marine"]
-    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
+    # Dynamic /marine/shyfem/stations exposes metadata, not this file listing.
 
     @decorators.endpoint(
         path="/marine/shyfem/data/stations",
@@ -158,7 +158,7 @@ class ShyfemStationFileEndpoint(EndpointResource):
     """Get a specific SHYFEM station JSON file for a given forcing provider."""
 
     labels = ["marine"]
-    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
+    # Keep the station JSON response contract available in dynamic dataset mode.
 
     @decorators.endpoint(
         path="/marine/shyfem/data/stations/<forcing>/<filename>",
