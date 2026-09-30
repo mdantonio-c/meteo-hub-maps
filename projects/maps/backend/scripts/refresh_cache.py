@@ -2,8 +2,8 @@
 """Refresh GeoWebCache tiles on demand.
 
 Examples:
-  python scripts/refresh_cache.py --dataset radar --variable srt
-  python scripts/refresh_cache.py --layer radar-srt --times 2026-09-18T10:00:00Z
+  python projects/maps/backend/scripts/refresh_cache.py --dataset radar --variable srt
+  python projects/maps/backend/scripts/refresh_cache.py --layer radar-srt --times 2026-09-18T10:00:00Z
 """
 
 import argparse
@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import List, Optional
 
 
-PROJECT = Path(__file__).resolve().parents[1] / "projects" / "maps"
-BACKEND = PROJECT / "backend"
+BACKEND = Path(__file__).resolve().parents[1]
+PROJECT = BACKEND.parent
 # RAPyDo mounts backend/ as the `maps` package inside its containers.
 package = importlib.util.spec_from_file_location(
     "maps", BACKEND / "__init__.py", submodule_search_locations=[str(BACKEND)]
@@ -66,10 +66,10 @@ def main() -> int:
 
     dataset = _dataset_config(args.dataset)
     layer = _resolve_layer(dataset, args.variable, args.layer)
-    store = args.store or f"mosaic_{layer}"
+    store = args.store or layer
     cache_config = dataset.geoserver.get("cache", {})
     invalidator = GWCInvalidator(
-        os.environ.get("GEOSERVER_URL", "http://localhost:8081/geoserver"),
+        os.environ.get("GEOSERVER_URL", "http://geoserver.dockerized.io:8080/geoserver"),
         os.environ.get("GEOSERVER_ADMIN_USER", "admin"),
         os.environ.get("GEOSERVER_ADMIN_PASSWORD", "D3vMode!"),
         str(dataset.geoserver.get("workspace", "meteohub")),

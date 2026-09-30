@@ -9,14 +9,22 @@ Usage:
 """
 
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from restapi.env import Env
+try:
+    from restapi.env import Env
+except ImportError:
+    Env = None
 
 # Use environment variable if set, otherwise use project-local path for testing
-STATUS_FILE_PATH = Env.get("STATUS_FILE_PATH", None)
+STATUS_FILE_PATH = (
+    Env.get("STATUS_FILE_PATH", None)
+    if Env is not None
+    else os.environ.get("STATUS_FILE_PATH")
+)
 if not STATUS_FILE_PATH:
     # Fallback to project directory for local testing outside Docker
     from pathlib import Path

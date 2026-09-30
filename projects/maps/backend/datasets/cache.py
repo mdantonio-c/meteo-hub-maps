@@ -635,9 +635,8 @@ class GWCInvalidator:
         )
         if not times:
             log.error(
-                "GWC found no granule times for {} using store {}",
-                layer.name,
-                layer.store_name or layer.name,
+                f"GWC found no granule times for {layer.name} "
+                f"using store {layer.store_name or layer.name}"
             )
             return False
         style_name = self.get_default_style(layer.name)
