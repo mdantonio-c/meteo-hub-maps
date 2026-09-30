@@ -1,5 +1,19 @@
 version: "3.9"
 services:
+  flower:
+    command:
+      - celery
+      - --app
+      - restapi.connectors.celery.worker.celery_app
+      - flower
+      - --basic_auth=${FLOWER_USER}:${FLOWER_PASSWORD}
+      - --port=5555
+      - --url_prefix=flower
+      # - --persistent  
+      # - --state_save_interval=10000
+      - --db=/var/flower/flower
+      - -n
+      - flower_monitor
   geoserver:
     environment:
       EXTRA_JAVA_OPTS: "-DGWC_SEEDER_CORE_POOL_SIZE=${GWC_SEEDER_CORE_POOL_SIZE} -DGWC_SEEDER_MAX_POOL_SIZE=${GWC_SEEDER_MAX_POOL_SIZE} -Xms4g -Xmx8g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+ParallelRefProcEnabled -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true -DGEOSERVER_CSRF_WHITELIST=${GEOSERVER_PROXY_BASE_URL}"

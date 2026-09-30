@@ -191,8 +191,7 @@ services:
     #   - ${HOST_WW3_DIR}:/ww3
     #   - ${HOST_MER_DIR}:${MER_DATA_PATH}
     #   - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
-    # command: celery --app restapi.connectors.celery.beat.celery_app beat --loglevel=info
-  # thredds:
+    # command: celery --app restapi.connectors.celery.beat.celery_app beat --loglevel=info  # thredds:
   #   # Build custom THREDDS image with pre-configured directories at build time
   #   build: ${PROJECT_DIR}/builds/thredds
   #   image: maps/thredds:${RAPYDO_VERSION}
