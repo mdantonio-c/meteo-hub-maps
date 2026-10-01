@@ -5,12 +5,14 @@ Examples:
   python projects/maps/backend/scripts/refresh_cache.py --dataset radar --variable srt
   python projects/maps/backend/scripts/refresh_cache.py --layer radar-srt --times 2026-09-18T10:00:00Z
   python projects/maps/backend/scripts/refresh_cache.py --store radar-sri
+  python projects/maps/backend/scripts/refresh_cache.py --dataset radar --variable sri --parallelism 4
 """
 
 import argparse
 import importlib.util
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote, unquote, urlparse
@@ -31,6 +33,11 @@ package.loader.exec_module(maps)
 
 from maps.datasets.cache import GWCInvalidator, TemporalCacheLayer  # noqa: E402
 from maps.datasets.manifest import load_manifest  # noqa: E402
+
+
+def _progress(message: str) -> None:
+    timestamp = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
+    print(f"[{timestamp}] {message}", flush=True)
 
 
 def _dataset_config(dataset_id: str):
@@ -110,9 +117,17 @@ def main() -> int:
     parser.add_argument("--store", help="Coverage store (or layer name when used alone)")
     parser.add_argument("--times", nargs="+", help="ISO8601 TIME values to refresh")
     parser.add_argument(
-        "--no-wait", action="store_true", help="Do not wait for GWC operations to finish"
+        "--parallelism",
+        type=int,
+        default=4,
+        help="Maximum parallel timestep seed jobs (default: 4)",
+    )
+    parser.add_argument(
+        "--no-wait", action="store_true", help="Do not wait for the final seed batch"
     )
     args = parser.parse_args()
+    if args.parallelism < 1:
+        parser.error("--parallelism must be at least 1")
 
     dataset = _dataset_config(args.dataset)
     layer = (
@@ -137,20 +152,84 @@ def main() -> int:
         print(f"Cannot resolve GeoServer layer/store: {exc}", file=sys.stderr)
         return 1
     layer, store = cache_layer.name, cache_layer.store_name
-    print(f"Refreshing {invalidator.workspace}:{layer} using coverage store {store}")
+    _progress(
+        f"Refreshing {invalidator.workspace}:{layer} using coverage store {store}"
+    )
+    _progress(
+        f"Zoom range: {invalidator.zoom_start}–{invalidator.zoom_stop}; "
+        f"server cache expiry: {invalidator._cache_expiry_seconds(layer)} seconds; "
+        f"seed parallelism: {args.parallelism}"
+    )
 
+    _progress("Cancelling existing seed jobs and waiting for the layer queue to drain")
+    if not invalidator.cancel_seed_tasks(layer):
+        _progress("ERROR: could not cancel existing seed jobs")
+        return 1
+    if not invalidator._wait_for_seed_completion(layer):
+        _progress("ERROR: layer queue did not drain")
+        return 1
+    _progress("Checking GWC TIME filter, gridset and expiry configuration")
     if not invalidator.ensure_time_parameter_filter(layer):
+        _progress("ERROR: could not configure GWC layer")
         return 1
 
-    if args.times:
-        ok = invalidator.truncate(layer, times=args.times)
-        if ok:
-            ok = invalidator.seed_new_times(
-                layer, args.times, store_name=store, wait=not args.no_wait
+    _progress("Resolving timestep list")
+    times = args.times or invalidator.get_granule_times(
+        layer, store_name=store, all_times=True
+    )
+    if not times:
+        print(f"No granule times found for {layer}", file=sys.stderr)
+        return 1
+    style_name = invalidator.get_default_style(layer)
+    if not style_name:
+        print(f"Cannot resolve default style for {layer}", file=sys.stderr)
+        return 1
+    _progress(
+        f"Found {len(times)} timestep(s), from {times[0]} to {times[-1]}; style={style_name}"
+    )
+    _progress(
+        f"Truncating {len(times)} timestep(s); waiting for each truncate to complete"
+    )
+    for index, time_value in enumerate(times, start=1):
+        _progress(f"Truncate {index}/{len(times)}: {time_value}")
+        if not invalidator.truncate(layer, times=[time_value], style_name=style_name):
+            _progress(f"ERROR: cache truncation failed for {time_value}")
+            return 1
+    _progress("Truncation complete; starting parallel seed batches")
+    batch_count = (len(times) + args.parallelism - 1) // args.parallelism
+    for offset in range(0, len(times), args.parallelism):
+        batch = times[offset : offset + args.parallelism]
+        number = offset // args.parallelism + 1
+        wait = not args.no_wait or number < batch_count
+        _progress(
+            f"Seed batch {number}/{batch_count}: submitting {len(batch)} job(s) "
+            f"({', '.join(batch)}); "
+            + ("waiting for completion" if wait else "leaving final batch running")
+        )
+        ok = invalidator.seed(
+            layer,
+            times=batch,
+            style_name=style_name,
+            wait=wait,
+            parallelism=args.parallelism,
+        )
+        if not ok:
+            _progress(f"ERROR: seed batch {number}/{batch_count} failed")
+            return 1
+        _progress(
+            f"Seed batch {number}/{batch_count} "
+            + (
+                f"complete ({offset + len(batch)}/{len(times)} timesteps)"
+                if wait
+                else "accepted"
             )
-    else:
-        ok = invalidator.refresh_temporal_layer(cache_layer)
-    return 0 if ok else 1
+        )
+    _progress(
+        "Refresh complete"
+        if not args.no_wait
+        else "Refresh submitted; final seed batch may still be running"
+    )
+    return 0
 
 
 if __name__ == "__main__":

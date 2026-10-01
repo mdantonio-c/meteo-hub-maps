@@ -116,6 +116,33 @@ After batch processing:
    - Remove oldest granules from GeoServer index
    - Maintain 72-hour window ending at latest data
 
+### GeoWebCache Lifetime and Metadata
+
+Radar server-side tiles expire after three days (`geoserver.cache.expire_seconds:
+259200` in `datasets.yml`), matching the radar retention window. Other layers
+default to one day (`GWC_CACHE_EXPIRE_SECONDS: 86400`). Client cache lifetime is
+controlled separately by `GWC_CLIENT_EXPIRE_SECONDS`.
+
+The number of `parameters-*.properties` files is not the number of populated tile
+folders: GWC keeps parameter metadata after targeted truncation removes tiles.
+Radar ingestion invalidates submitted timestamps and timestamps removed from
+the mosaic, then pre-seeds every retained affected timestep at zoom levels 5–9.
+Overlapping batches re-queue their retained timesteps so cancelling an earlier
+warming generation does not leave those tiles unseeded.
+
+To refresh existing tiles manually, use:
+
+```bash
+python projects/maps/backend/scripts/refresh_cache.py --dataset radar --variable sri --parallelism 4
+```
+
+`--parallelism` defaults to 4 and controls the maximum number of timestep seed
+jobs submitted per batch. Each job uses one GWC seeder thread; the server's
+seeder pool also limits actual concurrency. `--no-wait` skips waiting for the
+final seed batch, but earlier batches still drain before the next is submitted.
+Timestamped progress shows layer configuration, every truncation, batch
+submission and completion, and failures.
+
 ### 6. Status Tracking
 
 Creates `.GEOSERVER.READY` file with full time range:

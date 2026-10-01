@@ -199,11 +199,11 @@ def test_gwc_invalidator_keeps_existing_time_parameter_filter(
 ) -> None:
     class Response:
         status_code = 200
-        content = b"""<GeoServerLayer><gridSubsets><gridSubset>
+        content = f"""<GeoServerLayer><gridSubsets><gridSubset>
           <gridSetName>EPSG:900913_1024</gridSetName>
-        </gridSubset></gridSubsets><expireCache>86400</expireCache><expireClients>0</expireClients><parameterFilters>
+        </gridSubset></gridSubsets><expireCache>86400</expireCache><expireClients>{cache.GWC_CLIENT_EXPIRE_SECONDS}</expireClients><parameterFilters>
           <regexParameterFilter><key>TIME</key><defaultValue/><regex>.*</regex></regexParameterFilter>
-        </parameterFilters></GeoServerLayer>"""
+        </parameterFilters></GeoServerLayer>""".encode()
 
     monkeypatch.setattr(cache.requests, "get", lambda *args, **kwargs: Response())
     monkeypatch.setattr(

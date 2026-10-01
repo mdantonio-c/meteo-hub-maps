@@ -12,7 +12,7 @@ from xml.etree import ElementTree
 
 import requests
 from maps.utils.geoserver import GEOSERVER_REQUEST_TIMEOUT
-from .manifest import load_cache_defaults
+from .manifest import load_cache_defaults, load_manifest
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ GWC_TILE_SIZE = int(os.environ.get("GWC_TILE_SIZE", "1024"))
 GWC_IMAGE_FORMAT = os.environ.get("GWC_IMAGE_FORMAT", "image/png")
 GWC_BLOBSTORE_ROOT = os.environ.get("GEOSERVER_DATA_PATH", "/geoserver_data")
 # Ingestion explicitly removes stale entries. Expiry is a safety net when an
-# ingestion fails before truncating its layer.
+# ingestion fails before truncating its layer. Datasets can override this lifetime.
 GWC_CACHE_EXPIRE_SECONDS = int(os.environ.get("GWC_CACHE_EXPIRE_SECONDS", "86400"))
 # Forecast publication invalidates server-side tiles, but browsers cannot be
 # purged. Keep their copy below the five-minute radar update cadence.
@@ -66,11 +66,11 @@ class GWCInvalidator:
         self.workspace = workspace
         self.enabled = enabled if enabled is not None else GWC_ENABLED_DEFAULT
         self.timeout = timeout if timeout is not None else GEOSERVER_REQUEST_TIMEOUT
-        manifest_path = os.environ.get("DATASET_CONFIG_PATH") or str(
+        self.manifest_path = os.environ.get("DATASET_CONFIG_PATH") or str(
             Path(__file__).resolve().parents[2] / "datasets.yml"
         )
         cache_defaults = (
-            load_cache_defaults(manifest_path)
+            load_cache_defaults(self.manifest_path)
             if zoom_start is None or zoom_stop is None
             else {}
         )
@@ -268,6 +268,20 @@ class GWCInvalidator:
             return False
         return True
 
+    def _cache_expiry_seconds(self, layer_name: str) -> int:
+        """Resolve a mapped layer's dataset-specific server cache lifetime."""
+        for dataset in load_manifest(self.manifest_path):
+            if dataset.geoserver.get("workspace") != self.workspace:
+                continue
+            variables = dataset.geoserver.get("variables", {}).values()
+            if any(variable.get("layer_name") == layer_name for variable in variables):
+                return int(
+                    dataset.geoserver.get("cache", {}).get(
+                        "expire_seconds", GWC_CACHE_EXPIRE_SECONDS
+                    )
+                )
+        return GWC_CACHE_EXPIRE_SECONDS
+
     def ensure_time_parameter_filter(self, layer_name: str) -> bool:
         """Configure GWC to cache distinct WMS TIME parameter values for a layer."""
         if not self.enabled:
@@ -311,8 +325,9 @@ class GWCInvalidator:
         )
         cache_expiry = layer.find("expireCache")
         client_expiry = layer.find("expireClients")
+        expire_seconds = self._cache_expiry_seconds(layer_name)
         cache_expiry_is_current = cache_expiry is not None and cache_expiry.text == str(
-            GWC_CACHE_EXPIRE_SECONDS
+            expire_seconds
         )
         client_expiry_is_current = (
             client_expiry is not None
@@ -337,7 +352,7 @@ class GWCInvalidator:
         ElementTree.SubElement(grid_subset, "gridSetName").text = GWC_GRID_SET
         if cache_expiry is None:
             cache_expiry = ElementTree.SubElement(layer, "expireCache")
-        cache_expiry.text = str(GWC_CACHE_EXPIRE_SECONDS)
+        cache_expiry.text = str(expire_seconds)
         if client_expiry is None:
             client_expiry = ElementTree.SubElement(layer, "expireClients")
         client_expiry.text = str(GWC_CLIENT_EXPIRE_SECONDS)
@@ -482,6 +497,7 @@ class GWCInvalidator:
         wait: bool = True,
         times: Optional[Iterable[str]] = None,
         style_name: Optional[str] = None,
+        parallelism: int = 1,
     ) -> bool:
         """Seed one layer's GWC cache for every requested TIME value.
 
@@ -489,24 +505,33 @@ class GWCInvalidator:
             layer_name: Layer name without workspace prefix.
             wait: When True, blocks until seed queue drains and tiles are
                   fully generated (not lazily cached on first user request).
-            times: ISO8601 TIME values to seed. GWC can only seed one
-                   parameter combination per request, so values are handled
-                   serially just as they are in the GeoWebCache UI.
+            times: ISO8601 TIME values to seed, one parameter combination per job.
+            parallelism: Maximum timestep jobs submitted before waiting for the
+                         layer queue to drain. Each job uses one GWC thread.
 
         Returns:
             True if every seed request was accepted and (if wait=True)
             completed successfully, False otherwise.
         """
+        if parallelism < 1:
+            raise ValueError("Seed parallelism must be at least 1")
         if not self.enabled:
             return True
 
         time_values = list(times) if times is not None else [None]
-        for time_value in time_values:
+        for index, time_value in enumerate(time_values):
             if not self._seed_request(
                 layer_name, "seed", time_value, thread_count=1, style_name=style_name
             ):
                 return False
-            if wait and not self._wait_for_seed_completion(layer_name):
+            batch_end = (index + 1) % parallelism == 0
+            last_time = index + 1 == len(time_values)
+            # With parallel jobs, bound the queue even when the caller skips
+            # waiting for the final batch. Serial no-wait callers are unchanged.
+            should_wait = (wait and (batch_end or last_time)) or (
+                parallelism > 1 and batch_end and not last_time
+            )
+            if should_wait and not self._wait_for_seed_completion(layer_name):
                 return False
         return True
 

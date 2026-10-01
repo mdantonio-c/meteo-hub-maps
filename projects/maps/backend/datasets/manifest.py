@@ -395,6 +395,16 @@ def validate_manifest(document: Any) -> Tuple[DatasetConfig, ...]:
                 errors.append(
                     f"datasets[{index}].geoserver.cache.{key} must be an integer"
                 )
+        expire_seconds = merged_cache.get("expire_seconds")
+        if expire_seconds is not None and (
+            isinstance(expire_seconds, bool)
+            or not isinstance(expire_seconds, int)
+            or expire_seconds < 1
+        ):
+            errors.append(
+                f"datasets[{index}].geoserver.cache.expire_seconds "
+                "must be a positive integer"
+            )
         geoserver = dict(config.geoserver)
         geoserver["cache"] = merged_cache
         configs_list.append(

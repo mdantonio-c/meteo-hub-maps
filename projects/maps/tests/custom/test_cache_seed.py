@@ -27,6 +27,74 @@ class TestGWCSeedCompletion:
             workspace="meteohub",
         )
 
+    def test_radar_cache_policy_and_seed_zoom_range(self):
+        from maps.datasets.manifest import load_manifest
+
+        radar = next(
+            config for config in load_manifest(self.invalidator.manifest_path)
+            if config.identifier == "radar"
+        )
+        policy = radar.geoserver["cache"]
+        invalidator = GWCInvalidator(
+            "http://geoserver", "user", "password", "meteohub",
+            enabled=True, zoom_start=policy["zoom_start"], zoom_stop=policy["zoom_stop"],
+        )
+        assert invalidator._cache_expiry_seconds("radar-sri") == 259200
+        assert invalidator._cache_expiry_seconds("radar-srt") == 259200
+        assert invalidator._cache_expiry_seconds("t2m-t2m") == 86400
+        with patch.object(cache.requests, "post", return_value=MagicMock(status_code=200)) as post:
+            assert invalidator.seed("radar-sri", times=["2026-09-18T10:00:00Z"], wait=False)
+        payload = post.call_args.kwargs["data"]
+        assert "<zoomStart>5</zoomStart>" in payload
+        assert "<zoomStop>9</zoomStop>" in payload
+
+    def test_parallel_seed_bounds_batches_and_preserves_every_time(self):
+        events = []
+        times = [f"time-{index}" for index in range(9)]
+
+        def submit(layer, seed_type, time_value, **kwargs):
+            events.append(time_value)
+            assert kwargs["thread_count"] == 1
+            return True
+
+        def wait(layer):
+            events.append("wait")
+            return True
+
+        with patch.object(self.invalidator, "_seed_request", side_effect=submit), patch.object(
+            self.invalidator, "_wait_for_seed_completion", side_effect=wait
+        ):
+            assert self.invalidator.seed("radar-sri", times=times, parallelism=4)
+        assert events == times[:4] + ["wait"] + times[4:8] + ["wait"] + times[8:] + ["wait"]
+
+    def test_existing_radar_layer_gets_three_day_expiry(self):
+        response = MagicMock(
+            status_code=200,
+            content=b"""<GeoServerLayer><expireCache>86400</expireCache>
+            <parameterFilters><regexParameterFilter><key>TIME</key>
+            </regexParameterFilter></parameterFilters></GeoServerLayer>""",
+        )
+        with patch.object(cache.requests, "get", return_value=response), patch.object(
+            cache.requests, "put", return_value=MagicMock(status_code=200)
+        ) as update, patch.object(self.invalidator, "_ensure_grid_set", return_value=True):
+            assert self.invalidator.ensure_time_parameter_filter("radar-sri")
+        assert b"<expireCache>259200</expireCache>" in update.call_args.kwargs["data"]
+
+    def test_parallel_no_wait_drains_earlier_batches(self):
+        with patch.object(self.invalidator, "_seed_request", return_value=True) as submit, patch.object(
+            self.invalidator, "_wait_for_seed_completion", return_value=True
+        ) as wait:
+            assert self.invalidator.seed("radar-sri", times=list(range(9)), parallelism=4, wait=False)
+        assert submit.call_count == 9
+        assert wait.call_count == 2
+
+    def test_parallel_seed_stops_on_failed_batch(self):
+        with patch.object(self.invalidator, "_seed_request", return_value=True) as submit, patch.object(
+            self.invalidator, "_wait_for_seed_completion", return_value=False
+        ):
+            assert not self.invalidator.seed("radar-sri", times=list(range(9)), parallelism=4)
+        assert submit.call_count == 4
+
     @patch('datasets.cache.requests.get')
     @patch('datasets.cache.requests.post')
     def test_wait_for_completion_succeeds_immediately(

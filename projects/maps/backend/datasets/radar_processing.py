@@ -132,14 +132,6 @@ def update_geoserver_radar_layers(
         layer_name, store_name=store_name, all_times=True
     )
     copies_target_dir = os.path.join(COPIES_BASE_DIRECTORY, layer_name)
-    # The watcher submits the full rolling window on every run. Track files
-    # absent from the served mosaic before processing so only truly new radar
-    # granules are warmed after the index is rebuilt.
-    new_input_times = {
-        invalidator._normalize_time(date_dt.replace(tzinfo=timezone.utc).isoformat())
-        for filename, date_dt in zip(filenames, date_dts)
-        if not os.path.exists(os.path.join(copies_target_dir, filename))
-    }
     for filename, date_dt in zip(filenames, date_dts):
         log.info(f"Processing file: {filename}, date: {date_dt}")
         success = process_radar_file(
@@ -226,6 +218,10 @@ def update_geoserver_radar_layers(
             for date_dt in date_dts
         }
         affected_times = sorted(set(stale_times) | set(new_times) | changed_times)
+        # Rewarm every retained time we invalidate, including overlapping input
+        # batches. A previous generation's pending warming may be cancelled;
+        # checking only newly copied files would permanently skip those tiles.
+        warm_times = sorted(set(affected_times) & set(cached_times))
         var_path = os.path.join(RADAR_BASE_DIRECTORY, variable)
         copies_target_dir = os.path.join(COPIES_BASE_DIRECTORY, layer_name)
 
@@ -270,7 +266,7 @@ def update_geoserver_radar_layers(
                             "workspace": WORKSPACE,
                             "store_name": store_name,
                             "times": affected_times,
-                            "warm_times": sorted(new_input_times),
+                            "warm_times": warm_times,
                             "zoom_start": (cache_config or {}).get("zoom_start"),
                             "zoom_stop": (cache_config or {}).get("zoom_stop"),
                         }

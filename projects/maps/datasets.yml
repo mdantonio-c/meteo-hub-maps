@@ -260,6 +260,7 @@ datasets:
       cache:
         eligible: true
         require_explicit_time: true
+        expire_seconds: 259200
         zoom_start: 5
         zoom_stop: 9
       sld:

@@ -270,7 +270,10 @@ def test_gwc_invalidator_adds_time_parameter_filter(
     assert b"<regex>.*</regex>" in payload
     assert b"<gridSetName>EPSG:900913_1024</gridSetName>" in payload
     assert b"<expireCache>86400</expireCache>" in payload
-    assert b"<expireClients>86400</expireClients>" in payload
+    assert (
+        f"<expireClients>{cache.GWC_CLIENT_EXPIRE_SECONDS}</expireClients>".encode()
+        in payload
+    )
 
 
 def test_gwc_invalidator_keeps_existing_time_parameter_filter(
@@ -278,11 +281,11 @@ def test_gwc_invalidator_keeps_existing_time_parameter_filter(
 ) -> None:
     class Response:
         status_code = 200
-        content = b"""<GeoServerLayer><gridSubsets><gridSubset>
+        content = f"""<GeoServerLayer><gridSubsets><gridSubset>
           <gridSetName>EPSG:900913_1024</gridSetName>
-        </gridSubset></gridSubsets><expireCache>86400</expireCache><expireClients>86400</expireClients><parameterFilters>
+        </gridSubset></gridSubsets><expireCache>86400</expireCache><expireClients>{cache.GWC_CLIENT_EXPIRE_SECONDS}</expireClients><parameterFilters>
           <regexParameterFilter><key>TIME</key><defaultValue/><regex>.*</regex></regexParameterFilter>
-        </parameterFilters></GeoServerLayer>"""
+        </parameterFilters></GeoServerLayer>""".encode()
 
     monkeypatch.setattr(cache.requests, "get", lambda *args, **kwargs: Response())
     monkeypatch.setattr(
