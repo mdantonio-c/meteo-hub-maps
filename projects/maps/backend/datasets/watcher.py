@@ -195,6 +195,21 @@ class DataWatcherStream(DataWatcher):
         self.time_format = time_format
         self.file_time_format = file_time_format
 
+    def _latest_processed_time(self, path: str) -> Optional[datetime]:
+        """Use successful completion markers as the stream ingestion watermark."""
+        completed = []
+        for name in os.listdir(path):
+            if not name.endswith(self.processed_suffix):
+                continue
+            identifier = name[: -len(self.processed_suffix)]
+            try:
+                completed.append(
+                    datetime.strptime(identifier.rsplit("-", 1)[-1], self.time_format)
+                )
+            except ValueError:
+                log.warning(f"Could not parse {self.processed_suffix} file: {name}")
+        return max(completed) if completed else None
+
     def _check_processed(self, identifier: str, path: str) -> bool:
         try:
             current_ready_dt = datetime.strptime(identifier, self.time_format)
@@ -202,28 +217,8 @@ class DataWatcherStream(DataWatcher):
             log.error(f"Could not parse timestamp from READY file: {identifier}")
             return False
 
-        # Find all date-range .GEOSERVER.READY files
-        geoserver_ready_files = [
-            f for f in os.listdir(path) if f.endswith(self.processed_suffix)
-        ]
-
-        if geoserver_ready_files:
-            for gf in geoserver_ready_files:
-                try:
-                    date_range = gf.split(".")[0]
-                    if "-" in date_range:
-                        _, to_date = date_range.split("-")
-                        end_dt = datetime.strptime(to_date, self.time_format)
-                        if current_ready_dt <= end_dt:
-                            return True
-                    else:
-                        # Old single date format
-                        end_dt = datetime.strptime(date_range, self.time_format)
-                        if current_ready_dt <= end_dt:
-                            return True
-                except ValueError:
-                    log.warning(f"Could not parse {self.processed_suffix} file: {gf}")
-        return False
+        completed = self._latest_processed_time(path)
+        return completed is not None and current_ready_dt <= completed
 
     def _perform_action(
         self,
@@ -287,6 +282,13 @@ class DataWatcherStream(DataWatcher):
                 continue
 
         start_dt = current_ready_dt - timedelta(hours=self.retention_hours)
+        completed = self._latest_processed_time(path)
+        if completed is not None:
+            start_dt = max(start_dt, completed + timedelta(minutes=1))
+        log.info(
+            f"Stream {var_name}: completed through {completed}; "
+            f"scanning pending files from {start_dt} to {current_ready_dt}"
+        )
 
         pending_filenames = []
         pending_dates = []

@@ -125,10 +125,11 @@ controlled separately by `GWC_CLIENT_EXPIRE_SECONDS`.
 
 The number of `parameters-*.properties` files is not the number of populated tile
 folders: GWC keeps parameter metadata after targeted truncation removes tiles.
-Radar ingestion invalidates submitted timestamps and timestamps removed from
-the mosaic, then pre-seeds every retained affected timestep at zoom levels 5–9.
-Overlapping batches re-queue their retained timesteps so cancelling an earlier
-warming generation does not leave those tiles unseeded.
+Radar discovery submits only files after the latest successful
+`.GEOSERVER.READY` endpoint; the 72-hour scan is used for initial ingestion.
+Radar ingestion invalidates additions, newly copied files and timestamps removed
+from the mosaic, then pre-seeds retained affected timesteps at zoom levels 5–9.
+Unchanged files in overlapping batches retain their existing cached tiles.
 
 To refresh existing tiles manually, use:
 

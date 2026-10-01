@@ -132,6 +132,13 @@ def update_geoserver_radar_layers(
         layer_name, store_name=store_name, all_times=True
     )
     copies_target_dir = os.path.join(COPIES_BASE_DIRECTORY, layer_name)
+    # Old queued tasks and retries may still contain the full rolling window.
+    # process_radar_file skips existing TIFFs, so those inputs are unchanged.
+    copied_times = {
+        invalidator._normalize_time(date_dt.replace(tzinfo=timezone.utc).isoformat())
+        for filename, date_dt in zip(filenames, date_dts)
+        if not os.path.exists(os.path.join(copies_target_dir, filename))
+    }
     for filename, date_dt in zip(filenames, date_dts):
         log.info(f"Processing file: {filename}, date: {date_dt}")
         success = process_radar_file(
@@ -209,19 +216,15 @@ def update_geoserver_radar_layers(
         )
         stale_times = sorted(set(previous_times) - set(cached_times))
         new_times = sorted(set(cached_times) - set(previous_times))
-        # A producer can replace an existing timestamp. Invalidate every
-        # input time as well as additions/removals so stale tiles never win.
-        changed_times = {
-            invalidator._normalize_time(
-                date_dt.replace(tzinfo=timezone.utc).isoformat()
-            )
-            for date_dt in date_dts
-        }
-        affected_times = sorted(set(stale_times) | set(new_times) | changed_times)
-        # Rewarm every retained time we invalidate, including overlapping input
-        # batches. A previous generation's pending warming may be cancelled;
-        # checking only newly copied files would permanently skip those tiles.
+        affected_times = sorted(set(stale_times) | set(new_times) | copied_times)
+        # Seed additions and recovered missing copies, retaining unchanged tiles.
         warm_times = sorted(set(affected_times) & set(cached_times))
+        log.info(
+            f"Radar {layer_name} cache delta: {len(filenames)} submitted, "
+            f"{len(copied_times)} copied, {len(new_times)} added, "
+            f"{len(stale_times)} removed; truncate {len(affected_times)}, "
+            f"warm {len(warm_times)}"
+        )
         var_path = os.path.join(RADAR_BASE_DIRECTORY, variable)
         copies_target_dir = os.path.join(COPIES_BASE_DIRECTORY, layer_name)
 
