@@ -115,6 +115,7 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       GWC_SEEDER_CORE_POOL_SIZE: ${GWC_SEEDER_CORE_POOL_SIZE}
+      GWC_LAYER_QUOTA_MIB: ${GWC_LAYER_QUOTA_MIB}
     volumes:
       - ${SUBMODULE_DIR}/do/controller/confs/projects_defaults.yaml:/code/confs/projects_defaults.yaml
       - ${PROJECT_DIR}/project_configuration.yaml:/code/confs/project_configuration.yaml
@@ -153,6 +154,7 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       GWC_SEEDER_CORE_POOL_SIZE: ${GWC_SEEDER_CORE_POOL_SIZE}
+      GWC_LAYER_QUOTA_MIB: ${GWC_LAYER_QUOTA_MIB}
     volumes:
       - ${SUBMODULE_DIR}/do/controller/confs/projects_defaults.yaml:/code/confs/projects_defaults.yaml
       - ${PROJECT_DIR}/project_configuration.yaml:/code/confs/project_configuration.yaml
