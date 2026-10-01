@@ -1,6 +1,7 @@
 from restapi.connectors import celery
 from kombu import Exchange, Queue
 from maps.tasks import cache_control  # noqa: F401
+from maps.tasks import cache_cleanup  # noqa: F401
 from maps.tasks import ww3  # noqa: F401
 from maps.tasks import startup  # noqa: F401
 from maps.tasks import check_fs_data  # noqa: F401
@@ -16,6 +17,9 @@ app.conf.update(
     task_default_queue="ingest",
     task_default_exchange="ingest",
     task_default_routing_key="ingest",
+    task_routes={
+        "cleanup_gwc_parameters": {"queue": "cache-control"},
+    },
     task_queues=(
         Queue("ingest", Exchange("ingest"), routing_key="ingest"),
         Queue(

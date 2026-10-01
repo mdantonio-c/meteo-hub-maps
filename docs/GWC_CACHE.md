@@ -13,6 +13,7 @@ the configuration.
 - [Apply and verify changes](#apply-and-verify-changes)
 - [How quotas work](#how-quotas-work)
 - [Direct WMS-C integration](#direct-wms-c-integration)
+- [Parameter metadata cleanup](#parameter-metadata-cleanup)
 - [Related guides](#related-guides)
 
 ## Settings
@@ -121,6 +122,24 @@ only if this setting changes; other global GWC settings are preserved.
 This allows eligible tiled WMS requests to use GWC through the GeoServer WMS
 endpoint. Ordinary arbitrary-size WMS images are not automatically tile-cache
 hits; requests must match the configured gridset and parameter filters.
+
+## Parameter Metadata Cleanup
+
+Backend startup registers the `cleanup_gwc_parameters` Celery task to run hourly
+at minute `0`, on the `cache-control` queue. It scans layer directories under
+`${GEOSERVER_DATA_PATH}/gwc` (default `/geoserver_data/gwc`) and removes
+`parameters-<hash>.properties` files when either:
+
+- their modification time is more than three days old; or
+- no sibling tile-cache directory ends in `_<hash>` (for example,
+  `EPSG_900913_1024_05_<hash>`), as can happen after a truncate.
+
+Recent files with an associated directory are retained, including empty
+directories. Old files are removed even when an associated directory exists.
+The task only deletes parameter metadata; it does not truncate tiles or remove
+granules. Symlinked files and layer directories are skipped. Each run logs
+scanned, expired, orphaned and error counts. Cleanup is independent of ingestion
+monitoring and skips filesystem access when `GEOSERVER_GWC_ENABLED=0`.
 
 ## Related Guides
 

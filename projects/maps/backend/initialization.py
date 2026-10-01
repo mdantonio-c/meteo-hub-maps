@@ -2,7 +2,7 @@
 
 from restapi.connectors import celery
 
-from maps.datasets.monitoring import start_monitoring
+from maps.datasets.monitoring import start_cache_maintenance, start_monitoring
 from maps.datasets.registry import load_registry
 
 
@@ -12,6 +12,7 @@ class Initializer:
         self.dataset_registry = load_registry()
         instance = celery.get_instance()
         start_monitoring(instance)
+        start_cache_maintenance(instance)
         instance.celery_app.send_task(name="initialize_geoserver", args=[])
 
     def initialize_testing_environment(self) -> None:

@@ -8,6 +8,7 @@ from restapi.connectors.celery import CeleryExt
 from maps.datasets.monitoring import discovery_tasks, start_monitoring, stop_monitoring
 from maps.datasets.registry import load_registry
 from maps.tasks import (
+    cache_cleanup,
     check_fs_data,
     data_ready,
     radar,
@@ -94,3 +95,29 @@ def test_monitoring_uses_unique_manifest_adapters():
     client.get_periodic_task.return_value = True
     assert stop_monitoring(client)
     assert client.delete_periodic_task.call_count == 6
+
+
+def test_cache_cleanup_task_uses_shared_gwc_volume(monkeypatch, tmp_path):
+    monkeypatch.setattr(CeleryExt, "app", Flask(__name__))
+    monkeypatch.setenv("GEOSERVER_GWC_ENABLED", "1")
+    monkeypatch.setenv("GEOSERVER_DATA_PATH", str(tmp_path))
+    layer = tmp_path / "gwc" / "meteohub_radar-sri"
+    layer.mkdir(parents=True)
+    metadata = layer / "parameters-orphan.properties"
+    metadata.touch()
+
+    result = cache_cleanup.cleanup_gwc_parameters.run()
+
+    assert result["orphaned"] == 1
+    assert not metadata.exists()
+    app = cache_cleanup.cleanup_gwc_parameters.app
+    route = app.amqp.router.route({}, "cleanup_gwc_parameters")
+    assert route["queue"].name == "cache-control"
+
+
+def test_cache_cleanup_disabled_skips_filesystem(monkeypatch):
+    monkeypatch.setattr(CeleryExt, "app", Flask(__name__))
+    monkeypatch.setenv("GEOSERVER_GWC_ENABLED", "0")
+    with patch.object(cache_cleanup, "cleanup_parameter_files") as cleanup:
+        assert cache_cleanup.cleanup_gwc_parameters.run()["scanned"] == 0
+    cleanup.assert_not_called()

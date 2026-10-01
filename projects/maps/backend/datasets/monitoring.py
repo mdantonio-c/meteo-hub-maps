@@ -24,6 +24,20 @@ def discovery_tasks() -> tuple[str, ...]:
     return tuple(name for name, _, _ in discovery_schedules())
 
 
+def start_cache_maintenance(celery_instance) -> None:
+    """Schedule hourly metadata cleanup independently of ingestion monitoring."""
+    celery_instance.create_crontab_task(
+        name="cleanup_gwc_parameters",
+        hour="*",
+        minute="0",
+        day_of_week="*",
+        day_of_month="*",
+        month_of_year="*",
+        task="cleanup_gwc_parameters",
+        args=[],
+    )
+
+
 def start_monitoring(celery_instance) -> None:
     for name, task, args in discovery_schedules():
         celery_instance.create_crontab_task(
