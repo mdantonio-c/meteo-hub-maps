@@ -47,8 +47,11 @@ Test from an allowlisted address and from another address after enabling
 maintenance. Also check that sending a forged `X-Forwarded-For` from an
 untrusted peer still returns 503. During maintenance the nginx container's
 health probe needs an explicitly allowlisted loopback address if it should pass.
-This gate applies to requests reaching Docker nginx; independently exposed
-service ports and host-served static routes use their own routing/access rules.
+The tracked host nginx templates route `/api`, `/wms`, `/wms/cache` and
+`/geoserver/` through Docker nginx, including preflight requests. Install the
+updated host template and reload host nginx when deploying this routing change.
+Independently exposed service ports and host-served static routes use their own
+routing/access rules.
 
 ## How it works
 

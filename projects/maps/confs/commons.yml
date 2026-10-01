@@ -11,6 +11,7 @@ services:
       STATUS_FILE_PATH: ${STATUS_FILE_PATH}
     volumes:
       - ${PROJECT_DIR}/builds/proxy:/opt/meteohub-proxy:ro
+      - ${PROJECT_DIR}/confs/public_geoserver.service:/etc/nginx/sites-enabled/public_geoserver.service:ro
       - ${HOST_STATUS_DIR}:/var/lib/meteohub:ro
   maintenance:
     entrypoint: ["/sbin/tini", "/bin/sh", "/opt/meteohub-proxy/entrypoint.sh"]
