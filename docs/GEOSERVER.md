@@ -509,8 +509,19 @@ is initialized.
 
 The settings are persisted in `gwc/geowebcache-diskquota.xml` through the
 GeoServer resource API. GeoServer is reloaded only when quota settings change;
-existing cleanup scheduling, global quota and unrelated layer quotas are
-preserved. Explicit per-layer quotas are independent of the global quota.
+existing cleanup scheduling and unrelated layer quotas are preserved.
+
+Set `GWC_GLOBAL_QUOTA_MIB` to a positive integer to specify the global quota in
+MiB, for example `GWC_GLOBAL_QUOTA_MIB=8192`. When unset or empty (the default),
+the global quota is calculated as `GWC_LAYER_QUOTA_MIB × number of current GWC
+layers`, including layers in other workspaces. The live GWC catalog is queried
+on quota checks so additions and removals update the calculated limit, including
+when only one layer is being configured. With 512 MiB per layer and 10 cached
+layers, the automatic global quota is 5120 MiB; an empty catalog yields 0 MiB.
+
+GWC applies the global quota to layers without explicit per-layer quotas.
+Explicit per-layer quotas are independent of it, so the global setting is not
+an aggregate hard limit on all layer caches.
 
 Quota cleanup is periodic (every 10 seconds on a fresh configuration), so disk
 usage can temporarily exceed the configured limit during seeding or heavy

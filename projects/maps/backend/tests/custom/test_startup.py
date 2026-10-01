@@ -143,7 +143,7 @@ class TestStartupInitialization:
             result = initialize_geoserver()
 
         assert result is True
-        mock_invalidator_class.return_value.ensure_disk_quota.assert_not_called()
+        mock_invalidator_class.return_value.ensure_disk_quota.assert_called_once_with([])
 
     @patch("maps.tasks.startup.initialize_geoserver")
     @patch("maps.tasks.startup.celery")

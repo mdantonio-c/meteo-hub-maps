@@ -52,6 +52,8 @@ variables:
     GWC_CACHE_EXPIRE_SECONDS: 86400
     GWC_CLIENT_EXPIRE_SECONDS: 0
     GWC_LAYER_QUOTA_MIB: 1024
+    # Empty: per-layer quota multiplied by the current GWC layer count.
+    GWC_GLOBAL_QUOTA_MIB: ""
     GEOSERVER_DATA_PATH: /geoserver_data
     HOST_GEOSERVER_DATA_DIR: ${DATA_DIR}/geoserver_data
     STATUS_FILE_PATH: /var/lib/meteohub/status.json

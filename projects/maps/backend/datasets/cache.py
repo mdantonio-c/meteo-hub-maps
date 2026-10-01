@@ -36,6 +36,10 @@ GWC_CLIENT_EXPIRE_SECONDS = int(os.environ.get("GWC_CLIENT_EXPIRE_SECONDS", "300
 GWC_LAYER_QUOTA_MIB = int(os.environ.get("GWC_LAYER_QUOTA_MIB", "1024"))
 if GWC_LAYER_QUOTA_MIB < 1:
     raise ValueError("GWC_LAYER_QUOTA_MIB must be a positive integer")
+_global_quota_mib = os.environ.get("GWC_GLOBAL_QUOTA_MIB", "").strip()
+GWC_GLOBAL_QUOTA_MIB = int(_global_quota_mib) if _global_quota_mib else None
+if GWC_GLOBAL_QUOTA_MIB is not None and GWC_GLOBAL_QUOTA_MIB < 1:
+    raise ValueError("GWC_GLOBAL_QUOTA_MIB must be a positive integer or empty")
 # Max seconds to wait for GWC seed queue to drain (tile generation).
 GWC_SEED_WAIT_TIMEOUT = int(os.environ.get("GWC_SEED_WAIT_TIMEOUT", "1800"))
 # Seconds between seed queue polls.
@@ -332,17 +336,19 @@ class GWCInvalidator:
         if not self.enabled:
             return True
 
-        def quota_matches(entry: ElementTree.Element) -> bool:
+        def quota_matches(quota: Optional[ElementTree.Element], limit_mib: int) -> bool:
             # ConfigLoader saves quotas using the best-fit unit (e.g. 1024 MiB
             # becomes 1 GiB). Compare bytes to avoid reloading on every check.
             units = {
                 unit: 1024**power
                 for power, unit in enumerate(("B", "KiB", "MiB", "GiB", "TiB"))
             }
+            if quota is None:
+                return False
             try:
-                value = Decimal(entry.findtext("quota/value") or "")
-                multiplier = units.get(entry.findtext("quota/units") or "", 0)
-                return value * multiplier == GWC_LAYER_QUOTA_MIB * 1024**2
+                value = Decimal(quota.findtext("value") or "")
+                multiplier = units.get(quota.findtext("units") or "", 0)
+                return value * multiplier == limit_mib * 1024**2
             except InvalidOperation:
                 return False
 
@@ -358,7 +364,6 @@ class GWCInvalidator:
                     "<cacheCleanUpUnits>SECONDS</cacheCleanUpUnits>"
                     "<maxConcurrentCleanUps>2</maxConcurrentCleanUps>"
                     "<globalExpirationPolicyName>LFU</globalExpirationPolicyName>"
-                    "<globalQuota><value>500</value><units>MiB</units></globalQuota>"
                     "<layerQuotas/></gwcQuotaConfiguration>"
                 )
                 changed = True
@@ -390,7 +395,7 @@ class GWCInvalidator:
                 if (
                     len(existing) == 1
                     and existing[0].findtext("expirationPolicyName") == "LRU"
-                    and quota_matches(existing[0])
+                    and quota_matches(existing[0].find("quota"), GWC_LAYER_QUOTA_MIB)
                 ):
                     continue
                 for entry in existing:
@@ -401,6 +406,37 @@ class GWCInvalidator:
                 quota = ElementTree.SubElement(entry, "quota")
                 ElementTree.SubElement(quota, "value").text = str(GWC_LAYER_QUOTA_MIB)
                 ElementTree.SubElement(quota, "units").text = "MiB"
+                changed = True
+
+            global_limit_mib = GWC_GLOBAL_QUOTA_MIB
+            if global_limit_mib is None:
+                # Query the full live catalog, not this call's layer subset or
+                # persisted quotas, which may include deleted layers.
+                response = requests.get(
+                    f"{self.base_url}/gwc/rest/layers.xml",
+                    auth=(self.username, self.password),
+                    timeout=self.timeout,
+                )
+                if response.status_code != 200:
+                    log.error(
+                        "GWC layer count lookup failed: HTTP %s", response.status_code
+                    )
+                    return False
+                layers = ElementTree.fromstring(response.content)
+                if layers.tag != "layers":
+                    log.error("Unexpected GWC layer listing format")
+                    return False
+                names = {item.findtext("name") for item in layers.findall("layer")}
+                names.discard(None)
+                names.discard("")
+                global_limit_mib = GWC_LAYER_QUOTA_MIB * len(names)
+            global_quota = config.find("globalQuota")
+            if not quota_matches(global_quota, global_limit_mib):
+                if global_quota is not None:
+                    config.remove(global_quota)
+                global_quota = ElementTree.SubElement(config, "globalQuota")
+                ElementTree.SubElement(global_quota, "value").text = str(global_limit_mib)
+                ElementTree.SubElement(global_quota, "units").text = "MiB"
                 changed = True
             if not changed:
                 return True
@@ -426,8 +462,10 @@ class GWCInvalidator:
             log.exception("Could not configure GWC disk quotas")
             return False
         log.info(
-            "Configured %s MiB per-layer GWC disk quotas with LRU eviction",
+            "Configured %s MiB per-layer GWC disk quotas with LRU eviction "
+            "and %s MiB global quota",
             GWC_LAYER_QUOTA_MIB,
+            global_limit_mib,
         )
         return True
 

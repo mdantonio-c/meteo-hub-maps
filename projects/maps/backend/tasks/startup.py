@@ -95,14 +95,14 @@ def initialize_geoserver(self) -> bool:
         return False
 
     layers = _get_all_layers(GEOSERVER_URL, GEOSERVER_USER, GEOSERVER_PASSWORD, GEOSERVER_WORKSPACE)
+    if not invalidator.ensure_disk_quota(layers):
+        log.error("Could not configure GWC disk quotas")
+        return False
     if not layers:
         log.warning("No layers found in GeoServer workspace; skipping GWC initialization")
         return True
     
     log.info(f"Found {len(layers)} layers in workspace {GEOSERVER_WORKSPACE}")
-    if not invalidator.ensure_disk_quota(layers):
-        log.error("Could not configure per-layer GWC disk quotas")
-        return False
     
     success_count = 0
     failure_count = 0

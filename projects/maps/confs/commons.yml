@@ -14,6 +14,7 @@ services:
       GWC_CACHE_EXPIRE_SECONDS: ${GWC_CACHE_EXPIRE_SECONDS}
       GWC_CLIENT_EXPIRE_SECONDS: ${GWC_CLIENT_EXPIRE_SECONDS}
       GWC_LAYER_QUOTA_MIB: ${GWC_LAYER_QUOTA_MIB}
+      GWC_GLOBAL_QUOTA_MIB: ${GWC_GLOBAL_QUOTA_MIB:-}
       WW3_DATA_PATH: ${WW3_DATA_PATH}
       SEASONAL_DATA_PATH: ${SEASONAL_DATA_PATH}
       RADAR_DATA_PATH: ${RADAR_DATA_PATH}
@@ -64,6 +65,7 @@ services:
       GWC_CACHE_EXPIRE_SECONDS: ${GWC_CACHE_EXPIRE_SECONDS}
       GWC_CLIENT_EXPIRE_SECONDS: ${GWC_CLIENT_EXPIRE_SECONDS}
       GWC_LAYER_QUOTA_MIB: ${GWC_LAYER_QUOTA_MIB}
+      GWC_GLOBAL_QUOTA_MIB: ${GWC_GLOBAL_QUOTA_MIB:-}
       GEOSERVER_DATA_PATH: ${GEOSERVER_DATA_PATH}
       GEOSERVER_URL: http://geoserver.dockerized.io:8080/geoserver
       GEOSERVER_WORKSPACE: meteohub
@@ -116,6 +118,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       GWC_SEEDER_CORE_POOL_SIZE: ${GWC_SEEDER_CORE_POOL_SIZE}
       GWC_LAYER_QUOTA_MIB: ${GWC_LAYER_QUOTA_MIB}
+      GWC_GLOBAL_QUOTA_MIB: ${GWC_GLOBAL_QUOTA_MIB:-}
     volumes:
       - ${SUBMODULE_DIR}/do/controller/confs/projects_defaults.yaml:/code/confs/projects_defaults.yaml
       - ${PROJECT_DIR}/project_configuration.yaml:/code/confs/project_configuration.yaml
@@ -155,6 +158,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       GWC_SEEDER_CORE_POOL_SIZE: ${GWC_SEEDER_CORE_POOL_SIZE}
       GWC_LAYER_QUOTA_MIB: ${GWC_LAYER_QUOTA_MIB}
+      GWC_GLOBAL_QUOTA_MIB: ${GWC_GLOBAL_QUOTA_MIB:-}
     volumes:
       - ${SUBMODULE_DIR}/do/controller/confs/projects_defaults.yaml:/code/confs/projects_defaults.yaml
       - ${PROJECT_DIR}/project_configuration.yaml:/code/confs/project_configuration.yaml

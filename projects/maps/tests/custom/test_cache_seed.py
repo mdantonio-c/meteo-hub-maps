@@ -21,12 +21,17 @@ class TestGWCSeedCompletion:
     """Test the synchronous GWC seed completion mechanism."""
 
     def setup_method(self):
+        self.global_quota_patch = patch.object(cache, "GWC_GLOBAL_QUOTA_MIB", 1024)
+        self.global_quota_patch.start()
         self.invalidator = GWCInvalidator(
             geoserver_url="http://localhost:8080/geoserver",
             username="admin",
             password="password",
             workspace="meteohub",
         )
+
+    def teardown_method(self):
+        self.global_quota_patch.stop()
 
     def test_radar_cache_policy_and_seed_zoom_range(self):
         from maps.datasets.manifest import load_manifest
@@ -125,6 +130,8 @@ class TestGWCSeedCompletion:
         assert update.call_args.args[0].endswith("/rest/resource/gwc/geowebcache-diskquota.xml")
         config = ElementTree.fromstring(update.call_args.kwargs["data"])
         assert config.findtext("enabled") == "true"
+        assert config.findtext("globalQuota/value") == "1024"
+        assert config.findtext("globalQuota/units") == "MiB"
         entries = config.findall("layerQuotas/LayerQuota")
         assert {q.findtext("layer") for q in entries} == {"meteohub:radar-sri", "meteohub:radar-srt"}
         for entry in entries:
@@ -148,7 +155,7 @@ class TestGWCSeedCompletion:
             assert self.invalidator.ensure_disk_quota(["radar-sri"])
         config = ElementTree.fromstring(update.call_args.kwargs["data"])
         assert config.findtext("cacheCleanUpFrequency") == "30"
-        assert config.findtext("globalQuota/value") == "20"
+        assert config.findtext("globalQuota/value") == "1024"
         entries = {q.findtext("layer"): q for q in config.find("layerQuotas")}
         assert entries["other:layer"].findtext("quota/value") == "2"
         assert entries["meteohub:radar-sri"].findtext("quota/value") == "1024"
@@ -167,7 +174,8 @@ class TestGWCSeedCompletion:
         assert config.findtext("layerQuotas/LayerQuota/quota/units") == "MiB"
 
     def test_disk_quota_already_configured_is_noop(self):
-        xml = b"""<gwcQuotaConfiguration><enabled>true</enabled><layerQuotas>
+        xml = b"""<gwcQuotaConfiguration><enabled>true</enabled>
+        <globalQuota><value>1</value><units>GiB</units></globalQuota><layerQuotas>
         <LayerQuota><layer>meteohub:radar-sri</layer><expirationPolicyName>LRU</expirationPolicyName>
         <quota><value>1</value><units>GiB</units></quota></LayerQuota>
         </layerQuotas></gwcQuotaConfiguration>"""
@@ -177,6 +185,65 @@ class TestGWCSeedCompletion:
             assert self.invalidator.ensure_disk_quota(["radar-sri"])
         update.assert_not_called()
         reload.assert_not_called()
+
+    def test_global_quota_explicit_override_skips_layer_count_lookup(self):
+        with patch.object(cache, "GWC_GLOBAL_QUOTA_MIB", 8192), patch.object(
+            cache.requests, "get", return_value=MagicMock(status_code=404)
+        ) as lookup, patch.object(
+            cache.requests, "put", return_value=MagicMock(status_code=201)
+        ) as update, patch.object(cache.requests, "post", return_value=MagicMock(status_code=200)):
+            assert self.invalidator.ensure_disk_quota(["radar-sri"])
+        lookup.assert_called_once()
+        config = ElementTree.fromstring(update.call_args.kwargs["data"])
+        assert config.findtext("globalQuota/value") == "8192"
+
+    def test_global_quota_auto_counts_live_layers_during_single_layer_update(self):
+        existing = b"""<gwcQuotaConfiguration><enabled>true</enabled>
+        <globalQuota><value>500</value><units>MiB</units></globalQuota><layerQuotas>
+        <LayerQuota><layer>meteohub:deleted</layer><expirationPolicyName>LRU</expirationPolicyName>
+        <quota><value>512</value><units>MiB</units></quota></LayerQuota>
+        </layerQuotas></gwcQuotaConfiguration>"""
+        listing = b"""<layers><layer><name>meteohub:radar-sri</name></layer>
+        <layer><name>meteohub:radar-srt</name></layer>
+        <layer><name>other:layer</name></layer></layers>"""
+        with patch.object(cache, "GWC_GLOBAL_QUOTA_MIB", None), patch.object(
+            cache, "GWC_LAYER_QUOTA_MIB", 512
+        ), patch.object(cache.requests, "get", side_effect=[
+            MagicMock(status_code=200, content=existing),
+            MagicMock(status_code=200, content=listing),
+        ]) as lookup, patch.object(
+            cache.requests, "put", return_value=MagicMock(status_code=200)
+        ) as update, patch.object(cache.requests, "post", return_value=MagicMock(status_code=200)):
+            assert self.invalidator.ensure_disk_quota(["radar-sri"])
+        assert lookup.call_args.args[0].endswith("/gwc/rest/layers.xml")
+        config = ElementTree.fromstring(update.call_args.kwargs["data"])
+        assert config.findtext("globalQuota/value") == "1536"
+        assert config.findtext("globalQuota/units") == "MiB"
+
+    def test_global_quota_auto_empty_catalog(self):
+        with patch.object(cache, "GWC_GLOBAL_QUOTA_MIB", None), patch.object(
+            cache.requests, "get", side_effect=[
+                MagicMock(status_code=404),
+                MagicMock(status_code=200, content=b"<layers/>"),
+            ]
+        ), patch.object(cache.requests, "put", return_value=MagicMock(status_code=201)) as update, patch.object(
+            cache.requests, "post", return_value=MagicMock(status_code=200)
+        ):
+            assert self.invalidator.ensure_disk_quota([])
+        config = ElementTree.fromstring(update.call_args.kwargs["data"])
+        assert config.findtext("globalQuota/value") == "0"
+
+    def test_global_quota_auto_lookup_failure_does_not_persist(self):
+        for response in [
+            MagicMock(status_code=500),
+            MagicMock(status_code=200, content=b"invalid"),
+            MagicMock(status_code=200, content=b"<unexpected/>"),
+        ]:
+            with patch.object(cache, "GWC_GLOBAL_QUOTA_MIB", None), patch.object(
+                cache.requests, "get", side_effect=[MagicMock(status_code=404), response]
+            ), patch.object(cache.requests, "put") as update:
+                assert not self.invalidator.ensure_disk_quota(["radar-sri"])
+            update.assert_not_called()
 
     def test_disk_quota_lookup_failure_does_not_overwrite_configuration(self):
         for response in [MagicMock(status_code=500), MagicMock(status_code=200, content=b"invalid")]:
