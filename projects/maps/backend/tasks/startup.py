@@ -5,6 +5,7 @@ GeoWebCache are correctly configured before any ingestion or cache tasks
 execute. Typical responsibilities include:
 - Recreating GWC gridsets that may have been lost on restart
 - Ensuring TIME parameter filters exist for all temporal layers
+- Enabling direct WMS integration and configurable per-layer disk quotas
 - Syncing SLD styles from the mounted volume
 """
 
@@ -70,6 +71,7 @@ def initialize_geoserver(self) -> bool:
     1. GWC gridsets exist for all configured layers
     2. TIME parameter filters are configured for temporal layers
     3. SLD styles are synced from the mounted volume
+    4. Each cached layer has an independent configurable LRU disk quota
     
     Returns True if successful, False otherwise.
     """
@@ -99,7 +101,7 @@ def initialize_geoserver(self) -> bool:
     
     log.info(f"Found {len(layers)} layers in workspace {GEOSERVER_WORKSPACE}")
     if not invalidator.ensure_disk_quota(layers):
-        log.error("Could not configure 1 GiB per-layer GWC disk quotas")
+        log.error("Could not configure per-layer GWC disk quotas")
         return False
     
     success_count = 0

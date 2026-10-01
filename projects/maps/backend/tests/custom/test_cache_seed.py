@@ -558,7 +558,8 @@ datasets:
         ]
         mock_put.return_value = MagicMock(status_code=201)
 
-        assert self.invalidator.ensure_time_parameter_filter("test_layer") is True
+        with patch.object(self.invalidator, "ensure_disk_quota", return_value=True):
+            assert self.invalidator.ensure_time_parameter_filter("test_layer") is True
         assert mock_put.call_args.args[0] == (
             "http://localhost:8080/geoserver/gwc/rest/gridsets/EPSG:900913_1024.xml"
         )

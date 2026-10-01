@@ -2,6 +2,7 @@
 
 import sys
 import types
+from xml.etree import ElementTree
 from unittest.mock import MagicMock, patch
 
 from maps.datasets import cache
@@ -110,8 +111,91 @@ class TestGWCSeedCompletion:
         with patch.object(cache.requests, "get", return_value=response), patch.object(
             cache.requests, "put", return_value=MagicMock(status_code=200)
         ) as update, patch.object(self.invalidator, "_ensure_grid_set", return_value=True):
-            assert self.invalidator.ensure_time_parameter_filter("radar-sri")
+            with patch.object(self.invalidator, "ensure_disk_quota", return_value=True):
+                assert self.invalidator.ensure_time_parameter_filter("radar-sri")
         assert b"<expireCache>259200</expireCache>" in update.call_args.kwargs["data"]
+
+    def test_disk_quota_creates_persistent_independent_layer_limits(self):
+        with patch.object(cache.requests, "get", return_value=MagicMock(status_code=404)), patch.object(
+            cache.requests, "put", return_value=MagicMock(status_code=201)
+        ) as update, patch.object(
+            cache.requests, "post", return_value=MagicMock(status_code=200)
+        ) as reload:
+            assert self.invalidator.ensure_disk_quota(["radar-sri", "radar-srt"])
+        assert update.call_args.args[0].endswith("/rest/resource/gwc/geowebcache-diskquota.xml")
+        config = ElementTree.fromstring(update.call_args.kwargs["data"])
+        assert config.findtext("enabled") == "true"
+        entries = config.findall("layerQuotas/LayerQuota")
+        assert {q.findtext("layer") for q in entries} == {"meteohub:radar-sri", "meteohub:radar-srt"}
+        for entry in entries:
+            assert entry.findtext("expirationPolicyName") == "LRU"
+            assert entry.findtext("quota/value") == "1024"
+            assert entry.findtext("quota/units") == "MiB"
+        reload.assert_called_once()
+
+    def test_disk_quota_preserves_other_layers_and_cleanup_settings(self):
+        config_xml = b"""<gwcQuotaConfiguration xmlns="http://geowebcache.org/diskquota">
+        <enabled>false</enabled><cacheCleanUpFrequency>30</cacheCleanUpFrequency>
+        <globalQuota><value>20</value><units>GiB</units></globalQuota>
+        <layerQuotas><LayerQuota><layer>other:layer</layer><expirationPolicyName>LFU</expirationPolicyName>
+        <quota><value>2</value><units>GiB</units></quota></LayerQuota>
+        <LayerQuota><layer>meteohub:radar-sri</layer><expirationPolicyName>LFU</expirationPolicyName>
+        <quota><value>5</value><units>GiB</units></quota></LayerQuota></layerQuotas>
+        </gwcQuotaConfiguration>"""
+        with patch.object(cache.requests, "get", return_value=MagicMock(status_code=200, content=config_xml)), patch.object(
+            cache.requests, "put", return_value=MagicMock(status_code=200)
+        ) as update, patch.object(cache.requests, "post", return_value=MagicMock(status_code=200)):
+            assert self.invalidator.ensure_disk_quota(["radar-sri"])
+        config = ElementTree.fromstring(update.call_args.kwargs["data"])
+        assert config.findtext("cacheCleanUpFrequency") == "30"
+        assert config.findtext("globalQuota/value") == "20"
+        entries = {q.findtext("layer"): q for q in config.find("layerQuotas")}
+        assert entries["other:layer"].findtext("quota/value") == "2"
+        assert entries["meteohub:radar-sri"].findtext("quota/value") == "1024"
+
+    def test_disk_quota_uses_configured_mib_limit(self):
+        with patch.object(cache, "GWC_LAYER_QUOTA_MIB", 512), patch.object(
+            cache.requests, "get", return_value=MagicMock(status_code=404)
+        ), patch.object(
+            cache.requests, "put", return_value=MagicMock(status_code=201)
+        ) as update, patch.object(
+            cache.requests, "post", return_value=MagicMock(status_code=200)
+        ):
+            assert self.invalidator.ensure_disk_quota(["radar-sri"])
+        config = ElementTree.fromstring(update.call_args.kwargs["data"])
+        assert config.findtext("layerQuotas/LayerQuota/quota/value") == "512"
+        assert config.findtext("layerQuotas/LayerQuota/quota/units") == "MiB"
+
+    def test_disk_quota_already_configured_is_noop(self):
+        xml = b"""<gwcQuotaConfiguration><enabled>true</enabled><layerQuotas>
+        <LayerQuota><layer>meteohub:radar-sri</layer><expirationPolicyName>LRU</expirationPolicyName>
+        <quota><value>1</value><units>GiB</units></quota></LayerQuota>
+        </layerQuotas></gwcQuotaConfiguration>"""
+        with patch.object(cache.requests, "get", return_value=MagicMock(status_code=200, content=xml)), patch.object(
+            cache.requests, "put"
+        ) as update, patch.object(cache.requests, "post") as reload:
+            assert self.invalidator.ensure_disk_quota(["radar-sri"])
+        update.assert_not_called()
+        reload.assert_not_called()
+
+    def test_disk_quota_lookup_failure_does_not_overwrite_configuration(self):
+        for response in [MagicMock(status_code=500), MagicMock(status_code=200, content=b"invalid")]:
+            with patch.object(cache.requests, "get", return_value=response), patch.object(cache.requests, "put") as update:
+                assert not self.invalidator.ensure_disk_quota(["radar-sri"])
+            update.assert_not_called()
+
+    def test_disk_quota_update_failure_does_not_reload(self):
+        with patch.object(cache.requests, "get", return_value=MagicMock(status_code=404)), patch.object(
+            cache.requests, "put", return_value=MagicMock(status_code=500)
+        ), patch.object(cache.requests, "post") as reload:
+            assert not self.invalidator.ensure_disk_quota(["radar-sri"])
+        reload.assert_not_called()
+
+    def test_disk_quota_disabled_is_noop(self):
+        self.invalidator.enabled = False
+        with patch.object(cache.requests, "get") as lookup:
+            assert self.invalidator.ensure_disk_quota(["radar-sri"])
+        lookup.assert_not_called()
 
     def test_parallel_no_wait_drains_earlier_batches(self):
         with patch.object(self.invalidator, "_seed_request", return_value=True) as submit, patch.object(

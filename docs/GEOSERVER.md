@@ -498,9 +498,14 @@ global settings are preserved.
 ## Per-layer Cache Disk Quotas
 
 Startup initialization enables GWC disk quota enforcement and assigns each
-layer in the configured workspace an independent **1 GiB (1,073,741,824 bytes)**
-quota with **LRU** (least recently used) eviction. Newly ingested layers receive
-the same quota when their GWC layer configuration is initialized.
+layer in the configured workspace an independent quota with **LRU** (least
+recently used) eviction. Set `GWC_LAYER_QUOTA_MIB` in project configuration or
+an environment override to specify the per-layer limit in MiB. The default is
+`1024` MiB (**1 GiB / 1,073,741,824 bytes**); the value must be a positive integer.
+For example, `GWC_LAYER_QUOTA_MIB=512` limits each layer to 512 MiB. Recreate
+backend and worker containers after changing the environment configuration.
+Newly ingested layers receive the same quota when their GWC layer configuration
+is initialized.
 
 The settings are persisted in `gwc/geowebcache-diskquota.xml` through the
 GeoServer resource API. GeoServer is reloaded only when quota settings change;
@@ -508,5 +513,6 @@ existing cleanup scheduling, global quota and unrelated layer quotas are
 preserved. Explicit per-layer quotas are independent of the global quota.
 
 Quota cleanup is periodic (every 10 seconds on a fresh configuration), so disk
-usage can temporarily exceed 1 GiB during seeding or heavy requests. The quota
+usage can temporarily exceed the configured limit during seeding or heavy
+requests. The quota
 covers all cached times, styles, formats and gridsets for a layer together.

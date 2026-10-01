@@ -258,6 +258,7 @@ def test_gwc_invalidator_adds_time_parameter_filter(
 
     monkeypatch.setattr(cache.requests, "get", fake_get)
     monkeypatch.setattr(cache.requests, "put", fake_put)
+    monkeypatch.setattr(GWCInvalidator, "ensure_disk_quota", lambda *args: True)
 
     invalidator = GWCInvalidator(
         "http://geoserver", "user", "password", "meteohub", enabled=True
@@ -288,6 +289,7 @@ def test_gwc_invalidator_keeps_existing_time_parameter_filter(
         </parameterFilters></GeoServerLayer>""".encode()
 
     monkeypatch.setattr(cache.requests, "get", lambda *args, **kwargs: Response())
+    monkeypatch.setattr(GWCInvalidator, "ensure_disk_quota", lambda *args: True)
     monkeypatch.setattr(
         cache.requests,
         "put",

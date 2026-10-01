@@ -89,6 +89,9 @@ class TestStartupInitialization:
 
         assert result is True
         assert mock_get_layers.call_count == 1
+        mock_invalidator.ensure_disk_quota.assert_called_once_with(
+            ["layer1", "layer2", "layer3"]
+        )
         assert mock_invalidator.ensure_time_parameter_filter.call_count == 3
         mock_invalidator.ensure_time_parameter_filter.assert_any_call("layer1")
         mock_invalidator.ensure_time_parameter_filter.assert_any_call("layer2")
@@ -140,7 +143,7 @@ class TestStartupInitialization:
             result = initialize_geoserver()
 
         assert result is True
-        mock_invalidator_class.assert_not_called()
+        mock_invalidator_class.return_value.ensure_disk_quota.assert_not_called()
 
     @patch("maps.tasks.startup.initialize_geoserver")
     @patch("maps.tasks.startup.celery")

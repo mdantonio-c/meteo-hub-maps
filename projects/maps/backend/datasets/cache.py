@@ -6,6 +6,7 @@ import time
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple, Union
 from xml.etree import ElementTree
@@ -32,7 +33,9 @@ GWC_CACHE_EXPIRE_SECONDS = int(os.environ.get("GWC_CACHE_EXPIRE_SECONDS", "86400
 # Forecast publication invalidates server-side tiles, but browsers cannot be
 # purged. Keep their copy below the five-minute radar update cadence.
 GWC_CLIENT_EXPIRE_SECONDS = int(os.environ.get("GWC_CLIENT_EXPIRE_SECONDS", "300"))
-GWC_LAYER_QUOTA_GIB = 1
+GWC_LAYER_QUOTA_MIB = int(os.environ.get("GWC_LAYER_QUOTA_MIB", "1024"))
+if GWC_LAYER_QUOTA_MIB < 1:
+    raise ValueError("GWC_LAYER_QUOTA_MIB must be a positive integer")
 # Max seconds to wait for GWC seed queue to drain (tile generation).
 GWC_SEED_WAIT_TIMEOUT = int(os.environ.get("GWC_SEED_WAIT_TIMEOUT", "1800"))
 # Seconds between seed queue polls.
@@ -320,7 +323,7 @@ class GWCInvalidator:
         return True
 
     def ensure_disk_quota(self, layer_names: Iterable[str]) -> bool:
-        """Persist independent 1 GiB LRU quotas and restart quota enforcement.
+        """Persist configurable per-layer LRU quotas and restart enforcement.
 
         The native diskquota REST PUT only mutates runtime configuration in
         GeoServer 3.0. Persist the quota XML through the resource API and reload
@@ -328,6 +331,21 @@ class GWCInvalidator:
         """
         if not self.enabled:
             return True
+
+        def quota_matches(entry: ElementTree.Element) -> bool:
+            # ConfigLoader saves quotas using the best-fit unit (e.g. 1024 MiB
+            # becomes 1 GiB). Compare bytes to avoid reloading on every check.
+            units = {
+                unit: 1024**power
+                for power, unit in enumerate(("B", "KiB", "MiB", "GiB", "TiB"))
+            }
+            try:
+                value = Decimal(entry.findtext("quota/value") or "")
+                multiplier = units.get(entry.findtext("quota/units") or "", 0)
+                return value * multiplier == GWC_LAYER_QUOTA_MIB * 1024**2
+            except InvalidOperation:
+                return False
+
         url = f"{self.base_url}/rest/resource/gwc/geowebcache-diskquota.xml"
         try:
             response = requests.get(
@@ -372,8 +390,7 @@ class GWCInvalidator:
                 if (
                     len(existing) == 1
                     and existing[0].findtext("expirationPolicyName") == "LRU"
-                    and existing[0].findtext("quota/value") == str(GWC_LAYER_QUOTA_GIB)
-                    and existing[0].findtext("quota/units") == "GiB"
+                    and quota_matches(existing[0])
                 ):
                     continue
                 for entry in existing:
@@ -382,8 +399,8 @@ class GWCInvalidator:
                 ElementTree.SubElement(entry, "layer").text = layer_id
                 ElementTree.SubElement(entry, "expirationPolicyName").text = "LRU"
                 quota = ElementTree.SubElement(entry, "quota")
-                ElementTree.SubElement(quota, "value").text = str(GWC_LAYER_QUOTA_GIB)
-                ElementTree.SubElement(quota, "units").text = "GiB"
+                ElementTree.SubElement(quota, "value").text = str(GWC_LAYER_QUOTA_MIB)
+                ElementTree.SubElement(quota, "units").text = "MiB"
                 changed = True
             if not changed:
                 return True
@@ -408,7 +425,10 @@ class GWCInvalidator:
         except (requests.RequestException, ElementTree.ParseError):
             log.exception("Could not configure GWC disk quotas")
             return False
-        log.info("Configured 1 GiB per-layer GWC disk quotas with LRU eviction")
+        log.info(
+            "Configured %s MiB per-layer GWC disk quotas with LRU eviction",
+            GWC_LAYER_QUOTA_MIB,
+        )
         return True
 
     def _cache_expiry_seconds(self, layer_name: str) -> int:
