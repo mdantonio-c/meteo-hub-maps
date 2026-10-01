@@ -128,17 +128,17 @@ hits; requests must match the configured gridset and parameter filters.
 Backend startup registers the `cleanup_gwc_parameters` Celery task to run hourly
 at minute `0`, on the `cache-control` queue. It scans layer directories under
 `${GEOSERVER_DATA_PATH}/gwc` (default `/geoserver_data/gwc`) and removes
-`parameters-<hash>.properties` files when either:
+`parameters-<hash>.properties` files only when no sibling tile-cache directory
+ends in `_<hash>` (for example, `EPSG_900913_1024_05_<hash>`), as can happen after
+a truncate.
 
-- their modification time is more than three days old; or
-- no sibling tile-cache directory ends in `_<hash>` (for example,
-  `EPSG_900913_1024_05_<hash>`), as can happen after a truncate.
-
-Recent files with an associated directory are retained, including empty
-directories. Old files are removed even when an associated directory exists.
+Files with an associated directory are retained regardless of age, including
+empty directories. Age-based deletion is commented out; cleanup relies only on
+orphan detection.
 The task only deletes parameter metadata; it does not truncate tiles or remove
 granules. Symlinked files and layer directories are skipped. Each run logs
-scanned, expired, orphaned and error counts. Cleanup is independent of ingestion
+scanned, orphaned and error counts (the retained `expired` count is always zero).
+Cleanup is independent of ingestion
 monitoring and skips filesystem access when `GEOSERVER_GWC_ENABLED=0`.
 
 ## Related Guides

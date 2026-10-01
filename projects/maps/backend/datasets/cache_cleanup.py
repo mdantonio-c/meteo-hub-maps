@@ -2,26 +2,27 @@
 
 import logging
 import os
-import time
+# import time  # Only needed if age-based cleanup is re-enabled.
 from pathlib import Path
 from typing import Dict, Optional
 
 log = logging.getLogger(__name__)
-PARAMETER_MAX_AGE_SECONDS = 3 * 24 * 60 * 60
+# PARAMETER_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 
 
 def cleanup_parameter_files(
     cache_root: Path, *, now: Optional[float] = None
 ) -> Dict[str, int]:
-    """Delete metadata older than three days or lacking a sibling cache folder.
+    """Delete only metadata lacking a sibling cache folder, regardless of age.
 
     GWC stores ``parameters-<hash>.properties`` beside directories named
-    ``<gridset>_<zoom>_<hash>``. Any matching directory keeps recent metadata
+    ``<gridset>_<zoom>_<hash>``. Any matching directory keeps metadata
     associated, even if the directory is empty. Only metadata files are removed;
     tile directories and ImageMosaic granules are never modified.
     """
     counts = {"scanned": 0, "expired": 0, "orphaned": 0, "errors": 0}
-    cutoff = (time.time() if now is None else now) - PARAMETER_MAX_AGE_SECONDS
+    # Age-based deletion is disabled: live tile variants still need their metadata.
+    # cutoff = (time.time() if now is None else now) - PARAMETER_MAX_AGE_SECONDS
     try:
         with os.scandir(cache_root) as layers:
             for layer in layers:
@@ -50,12 +51,11 @@ def cleanup_parameter_files(
                             if not parameter_hash:
                                 continue
                             counts["scanned"] += 1
-                            expired = (
-                                entry.stat(follow_symlinks=False).st_mtime < cutoff
-                            )
-                            if expired or parameter_hash not in hashes:
+                            # expired = entry.stat(follow_symlinks=False).st_mtime < cutoff
+                            # if expired or parameter_hash not in hashes:
+                            if parameter_hash not in hashes:
                                 os.unlink(entry.path)
-                                counts["expired" if expired else "orphaned"] += 1
+                                counts["orphaned"] += 1
                         except FileNotFoundError:
                             # Truncation or another cleanup may remove it concurrently.
                             continue

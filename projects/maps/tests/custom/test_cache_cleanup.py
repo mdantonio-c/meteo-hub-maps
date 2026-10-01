@@ -1,4 +1,4 @@
-"""Exercise metadata expiry and orphan detection against a real cache layout."""
+"""Exercise orphan detection and age-independent retention of live metadata."""
 
 import os
 from pathlib import Path
@@ -18,30 +18,26 @@ def parameter_file(layer: Path, parameter_hash: str, age: int = 0) -> Path:
     return path
 
 
-def test_removes_expired_associated_and_recent_orphaned_metadata(tmp_path):
+def test_preserves_old_associated_metadata_and_removes_only_orphans(tmp_path):
     layer = tmp_path / "meteohub_radar-sri"
-    expired = parameter_file(
-        layer, "expired", cache_cleanup.PARAMETER_MAX_AGE_SECONDS + 1
-    )
+    old = parameter_file(layer, "old", 90 * 24 * 60 * 60)
     orphaned = parameter_file(layer, "orphaned")
     current = parameter_file(layer, "current")
-    boundary = parameter_file(
-        layer, "boundary", cache_cleanup.PARAMETER_MAX_AGE_SECONDS
-    )
-    for parameter_hash in ("expired", "current", "boundary"):
+    old_orphaned = parameter_file(layer, "old-orphaned", 90 * 24 * 60 * 60)
+    for parameter_hash in ("old", "current"):
         (layer / f"EPSG_900913_1024_05_{parameter_hash}").mkdir()
-    tile = layer / "EPSG_900913_1024_05_expired" / "tile.png"
+    tile = layer / "EPSG_900913_1024_05_old" / "tile.png"
     tile.write_bytes(b"tile")
     unrelated = layer / "geowebcache.xml"
     unrelated.touch()
 
     result = cache_cleanup.cleanup_parameter_files(tmp_path, now=NOW)
 
-    assert result == {"scanned": 4, "expired": 1, "orphaned": 1, "errors": 0}
-    assert not expired.exists()
+    assert result == {"scanned": 4, "expired": 0, "orphaned": 2, "errors": 0}
+    assert old.exists()
     assert not orphaned.exists()
     assert current.exists()
-    assert boundary.exists()  # Exactly three days is not older than three days.
+    assert not old_orphaned.exists()
     assert tile.read_bytes() == b"tile"
     assert unrelated.exists()
 
