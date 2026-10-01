@@ -1,12 +1,34 @@
 version: "3.9"
 
 services:
+  proxy:
+    entrypoint: ["/sbin/tini", "/bin/sh", "/opt/meteohub-proxy/entrypoint.sh"]
+    environment:
+      MAINTENANCE_ALLOWLIST: ${MAINTENANCE_ALLOWLIST:-}
+      MAINTENANCE_TRUSTED_PROXIES: ${MAINTENANCE_TRUSTED_PROXIES:-}
+      MAINTENANCE_MODE: ${MAINTENANCE_MODE:-}
+      STATUS_FILE_PATH: ${STATUS_FILE_PATH}
+    volumes:
+      - ${PROJECT_DIR}/builds/proxy:/opt/meteohub-proxy:ro
+      - ${HOST_STATUS_DIR}:/var/lib/meteohub:ro
+  maintenance:
+    entrypoint: ["/sbin/tini", "/bin/sh", "/opt/meteohub-proxy/entrypoint.sh"]
+    environment:
+      MAINTENANCE_ALLOWLIST: ${MAINTENANCE_ALLOWLIST:-}
+      MAINTENANCE_TRUSTED_PROXIES: ${MAINTENANCE_TRUSTED_PROXIES:-}
+      MAINTENANCE_MODE: "1"
+      MAINTENANCE_ORIGINAL_ENTRYPOINT: /usr/local/bin/docker-entrypoint-maintenanance
+      STATUS_FILE_PATH: ${STATUS_FILE_PATH}
+    volumes:
+      - ${PROJECT_DIR}/builds/proxy:/opt/meteohub-proxy:ro
+      - ${HOST_STATUS_DIR}:/var/lib/meteohub:ro
   backend:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
     environment:
       PLATFORM: ${PLATFORM}
       ALLOWED_IPS: ${ALLOWED_IPS}
+      STATUS_FILE_PATH: ${STATUS_FILE_PATH}
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
       GEOSERVER_GWC_ENABLED: ${GEOSERVER_GWC_ENABLED}
@@ -39,6 +61,7 @@ services:
       - ${HOST_MER_DIR}:${MER_DATA_PATH}
       - ${PROJECT_DIR}/datasets.yml:${DATASET_CONFIG_PATH}:ro
       - ${PROJECT_DIR}/tests/custom:/code/tests/custom
+      - ${PROJECT_DIR}/builds/proxy:/opt/meteohub-proxy:ro
       - ${HOST_STATUS_DIR}:/var/lib/meteohub
       # - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
   celery:

@@ -42,6 +42,12 @@ variables:
     WW3_DATA_PATH: /ww3
     STATIC_MAPS_DATA_PATH: ${DATA_DIR}/maps
     ALLOWED_IPS: {}
+    # Space/comma-separated IPs or CIDRs allowed through Docker nginx in maintenance.
+    MAINTENANCE_ALLOWLIST: "130.186.19.0/24, 193.205.218.0/26"
+    # Only these proxy peers may supply the client address via X-Forwarded-For.
+    MAINTENANCE_TRUSTED_PROXIES: ""
+    # Empty: follow status.json; 1: force maintenance; 0: force normal access.
+    MAINTENANCE_MODE: ""
     GEOSERVER_PROXY_BASE_URL: maps.mistralportal.it
     GEOSERVER_GWC_ENABLED: 1
     GEOSERVER_REQUEST_TIMEOUT_SECONDS: 600

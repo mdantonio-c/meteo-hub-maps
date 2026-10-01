@@ -2,6 +2,51 @@
 
 This guide covers the persisted maintenance/incident status exposed at `GET /api/service/status`. It is different from `GET /api/status`, which only checks whether the API process is alive.
 
+## Docker Nginx Maintenance Allowlist
+
+The Docker-managed `proxy` nginx enforces maintenance access for every route
+when `status.json` contains `"status": "maintenance"`. Only clients in
+`MAINTENANCE_ALLOWLIST` pass through; others receive HTTP **503** before the
+request reaches the API or a location handler. An empty allowlist blocks all
+clients during maintenance. Normal operation is unrestricted by this gate.
+
+Configure deployment environment overrides in `.projectrc`:
+
+```yaml
+project_configuration:
+  variables:
+    env:
+      MAINTENANCE_ALLOWLIST: "192.0.2.10, 198.51.100.0/24, 2001:db8::10"
+      MAINTENANCE_TRUSTED_PROXIES: ""
+      MAINTENANCE_MODE: ""
+```
+
+- `MAINTENANCE_ALLOWLIST`: comma/space-separated IPv4, IPv6 or CIDR entries.
+  Invalid entries prevent proxy startup. This is separate from API `ALLOWED_IPS`.
+- `MAINTENANCE_TRUSTED_PROXIES`: IPs/CIDRs of reverse proxies that may supply
+  `X-Forwarded-For`. Leave empty for direct connections. Behind a host nginx,
+  set this to its actual source address as seen by Docker nginx and ensure that
+  host nginx forwards the client address. Untrusted forwarded headers cannot
+  bypass the allowlist.
+- `MAINTENANCE_MODE`: empty follows the shared status file; `1` forces the gate
+  on, `0` forces it off. The standalone RAPyDo `maintenance` container always
+  forces maintenance and applies the same allowlist to its maintenance page.
+
+Regenerate RAPyDo configuration using your usual deployment profile, then
+recreate the `proxy` container after changing environment values. The status
+directory is mounted read-only into nginx. Status-file changes made by either
+status script are checked every second and trigger a validated nginx reload;
+no container restart is needed to toggle the status. Missing or malformed
+updates retain the last applied state (a first startup without a status file
+starts operational).
+
+Test from an allowlisted address and from another address after enabling
+maintenance. Also check that sending a forged `X-Forwarded-For` from an
+untrusted peer still returns 503. During maintenance the nginx container's
+health probe needs an explicitly allowlisted loopback address if it should pass.
+This gate applies to requests reaching Docker nginx; independently exposed
+service ports and host-served static routes use their own routing/access rules.
+
 ## How it works
 
 ```text
