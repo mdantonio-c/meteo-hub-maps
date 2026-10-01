@@ -4,11 +4,14 @@ This guide covers the persisted maintenance/incident status exposed at `GET /api
 
 ## Docker Nginx Maintenance Allowlist
 
-The Docker-managed `proxy` nginx enforces maintenance access for every route
+The Docker-managed `proxy` nginx enforces maintenance access
 when `status.json` contains `"status": "maintenance"`. Only clients in
 `MAINTENANCE_ALLOWLIST` pass through; others receive HTTP **503** before the
 request reaches the API or a location handler. An empty allowlist blocks all
-clients during maintenance. Normal operation is unrestricted by this gate.
+clients during maintenance except for **`/api/status`** and
+**`/api/service/status`**, which remain publicly accessible for health and
+maintenance checks (including requests with query parameters). Normal operation
+is unrestricted by this gate.
 
 Configure deployment environment overrides in `.projectrc`:
 

@@ -3,6 +3,7 @@ version: "3.9"
 services:
   proxy:
     entrypoint: ["/sbin/tini", "/bin/sh", "/opt/meteohub-proxy/entrypoint.sh"]
+    command: ["proxy"]
     environment:
       MAINTENANCE_ALLOWLIST: ${MAINTENANCE_ALLOWLIST:-}
       MAINTENANCE_TRUSTED_PROXIES: ${MAINTENANCE_TRUSTED_PROXIES:-}

@@ -39,10 +39,16 @@ def render_configuration(active: bool, allowlist: str, trusted_proxies: str) -> 
             "map $host $meteohub_maintenance_active {",
             f"    default {int(active)};",
             "}",
-            'map "$meteohub_maintenance_active:$meteohub_maintenance_allowed" '
+            "map $uri $meteohub_maintenance_status_route {",
+            "    default 0;",
+            "    /api/status 1;",
+            "    /api/service/status 1;",
+            "}",
+            'map "$meteohub_maintenance_active:$meteohub_maintenance_allowed:'
+            '$meteohub_maintenance_status_route" '
             "$meteohub_maintenance_denied {",
             "    default 0;",
-            '    "1:0" 1;',
+            '    "1:0:0" 1;',
             "}",
             "",
         ]

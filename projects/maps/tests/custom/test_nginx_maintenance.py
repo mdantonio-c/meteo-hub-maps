@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import os
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -16,6 +17,22 @@ maintenance = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(maintenance)
 
 
+@pytest.mark.parametrize("arguments, expected", [([], "proxy"), (["custom"], "custom")])
+def test_entrypoint_defaults_to_proxy_when_compose_clears_image_command(
+    arguments, expected
+):
+    script = (MODULE_PATH.parent / "entrypoint.sh").read_text()
+    script = script.replace("python3 /opt/meteohub-proxy/maintenance.py", ":")
+    result = subprocess.run(
+        ["sh", "-c", script, "entrypoint.sh", *arguments],
+        env={**os.environ, "MAINTENANCE_ORIGINAL_ENTRYPOINT": "/bin/echo"},
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.strip() == expected
+
+
 def test_allowlist_supports_ipv4_ipv6_and_cidr():
     content = maintenance.render_configuration(
         True, "192.0.2.1, 198.51.100.0/24\n2001:db8::1", "10.0.0.1"
@@ -25,7 +42,16 @@ def test_allowlist_supports_ipv4_ipv6_and_cidr():
     assert "2001:db8::1/128 1;" in content
     assert "set_real_ip_from 10.0.0.1/32;" in content
     assert "real_ip_recursive on;" in content
-    assert '"1:0" 1;' in content
+    assert '"1:0:0" 1;' in content
+
+
+def test_status_routes_are_public_during_maintenance():
+    content = maintenance.render_configuration(True, "", "")
+    assert "map $uri $meteohub_maintenance_status_route {" in content
+    assert "    /api/status 1;" in content
+    assert "    /api/service/status 1;" in content
+    assert "$meteohub_maintenance_status_route" in content
+    assert '"1:0:0" 1;' in content
 
 
 @pytest.mark.parametrize(
