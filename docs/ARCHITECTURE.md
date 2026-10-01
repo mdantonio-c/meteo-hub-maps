@@ -1,5 +1,7 @@
 # Service Architecture Documentation
 
+[Project README](../README.md) · [Documentation index](README.md) · [Cache operations](GWC_CACHE.md)
+
 This document provides an overview of the Meteo-Hub-Maps service architecture, components, and data flow.
 
 ## System Overview

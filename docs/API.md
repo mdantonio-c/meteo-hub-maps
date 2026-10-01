@@ -1,5 +1,7 @@
 # REST API Documentation
 
+[Project README](../README.md) · [Documentation index](README.md) · [GeoServer WMS](GEOSERVER.md#wms-services)
+
 This document provides comprehensive documentation for all REST API endpoints exposed by the Meteo-Hub-Maps service.
 
 ## Base URL

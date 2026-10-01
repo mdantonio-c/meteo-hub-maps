@@ -1,6 +1,12 @@
 # Radar Data Documentation
 
+[Project README](../README.md) · [Documentation index](README.md) · [Cache configuration](GWC_CACHE.md)
+
 This document describes radar data ingestion, processing, and serving through GeoServer ImageMosaics with temporal support.
+
+To change tile-cache disk limits or verify worker configuration, read the
+[GeoWebCache guide](GWC_CACHE.md). Radar granule retention and cache lifetime are
+separate from those disk quotas.
 
 ## Overview
 

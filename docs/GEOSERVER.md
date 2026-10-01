@@ -1,6 +1,22 @@
 # GeoServer Integration Documentation
 
+[Project README](../README.md) · [Documentation index](README.md) · [GeoWebCache configuration](GWC_CACHE.md)
+
 This document describes the GeoServer integration architecture, configuration, and REST API interactions for dynamic map serving.
+
+## On This Page
+
+- [GeoServer configuration](#geoserver-configuration)
+- [GeoWebCache configuration](#geowebcache-configuration)
+- [ImageMosaic architecture](#imagemosaic-architecture)
+- [Layer management](#layer-management)
+- [Time dimensions](#time-dimension-configuration)
+- [SLD styles](#sld-style-management)
+- [Granule lifecycle](#granule-lifecycle)
+- [WMS services](#wms-services)
+- [Monitoring and health](#monitoring-and-health)
+- [Troubleshooting](#troubleshooting)
+- [Best practices](#best-practices)
 
 ## Overview
 
@@ -46,6 +62,16 @@ Network panel to check that the login POST's redirect also stays on HTTPS.
 ### Workspace
 
 All layers are published in the `meteohub` workspace.
+
+## GeoWebCache Configuration
+
+For cache sizing and operation, read the [GeoWebCache guide](GWC_CACHE.md):
+
+- [Per-layer and global quota settings](GWC_CACHE.md#settings)
+- [Automatic sizing and explicit override examples](GWC_CACHE.md#configuration-examples)
+- [Apply changes and verify worker environments](GWC_CACHE.md#apply-and-verify-changes)
+- [Quota scope and eviction](GWC_CACHE.md#how-quotas-work)
+- [Direct WMS-C integration](GWC_CACHE.md#direct-wms-c-integration)
 
 ## ImageMosaic Architecture
 
@@ -488,42 +514,16 @@ curl -u admin:password \
 - Restrict REST API access (IP-based or authentication)
 - Use HTTPS in production
 - Regularly rotate admin credentials
+
 ## Direct WMS-C Integration
 
-Worker startup initialization enables **Enable direct WMS-C integration with
-GeoServer WMS** by default, persisting `directWMSIntegrationEnabled=true` in
-`gwc-gs.xml`. GeoServer is reloaded only when this setting changes. Other GWC
-global settings are preserved.
+Worker startup enables direct WMS-C integration by default. See
+[direct WMS-C integration](GWC_CACHE.md#direct-wms-c-integration) for persistence
+and tiled-request behavior.
 
 ## Per-layer Cache Disk Quotas
 
-Startup initialization enables GWC disk quota enforcement and assigns each
-layer in the configured workspace an independent quota with **LRU** (least
-recently used) eviction. Set `GWC_LAYER_QUOTA_MIB` in project configuration or
-an environment override to specify the per-layer limit in MiB. The default is
-`1024` MiB (**1 GiB / 1,073,741,824 bytes**); the value must be a positive integer.
-For example, `GWC_LAYER_QUOTA_MIB=512` limits each layer to 512 MiB. Recreate
-backend and worker containers after changing the environment configuration.
-Newly ingested layers receive the same quota when their GWC layer configuration
-is initialized.
-
-The settings are persisted in `gwc/geowebcache-diskquota.xml` through the
-GeoServer resource API. GeoServer is reloaded only when quota settings change;
-existing cleanup scheduling and unrelated layer quotas are preserved.
-
-Set `GWC_GLOBAL_QUOTA_MIB` to a positive integer to specify the global quota in
-MiB, for example `GWC_GLOBAL_QUOTA_MIB=8192`. When unset or empty (the default),
-the global quota is calculated as `GWC_LAYER_QUOTA_MIB × number of current GWC
-layers`, including layers in other workspaces. The live GWC catalog is queried
-on quota checks so additions and removals update the calculated limit, including
-when only one layer is being configured. With 512 MiB per layer and 10 cached
-layers, the automatic global quota is 5120 MiB; an empty catalog yields 0 MiB.
-
-GWC applies the global quota to layers without explicit per-layer quotas.
-Explicit per-layer quotas are independent of it, so the global setting is not
-an aggregate hard limit on all layer caches.
-
-Quota cleanup is periodic (every 10 seconds on a fresh configuration), so disk
-usage can temporarily exceed the configured limit during seeding or heavy
-requests. The quota
-covers all cached times, styles, formats and gridsets for a layer together.
+Set `GWC_LAYER_QUOTA_MIB` for per-layer limits and `GWC_GLOBAL_QUOTA_MIB` for an
+explicit global limit or automatic sizing. The
+[GeoWebCache guide](GWC_CACHE.md#configuration-examples) contains the examples,
+deployment steps and explanation of global versus per-layer quota scope.

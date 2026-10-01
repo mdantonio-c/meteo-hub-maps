@@ -1,5 +1,7 @@
 # Dataset manifest configuration
 
+[Project README](../README.md) · [Documentation index](README.md) · [Cache disk quotas](GWC_CACHE.md)
+
 Dataset definitions live in `projects/maps/datasets.yml`. The backend and Celery containers mount this file read-only at `DATASET_CONFIG_PATH` (currently `/etc/meteohub/datasets.yml`). The code loads and validates the YAML manifest when it builds the dataset registry; edit the project-side YAML and restart/redeploy the affected services to load changes.
 
 This manifest describes dataset discovery, ingestion adapter selection, temporal parsing, GeoServer publication/cache settings, and REST endpoint capabilities. It is not a list of individual forecast files or runtime data values.
@@ -87,6 +89,10 @@ These three fields are required and must be non-empty strings; the regular expre
 
 ### `geoserver`
 
+Use this section for dataset publication, cache expiry and seed zooms. For
+deployment-wide disk size limits (`GWC_LAYER_QUOTA_MIB` and
+`GWC_GLOBAL_QUOTA_MIB`), use the [GeoWebCache guide](GWC_CACHE.md#settings).
+
 | Option | Purpose |
 | --- | --- |
 | `workspace` | GeoServer workspace where stores and layers are published. |
@@ -94,6 +100,7 @@ These three fields are required and must be non-empty strings; the regular expre
 | `sld.style_name` | Default style template, with supported substitutions such as `{variable}`. |
 | `variables` | Optional per-variable settings such as `layer_name`, `layer_name_pattern`, and `style_name`. |
 | `cache.eligible` | Whether the dataset's adapter should apply cache invalidation. |
+| `cache.expire_seconds` | Positive cache lifetime in seconds; overrides the deployment default for mapped dataset layers. |
 | `cache.zoom_start` | Minimum zoom level to truncate/seed in GeoWebCache. |
 | `cache.zoom_stop` | Maximum zoom level to truncate/seed in GeoWebCache. |
 | `cache.require_explicit_time` | Declares that cache requests should use an explicit time key for temporal data; runtime cache key behavior is implemented in the GWC adapter. |
