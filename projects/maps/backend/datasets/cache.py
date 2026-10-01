@@ -32,6 +32,7 @@ GWC_CACHE_EXPIRE_SECONDS = int(os.environ.get("GWC_CACHE_EXPIRE_SECONDS", "86400
 # Forecast publication invalidates server-side tiles, but browsers cannot be
 # purged. Keep their copy below the five-minute radar update cadence.
 GWC_CLIENT_EXPIRE_SECONDS = int(os.environ.get("GWC_CLIENT_EXPIRE_SECONDS", "300"))
+GWC_LAYER_QUOTA_GIB = 1
 # Max seconds to wait for GWC seed queue to drain (tile generation).
 GWC_SEED_WAIT_TIMEOUT = int(os.environ.get("GWC_SEED_WAIT_TIMEOUT", "1800"))
 # Seconds between seed queue polls.
@@ -268,6 +269,148 @@ class GWCInvalidator:
             return False
         return True
 
+    def ensure_direct_wms_integration(self) -> bool:
+        """Enable GeoServer's direct WMS-C integration in persisted GWC settings."""
+        if not self.enabled:
+            return True
+        url = f"{self.base_url}/rest/resource/gwc-gs.xml"
+        try:
+            response = requests.get(
+                url, auth=(self.username, self.password), timeout=self.timeout
+            )
+            if response.status_code != 200:
+                log.error(
+                    "GWC global configuration lookup failed: HTTP %s",
+                    response.status_code,
+                )
+                return False
+            config = ElementTree.fromstring(response.content)
+            setting = config.find("directWMSIntegrationEnabled")
+            if setting is not None and setting.text == "true":
+                return True
+            if setting is None:
+                setting = ElementTree.SubElement(config, "directWMSIntegrationEnabled")
+            setting.text = "true"
+            response = requests.put(
+                url,
+                data=ElementTree.tostring(config, encoding="utf-8"),
+                headers={"Content-Type": "application/xml"},
+                auth=(self.username, self.password),
+                timeout=self.timeout,
+            )
+            if response.status_code not in (200, 201):
+                log.error(
+                    "GWC global configuration update failed: HTTP %s",
+                    response.status_code,
+                )
+                return False
+            # The resource endpoint persists XML; reload makes GWC use it now.
+            response = requests.post(
+                f"{self.base_url}/rest/reload",
+                auth=(self.username, self.password),
+                timeout=self.timeout,
+            )
+            if response.status_code not in (200, 201):
+                log.error("GeoServer reload failed: HTTP %s", response.status_code)
+                return False
+        except (requests.RequestException, ElementTree.ParseError):
+            log.exception("Could not enable direct WMS integration")
+            return False
+        log.info("Enabled direct WMS-C integration with GeoServer WMS")
+        return True
+
+    def ensure_disk_quota(self, layer_names: Iterable[str]) -> bool:
+        """Persist independent 1 GiB LRU quotas and restart quota enforcement.
+
+        The native diskquota REST PUT only mutates runtime configuration in
+        GeoServer 3.0. Persist the quota XML through the resource API and reload
+        GeoServer so quotas survive restarts and the cleanup monitor starts.
+        """
+        if not self.enabled:
+            return True
+        url = f"{self.base_url}/rest/resource/gwc/geowebcache-diskquota.xml"
+        try:
+            response = requests.get(
+                url, auth=(self.username, self.password), timeout=self.timeout
+            )
+            if response.status_code == 404:
+                config = ElementTree.fromstring(
+                    "<gwcQuotaConfiguration><enabled>true</enabled>"
+                    "<cacheCleanUpFrequency>10</cacheCleanUpFrequency>"
+                    "<cacheCleanUpUnits>SECONDS</cacheCleanUpUnits>"
+                    "<maxConcurrentCleanUps>2</maxConcurrentCleanUps>"
+                    "<globalExpirationPolicyName>LFU</globalExpirationPolicyName>"
+                    "<globalQuota><value>500</value><units>MiB</units></globalQuota>"
+                    "<layerQuotas/></gwcQuotaConfiguration>"
+                )
+                changed = True
+            elif response.status_code == 200:
+                config = ElementTree.fromstring(response.content)
+                # ConfigLoader's persisted XML may have a default namespace.
+                for element in config.iter():
+                    element.tag = element.tag.rsplit("}", 1)[-1]
+                if config.tag != "gwcQuotaConfiguration":
+                    log.error("Unexpected GWC disk quota configuration format")
+                    return False
+                changed = False
+            else:
+                log.error("GWC disk quota lookup failed: HTTP %s", response.status_code)
+                return False
+
+            enabled = config.find("enabled")
+            if enabled is None:
+                enabled = ElementTree.SubElement(config, "enabled")
+            if enabled.text != "true":
+                enabled.text = "true"
+                changed = True
+            quotas = config.find("layerQuotas")
+            if quotas is None:
+                quotas = ElementTree.SubElement(config, "layerQuotas")
+            for layer_name in sorted(set(layer_names)):
+                layer_id = f"{self.workspace}:{layer_name}"
+                existing = [q for q in quotas if q.findtext("layer") == layer_id]
+                if (
+                    len(existing) == 1
+                    and existing[0].findtext("expirationPolicyName") == "LRU"
+                    and existing[0].findtext("quota/value") == str(GWC_LAYER_QUOTA_GIB)
+                    and existing[0].findtext("quota/units") == "GiB"
+                ):
+                    continue
+                for entry in existing:
+                    quotas.remove(entry)
+                entry = ElementTree.SubElement(quotas, "LayerQuota")
+                ElementTree.SubElement(entry, "layer").text = layer_id
+                ElementTree.SubElement(entry, "expirationPolicyName").text = "LRU"
+                quota = ElementTree.SubElement(entry, "quota")
+                ElementTree.SubElement(quota, "value").text = str(GWC_LAYER_QUOTA_GIB)
+                ElementTree.SubElement(quota, "units").text = "GiB"
+                changed = True
+            if not changed:
+                return True
+            response = requests.put(
+                url,
+                data=ElementTree.tostring(config, encoding="utf-8"),
+                headers={"Content-Type": "application/xml"},
+                auth=(self.username, self.password),
+                timeout=self.timeout,
+            )
+            if response.status_code not in (200, 201):
+                log.error("GWC disk quota update failed: HTTP %s", response.status_code)
+                return False
+            response = requests.post(
+                f"{self.base_url}/rest/reload",
+                auth=(self.username, self.password),
+                timeout=self.timeout,
+            )
+            if response.status_code not in (200, 201):
+                log.error("GWC disk quota reload failed: HTTP %s", response.status_code)
+                return False
+        except (requests.RequestException, ElementTree.ParseError):
+            log.exception("Could not configure GWC disk quotas")
+            return False
+        log.info("Configured 1 GiB per-layer GWC disk quotas with LRU eviction")
+        return True
+
     def _cache_expiry_seconds(self, layer_name: str) -> int:
         """Resolve a mapped layer's dataset-specific server cache lifetime."""
         for dataset in load_manifest(self.manifest_path):
@@ -344,7 +487,7 @@ class GWCInvalidator:
             and cache_expiry_is_current
             and client_expiry_is_current
         ):
-            return True
+            return self.ensure_disk_quota([layer_name])
         if grid_subsets is not None:
             layer.remove(grid_subsets)
         grid_subsets = ElementTree.SubElement(layer, "gridSubsets")
@@ -372,7 +515,7 @@ class GWCInvalidator:
                 f"GWC layer configuration update failed for {layer_name}: "
                 f"HTTP {response.status_code} {response.text}"
             )
-        return response.status_code in (200, 201)
+        return response.status_code in (200, 201) and self.ensure_disk_quota([layer_name])
 
     def _ensure_grid_set(self) -> bool:
         """Create the Web Mercator gridset used by 1024px WMS tiles."""

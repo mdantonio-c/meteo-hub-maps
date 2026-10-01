@@ -88,12 +88,19 @@ def initialize_geoserver(self) -> bool:
         timeout=GEOSERVER_REQUEST_TIMEOUT,
     )
     
+    if not invalidator.ensure_direct_wms_integration():
+        log.error("Could not enable direct WMS-C integration with GeoServer WMS")
+        return False
+
     layers = _get_all_layers(GEOSERVER_URL, GEOSERVER_USER, GEOSERVER_PASSWORD, GEOSERVER_WORKSPACE)
     if not layers:
         log.warning("No layers found in GeoServer workspace; skipping GWC initialization")
         return True
     
     log.info(f"Found {len(layers)} layers in workspace {GEOSERVER_WORKSPACE}")
+    if not invalidator.ensure_disk_quota(layers):
+        log.error("Could not configure 1 GiB per-layer GWC disk quotas")
+        return False
     
     success_count = 0
     failure_count = 0

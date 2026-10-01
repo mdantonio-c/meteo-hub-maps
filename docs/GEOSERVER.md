@@ -488,3 +488,25 @@ curl -u admin:password \
 - Restrict REST API access (IP-based or authentication)
 - Use HTTPS in production
 - Regularly rotate admin credentials
+## Direct WMS-C Integration
+
+Worker startup initialization enables **Enable direct WMS-C integration with
+GeoServer WMS** by default, persisting `directWMSIntegrationEnabled=true` in
+`gwc-gs.xml`. GeoServer is reloaded only when this setting changes. Other GWC
+global settings are preserved.
+
+## Per-layer Cache Disk Quotas
+
+Startup initialization enables GWC disk quota enforcement and assigns each
+layer in the configured workspace an independent **1 GiB (1,073,741,824 bytes)**
+quota with **LRU** (least recently used) eviction. Newly ingested layers receive
+the same quota when their GWC layer configuration is initialized.
+
+The settings are persisted in `gwc/geowebcache-diskquota.xml` through the
+GeoServer resource API. GeoServer is reloaded only when quota settings change;
+existing cleanup scheduling, global quota and unrelated layer quotas are
+preserved. Explicit per-layer quotas are independent of the global quota.
+
+Quota cleanup is periodic (every 10 seconds on a fresh configuration), so disk
+usage can temporarily exceed 1 GiB during seeding or heavy requests. The quota
+covers all cached times, styles, formats and gridsets for a layer together.

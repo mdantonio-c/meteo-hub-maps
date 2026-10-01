@@ -48,6 +48,39 @@ class TestGWCSeedCompletion:
         assert "<zoomStart>5</zoomStart>" in payload
         assert "<zoomStop>9</zoomStop>" in payload
 
+    def test_direct_wms_integration_preserves_settings_and_reloads(self):
+        response = MagicMock(
+            status_code=200,
+            content=b"""<GeoServerGWCConfig>
+            <directWMSIntegrationEnabled>false</directWMSIntegrationEnabled>
+            <requireTiledParameter>true</requireTiledParameter>
+            </GeoServerGWCConfig>""",
+        )
+        with patch.object(cache.requests, "get", return_value=response), patch.object(
+            cache.requests, "put", return_value=MagicMock(status_code=200)
+        ) as update, patch.object(
+            cache.requests, "post", return_value=MagicMock(status_code=200)
+        ) as reload:
+            assert self.invalidator.ensure_direct_wms_integration()
+        payload = update.call_args.kwargs["data"]
+        assert b"<directWMSIntegrationEnabled>true</directWMSIntegrationEnabled>" in payload
+        assert b"<requireTiledParameter>true</requireTiledParameter>" in payload
+        assert reload.call_args.args[0].endswith("/rest/reload")
+
+    def test_direct_wms_integration_already_enabled_needs_no_reload(self):
+        response = MagicMock(
+            status_code=200,
+            content=b"""<GeoServerGWCConfig>
+            <directWMSIntegrationEnabled>true</directWMSIntegrationEnabled>
+            </GeoServerGWCConfig>""",
+        )
+        with patch.object(cache.requests, "get", return_value=response), patch.object(
+            cache.requests, "put"
+        ) as update, patch.object(cache.requests, "post") as reload:
+            assert self.invalidator.ensure_direct_wms_integration()
+        update.assert_not_called()
+        reload.assert_not_called()
+
     def test_parallel_seed_bounds_batches_and_preserves_every_time(self):
         events = []
         times = [f"time-{index}" for index in range(9)]
