@@ -276,8 +276,8 @@ class GWCInvalidator:
             return False
         return True
 
-    def ensure_direct_wms_integration(self) -> bool:
-        """Enable GeoServer's direct WMS-C integration in persisted GWC settings."""
+    def disable_direct_wms_integration(self) -> bool:
+        """Keep WMS and WMS-C separate in GeoServer's persisted GWC settings."""
         if not self.enabled:
             return True
         url = f"{self.base_url}/rest/resource/gwc-gs.xml"
@@ -293,11 +293,11 @@ class GWCInvalidator:
                 return False
             config = ElementTree.fromstring(response.content)
             setting = config.find("directWMSIntegrationEnabled")
-            if setting is not None and setting.text == "true":
+            if setting is not None and setting.text == "false":
                 return True
             if setting is None:
                 setting = ElementTree.SubElement(config, "directWMSIntegrationEnabled")
-            setting.text = "true"
+            setting.text = "false"
             response = requests.put(
                 url,
                 data=ElementTree.tostring(config, encoding="utf-8"),
@@ -321,9 +321,9 @@ class GWCInvalidator:
                 log.error("GeoServer reload failed: HTTP %s", response.status_code)
                 return False
         except (requests.RequestException, ElementTree.ParseError):
-            log.exception("Could not enable direct WMS integration")
+            log.exception("Could not disable direct WMS integration")
             return False
-        log.info("Enabled direct WMS-C integration with GeoServer WMS")
+        log.info("Disabled direct WMS-C integration with GeoServer WMS")
         return True
 
     def ensure_disk_quota(self, layer_names: Iterable[str]) -> bool:

@@ -41,8 +41,7 @@ variables:
     SUB_SEASONAL_DATA_PATH: /sub-seasonal-aim
     WW3_DATA_PATH: /ww3
     STATIC_MAPS_DATA_PATH: ${DATA_DIR}/maps
-    ALLOWED_IPS: {}
-    # Space/comma-separated IPs or CIDRs allowed through Docker nginx in maintenance.
+    # Space/comma-separated IPs/CIDRs for maintenance access and monitoring APIs.
     MAINTENANCE_ALLOWLIST: "130.186.19.0/24, 193.205.218.0/26"
     # Only these proxy peers may supply the client address via X-Forwarded-For.
     MAINTENANCE_TRUSTED_PROXIES: ""

@@ -25,7 +25,10 @@ project_configuration:
 ```
 
 - `MAINTENANCE_ALLOWLIST`: comma/space-separated IPv4, IPv6 or CIDR entries.
-  Invalid entries prevent proxy startup. This is separate from API `ALLOWED_IPS`.
+  Invalid entries prevent proxy startup. The backend uses the same allowlist to
+  guard `POST` and `DELETE /api/data/monitoring` and `/api/maps/sensitive`, even
+  during normal operation. Empty or invalid allowlists deny these API requests
+  with HTTP **403**.
 - `MAINTENANCE_TRUSTED_PROXIES`: IPs/CIDRs of reverse proxies that may supply
   `X-Forwarded-For`. Leave empty for direct connections. Behind a host nginx,
   set this to its actual source address as seen by Docker nginx and ensure that
@@ -36,7 +39,7 @@ project_configuration:
   forces maintenance and applies the same allowlist to its maintenance page.
 
 Regenerate RAPyDo configuration using your usual deployment profile, then
-recreate the `proxy` container after changing environment values. The status
+recreate the `proxy` and `backend` containers after changing environment values. The status
 directory is mounted read-only into nginx. Status-file changes made by either
 status script are checked every second and trigger a validated nginx reload;
 no container restart is needed to toggle the status. Missing or malformed

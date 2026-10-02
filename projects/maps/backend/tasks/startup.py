@@ -90,8 +90,8 @@ def initialize_geoserver(self) -> bool:
         timeout=GEOSERVER_REQUEST_TIMEOUT,
     )
     
-    if not invalidator.ensure_direct_wms_integration():
-        log.error("Could not enable direct WMS-C integration with GeoServer WMS")
+    if not invalidator.disable_direct_wms_integration():
+        log.error("Could not disable direct WMS-C integration with GeoServer WMS")
         return False
 
     layers = _get_all_layers(GEOSERVER_URL, GEOSERVER_USER, GEOSERVER_PASSWORD, GEOSERVER_WORKSPACE)

@@ -647,6 +647,11 @@ These endpoints expose generic THREDDS layer metadata and remain available for b
 
 ## Data Monitoring Endpoints
 
+Both operations require the client IP to match `MAINTENANCE_ALLOWLIST`, a
+comma/space-separated list of IPv4, IPv6 or CIDR entries. This restriction applies
+regardless of maintenance mode. Non-allowlisted clients receive `403 Forbidden`;
+an empty or invalid allowlist denies access.
+
 ### Start Data Monitoring
 
 Start periodic Celery tasks to monitor data directories and trigger GeoServer imports.
@@ -707,7 +712,8 @@ Server is alive
 
 ### Authentication
 
-Most endpoints are publicly accessible. Some administrative endpoints (e.g., `/api/data/monitoring`, `/api/data/ready`) are IP-restricted.
+Most endpoints are publicly accessible. `/api/data/monitoring` and
+`/api/maps/sensitive` are IP-restricted using `MAINTENANCE_ALLOWLIST`.
 
 ### Caching
 

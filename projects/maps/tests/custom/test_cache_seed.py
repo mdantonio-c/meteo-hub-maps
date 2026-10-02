@@ -58,7 +58,7 @@ class TestGWCSeedCompletion:
         response = MagicMock(
             status_code=200,
             content=b"""<GeoServerGWCConfig>
-            <directWMSIntegrationEnabled>false</directWMSIntegrationEnabled>
+            <directWMSIntegrationEnabled>true</directWMSIntegrationEnabled>
             <requireTiledParameter>true</requireTiledParameter>
             </GeoServerGWCConfig>""",
         )
@@ -67,23 +67,23 @@ class TestGWCSeedCompletion:
         ) as update, patch.object(
             cache.requests, "post", return_value=MagicMock(status_code=200)
         ) as reload:
-            assert self.invalidator.ensure_direct_wms_integration()
+            assert self.invalidator.disable_direct_wms_integration()
         payload = update.call_args.kwargs["data"]
-        assert b"<directWMSIntegrationEnabled>true</directWMSIntegrationEnabled>" in payload
+        assert b"<directWMSIntegrationEnabled>false</directWMSIntegrationEnabled>" in payload
         assert b"<requireTiledParameter>true</requireTiledParameter>" in payload
         assert reload.call_args.args[0].endswith("/rest/reload")
 
-    def test_direct_wms_integration_already_enabled_needs_no_reload(self):
+    def test_direct_wms_integration_already_disabled_needs_no_reload(self):
         response = MagicMock(
             status_code=200,
             content=b"""<GeoServerGWCConfig>
-            <directWMSIntegrationEnabled>true</directWMSIntegrationEnabled>
+            <directWMSIntegrationEnabled>false</directWMSIntegrationEnabled>
             </GeoServerGWCConfig>""",
         )
         with patch.object(cache.requests, "get", return_value=response), patch.object(
             cache.requests, "put"
         ) as update, patch.object(cache.requests, "post") as reload:
-            assert self.invalidator.ensure_direct_wms_integration()
+            assert self.invalidator.disable_direct_wms_integration()
         update.assert_not_called()
         reload.assert_not_called()
 

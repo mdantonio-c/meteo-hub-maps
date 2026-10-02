@@ -115,13 +115,13 @@ the deployment configuration and recreate that container.
 
 ## Direct WMS-C Integration
 
-Worker startup enables **Enable direct WMS-C integration with GeoServer WMS**
-and persists `directWMSIntegrationEnabled=true` in `gwc-gs.xml`. GeoServer reloads
+Worker startup disables **Enable direct WMS-C integration with GeoServer WMS**
+and persists `directWMSIntegrationEnabled=false` in `gwc-gs.xml`. GeoServer reloads
 only if this setting changes; other global GWC settings are preserved.
 
-This allows eligible tiled WMS requests to use GWC through the GeoServer WMS
-endpoint. Ordinary arbitrary-size WMS images are not automatically tile-cache
-hits; requests must match the configured gridset and parameter filters.
+WMS and WMS-C remain separate: use the GeoServer WMS endpoint for ordinary WMS
+requests and `/geoserver/gwc/service/wms` for cached WMS-C requests. Cached
+requests must match the configured gridset and parameter filters.
 
 ## Parameter Metadata Cleanup
 

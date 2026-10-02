@@ -24,11 +24,9 @@ from restapi.services.download import Downloader
 from restapi.utilities.logs import log
 from restapi.connectors import celery
 from restapi.env import Env
-from maps.utils.env import Env as utils_env
 from maps.auth.authz import check_ip_access
 from maps.datasets.monitoring import start_monitoring, stop_monitoring
 
-ALLOWED_IPS = utils_env.get_set("ALLOWED_IPS", frozenset())
 
 class DataReady(EndpointResource):
     labels = ["maps"]
@@ -40,7 +38,6 @@ class DataReady(EndpointResource):
         responses={202: "Notification received"},
 
     )
-    #@check_ip_access(ALLOWED_IPS)
     def post(
         self, run, date, model, **kwargs
     ) -> Response:
@@ -86,10 +83,9 @@ class StartMonitoring(EndpointResource):
     @decorators.endpoint(
         path="/data/monitoring",
         summary="Start monitoring a dataset",
-        responses={202: "Monitoring started"},
+        responses={202: "Monitoring started", 403: "Access Forbidden"},
     )
-
-    #@check_ip_access(ALLOWED_IPS)
+    @check_ip_access
     def post(self):
         c = celery.get_instance()
 
@@ -106,9 +102,9 @@ class StartMonitoring(EndpointResource):
     @decorators.endpoint(
         path="/data/monitoring",
         summary="Delete monitoring",
-        responses={202: "Monitoring ended"},
+        responses={202: "Monitoring ended", 403: "Access Forbidden"},
     )
-    #@check_ip_access(ALLOWED_IPS)
+    @check_ip_access
     def delete(self):
         c = celery.get_instance()
         if stop_monitoring(c):
