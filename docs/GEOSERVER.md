@@ -1,6 +1,22 @@
 # GeoServer Integration Documentation
 
+[Project README](../README.md) · [Documentation index](README.md) · [GeoWebCache configuration](GWC_CACHE.md)
+
 This document describes the GeoServer integration architecture, configuration, and REST API interactions for dynamic map serving.
+
+## On This Page
+
+- [GeoServer configuration](#geoserver-configuration)
+- [GeoWebCache configuration](#geowebcache-configuration)
+- [ImageMosaic architecture](#imagemosaic-architecture)
+- [Layer management](#layer-management)
+- [Time dimensions](#time-dimension-configuration)
+- [SLD styles](#sld-style-management)
+- [Granule lifecycle](#granule-lifecycle)
+- [WMS services](#wms-services)
+- [Monitoring and health](#monitoring-and-health)
+- [Troubleshooting](#troubleshooting)
+- [Best practices](#best-practices)
 
 ## Overview
 
@@ -20,9 +36,42 @@ Configured via environment variables:
 - `GEOSERVER_ADMIN_USER`
 - `GEOSERVER_ADMIN_PASSWORD`
 
+### HTTPS login behind Nginx
+
+The host proxy configurations are `projects/maps/builds/host_nginx.config`
+(production) and `projects/maps/builds/host_nginx_dev.config` (development).
+Deploy the appropriate configuration to the host's active Nginx site, then run
+`sudo nginx -t && sudo systemctl reload nginx`.
+
+Both the HTML form action and the authentication response's `Location` header
+must stay on the public HTTPS origin. `sub_filter` rewrites HTML URLs;
+`proxy_redirect` rewrites redirect headers. Rewriting only the HTML is
+insufficient: Spring Security can redirect an HTTPS login POST to HTTP, which
+the browser blocks under `form-action 'self'`.
+
+Check the development site's redirect without following it:
+
+```bash
+curl -sSI https://meteohub-maps.hpc.cineca.it/geoserver/web/
+```
+
+Its `Location` must be HTTPS (or a relative URL), never
+`http://meteohub-maps.hpc.cineca.it/...`. After reloading the site, use the browser
+Network panel to check that the login POST's redirect also stays on HTTPS.
+
 ### Workspace
 
 All layers are published in the `meteohub` workspace.
+
+## GeoWebCache Configuration
+
+For cache sizing and operation, read the [GeoWebCache guide](GWC_CACHE.md):
+
+- [Per-layer and global quota settings](GWC_CACHE.md#settings)
+- [Automatic sizing and explicit override examples](GWC_CACHE.md#configuration-examples)
+- [Apply changes and verify worker environments](GWC_CACHE.md#apply-and-verify-changes)
+- [Quota scope and eviction](GWC_CACHE.md#how-quotas-work)
+- [Direct WMS-C integration](GWC_CACHE.md#direct-wms-c-integration)
 
 ## ImageMosaic Architecture
 
@@ -358,6 +407,18 @@ Check GeoServer health:
 GET /geoserver/rest/about/status
 ```
 
+The container health check uses GeoServer's lightweight web UI asset endpoint. It
+checks that the application is answering without rendering a raster on every
+probe. In the production profile, `healthwatch` restarts only GeoServer when its
+health check remains unhealthy; Celery's ingestion-failure marker is handled by
+restarting the Celery worker, so ingestion problems do not unnecessarily interrupt
+map requests. Docker itself does not restart a running container solely because
+it becomes unhealthy, which is why the healthwatch service is kept enabled.
+The published `8081` port is bound to loopback; external clients should use the
+TLS reverse proxy, while services on the Compose network continue to use the
+internal GeoServer hostname and port. GeoServer is allowed two minutes to shut
+down cleanly so in-flight requests have time to finish during a restart.
+
 ### Layer Status
 
 Verify layer exists:
@@ -408,6 +469,28 @@ curl -u admin:password \
 
 ## Best Practices
 
+### Production Capacity and Availability
+
+- The production JVM heap is configured through the OSGeo image's
+  `EXTRA_JAVA_OPTS` with a 4 GiB initial and 8 GiB maximum
+  heap. Size the host for the heap plus JVM native memory, raster/rendering
+  buffers, the OS, and other containers; do not deploy this profile on a host
+  with less than 12 GiB available to GeoServer and its runtime overhead.
+- Avoid setting a CPU or memory limit below the JVM's configured requirements.
+  Watch heap occupancy, GC pauses, CPU saturation, open file descriptors, and
+  request latency under representative concurrent WMS load before increasing
+  worker or cache-seeding concurrency.
+- A single GeoServer container on one host is not highly available: host, disk,
+  network, or shared data-directory failures still take the service offline. For
+  host-level HA, deploy multiple GeoServer instances behind a load balancer with
+  health-based routing, use a supported shared GeoServer data directory and
+  coordinated configuration updates, and keep the GeoWebCache strategy consistent
+  across instances. Never let independent instances concurrently mutate an
+  unsupported shared catalog/data directory.
+- Use durable, monitored storage for `/opt/geoserver_data` and maintain tested
+  backups of the catalog and data. Container restart recovery cannot recover a
+  lost or corrupt data volume.
+
 ### Granule Management
 
 - Maintain reasonable granule counts (< 10,000 per mosaic)
@@ -431,3 +514,16 @@ curl -u admin:password \
 - Restrict REST API access (IP-based or authentication)
 - Use HTTPS in production
 - Regularly rotate admin credentials
+
+## Direct WMS-C Integration
+
+Worker startup enables direct WMS-C integration by default. See
+[direct WMS-C integration](GWC_CACHE.md#direct-wms-c-integration) for persistence
+and tiled-request behavior.
+
+## Per-layer Cache Disk Quotas
+
+Set `GWC_LAYER_QUOTA_MIB` for per-layer limits and `GWC_GLOBAL_QUOTA_MIB` for an
+explicit global limit or automatic sizing. The
+[GeoWebCache guide](GWC_CACHE.md#configuration-examples) contains the examples,
+deployment steps and explanation of global versus per-layer quota scope.

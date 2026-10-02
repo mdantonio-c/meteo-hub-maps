@@ -1,24 +1,57 @@
 version: "3.9"
 
 services:
+  proxy:
+    entrypoint: ["/sbin/tini", "/bin/sh", "/opt/meteohub-proxy/entrypoint.sh"]
+    command: ["proxy"]
+    environment:
+      MAINTENANCE_ALLOWLIST: ${MAINTENANCE_ALLOWLIST:-}
+      MAINTENANCE_TRUSTED_PROXIES: ${MAINTENANCE_TRUSTED_PROXIES:-}
+      MAINTENANCE_MODE: ${MAINTENANCE_MODE:-}
+      STATUS_FILE_PATH: ${STATUS_FILE_PATH}
+    volumes:
+      - ${PROJECT_DIR}/builds/proxy:/opt/meteohub-proxy:ro
+      - ${PROJECT_DIR}/confs/public_geoserver.service:/etc/nginx/sites-enabled/public_geoserver.service:ro
+      - ${HOST_STATUS_DIR}:/var/lib/meteohub:ro
+  maintenance:
+    entrypoint: ["/sbin/tini", "/bin/sh", "/opt/meteohub-proxy/entrypoint.sh"]
+    environment:
+      MAINTENANCE_ALLOWLIST: ${MAINTENANCE_ALLOWLIST:-}
+      MAINTENANCE_TRUSTED_PROXIES: ${MAINTENANCE_TRUSTED_PROXIES:-}
+      MAINTENANCE_MODE: "1"
+      MAINTENANCE_ORIGINAL_ENTRYPOINT: /usr/local/bin/docker-entrypoint-maintenanance
+      STATUS_FILE_PATH: ${STATUS_FILE_PATH}
+    volumes:
+      - ${PROJECT_DIR}/builds/proxy:/opt/meteohub-proxy:ro
+      - ${HOST_STATUS_DIR}:/var/lib/meteohub:ro
   backend:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
     environment:
       PLATFORM: ${PLATFORM}
-      ALLOWED_IPS: ${ALLOWED_IPS}
+      MAINTENANCE_ALLOWLIST: ${MAINTENANCE_ALLOWLIST:-}
+      STATUS_FILE_PATH: ${STATUS_FILE_PATH}
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
+      GEOSERVER_GWC_ENABLED: ${GEOSERVER_GWC_ENABLED}
+      GEOSERVER_REQUEST_TIMEOUT_SECONDS: ${GEOSERVER_REQUEST_TIMEOUT_SECONDS}
+      GWC_CACHE_EXPIRE_SECONDS: ${GWC_CACHE_EXPIRE_SECONDS}
+      GWC_CLIENT_EXPIRE_SECONDS: ${GWC_CLIENT_EXPIRE_SECONDS}
+      GWC_LAYER_QUOTA_MIB: ${GWC_LAYER_QUOTA_MIB}
+      GWC_GLOBAL_QUOTA_MIB: ${GWC_GLOBAL_QUOTA_MIB:-}
       WW3_DATA_PATH: ${WW3_DATA_PATH}
       SEASONAL_DATA_PATH: ${SEASONAL_DATA_PATH}
       RADAR_DATA_PATH: ${RADAR_DATA_PATH}
+      DATASET_CONFIG_PATH: ${DATASET_CONFIG_PATH}
       SUB_SEASONAL_DATA_PATH: ${SUB_SEASONAL_DATA_PATH}
       WINDY_MULTILAYER_DATA_PATH: ${WINDY_DATA_PATH}
       WINDY_INGEST_BASE_PATH: ${WINDY_INGEST_BASE_PATH}
       WINDY_INGEST_AREA: ${WINDY_INGEST_AREA}
       WINDY_INGEST_FOLDERS: ${WINDY_INGEST_FOLDERS}
+      WINDY_WRF_INGEST_FOLDERS: ${WINDY_WRF_INGEST_FOLDERS}
       MER_DATA_PATH: ${MER_DATA_PATH}
       MER_FORCINGS: ${MER_FORCINGS:-BOLAM,ECMWF,ICON}
+      ACTIVATE_DYNAMIC_DATASETS: ${ACTIVATE_DYNAMIC_DATASETS:-0}
       # THREDDS_DATA_PATH: ${THREDDS_DATA_PATH}
     volumes:
       - ${HOST_WINDY_GEOTIFF_DIR}:${WINDY_DATA_PATH}
@@ -28,36 +61,148 @@ services:
       - ${HOST_SUB_SEASONAL_GEOTIFF_DIR}:${SUB_SEASONAL_DATA_PATH}
       - ${HOST_WW3_DIR}:/ww3
       - ${HOST_MER_DIR}:${MER_DATA_PATH}
+      - ${PROJECT_DIR}/datasets.yml:${DATASET_CONFIG_PATH}:ro
+      - ${PROJECT_DIR}/tests/custom:/code/tests/custom
+      - ${PROJECT_DIR}/builds/proxy:/opt/meteohub-proxy:ro
+      - ${HOST_STATUS_DIR}:/var/lib/meteohub
       # - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
   celery:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
+    command:
+      - celery
+      - --app
+      - restapi.connectors.celery.worker.celery_app
+      - worker
+      - --concurrency=1
+      - --pool=prefork
+      - -Ofair
+      - -Q
+      - ingest
+      - -n
+      - maps-ingest@%h
     environment:
       PLATFORM: ${PLATFORM}
       GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER}
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
+      GEOSERVER_GWC_ENABLED: ${GEOSERVER_GWC_ENABLED}
+      GEOSERVER_REQUEST_TIMEOUT_SECONDS: ${GEOSERVER_REQUEST_TIMEOUT_SECONDS}
+      GWC_CACHE_EXPIRE_SECONDS: ${GWC_CACHE_EXPIRE_SECONDS}
+      GWC_CLIENT_EXPIRE_SECONDS: ${GWC_CLIENT_EXPIRE_SECONDS}
+      GWC_LAYER_QUOTA_MIB: ${GWC_LAYER_QUOTA_MIB}
+      GWC_GLOBAL_QUOTA_MIB: ${GWC_GLOBAL_QUOTA_MIB:-}
+      GEOSERVER_DATA_PATH: ${GEOSERVER_DATA_PATH}
+      GEOSERVER_URL: http://geoserver.dockerized.io:8080/geoserver
+      GEOSERVER_WORKSPACE: meteohub
+      SLD_BASE_DIRECTORY: /SLDs
+      SYNC_SLDS_ON_STARTUP: 1
       RADAR_RETENTION_HOURS: ${RADAR_RETENTION_HOURS}
       WW3_DATA_PATH: ${WW3_DATA_PATH}
       SEASONAL_DATA_PATH: ${SEASONAL_DATA_PATH}
       RADAR_DATA_PATH: ${RADAR_DATA_PATH}
+      DATASET_CONFIG_PATH: ${DATASET_CONFIG_PATH}
       SUB_SEASONAL_DATA_PATH: ${SUB_SEASONAL_DATA_PATH}
       WINDY_INGEST_BASE_PATH: ${WINDY_INGEST_BASE_PATH}
       WINDY_INGEST_AREA: ${WINDY_INGEST_AREA}
       WINDY_INGEST_FOLDERS: ${WINDY_INGEST_FOLDERS}
+      WINDY_WRF_INGEST_FOLDERS: ${WINDY_WRF_INGEST_FOLDERS}
       MER_DATA_PATH: ${MER_DATA_PATH}
       MER_FORCINGS: ${MER_FORCINGS:-BOLAM,ECMWF,ICON}
       # THREDDS_DATA_PATH: ${THREDDS_DATA_PATH}
     volumes:
       - ${HOST_WINDY_GEOTIFF_DIR}:/windy
       - ${HOST_SEASONAL_GEOTIFF_DIR}:${SEASONAL_DATA_PATH}
-      - ${DATA_DIR}/geoserver_data:/geoserver_data
+      - ${HOST_GEOSERVER_DATA_DIR}:/geoserver_data
       - ${DATA_DIR}/../projects/maps/builds/geoserver/SLDs:/SLDs
       - ${HOST_RADAR_DIR}:${RADAR_DATA_PATH}
       - ${HOST_SUB_SEASONAL_GEOTIFF_DIR}:${SUB_SEASONAL_DATA_PATH}
       - ${HOST_WW3_DIR}:/ww3
       - ${HOST_MER_DIR}:${MER_DATA_PATH}
+      - ${PROJECT_DIR}/datasets.yml:${DATASET_CONFIG_PATH}:ro
+      - ${PROJECT_DIR}/tests/custom:/code/tests/custom
+      - ${HOST_STATUS_DIR}:/var/lib/meteohub
       # - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
       - ${DATA_DIR}/celery_health:/status
+  gwc_cache_control:
+    extends:
+      service: celery
+    environment:
+      ACTIVATE: 1
+      PROJECT_NAME: maps
+      EXTENDED_PACKAGE: no_extended_project
+      APP_MODE: ${APP_MODE}
+      CURRENT_UID: ${CURRENT_UID}
+      CURRENT_GID: ${CURRENT_GID}
+      CELERY_ENABLE: 1
+      CELERY_BROKER_SERVICE: REDIS
+      CELERY_BACKEND_SERVICE: REDIS
+      REDIS_ENABLE: 1
+      REDIS_ENABLE_CONNECTOR: 1
+      REDIS_HOST: redis.dockerized.io
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      GWC_SEEDER_CORE_POOL_SIZE: ${GWC_SEEDER_CORE_POOL_SIZE}
+      GWC_LAYER_QUOTA_MIB: ${GWC_LAYER_QUOTA_MIB}
+      GWC_GLOBAL_QUOTA_MIB: ${GWC_GLOBAL_QUOTA_MIB:-}
+    volumes:
+      - ${SUBMODULE_DIR}/do/controller/confs/projects_defaults.yaml:/code/confs/projects_defaults.yaml
+      - ${PROJECT_DIR}/project_configuration.yaml:/code/confs/project_configuration.yaml
+      - ${PROJECT_DIR}/backend:/code/${COMPOSE_PROJECT_NAME}
+      - ${BASE_PROJECT_DIR}/backend:/code/${EXTENDED_PROJECT}
+      - ${BASE_PROJECT_DIR}/project_configuration.yaml:/code/confs/extended_project_configuration.yaml
+      - ${SUBMODULE_DIR}/http-api/restapi:${PYTHON_PATH}/restapi
+    command:
+      - celery
+      - --app
+      - restapi.connectors.celery.worker.celery_app
+      - worker
+      - --concurrency=1
+      - --pool=prefork
+      - -Ofair
+      - -Q
+      - cache-control
+      - -n
+      - maps-cache-control@%h
+  gwc_cache_warm:
+    extends:
+      service: celery
+    environment:
+      ACTIVATE: 1
+      PROJECT_NAME: maps
+      EXTENDED_PACKAGE: no_extended_project
+      APP_MODE: ${APP_MODE}
+      CURRENT_UID: ${CURRENT_UID}
+      CURRENT_GID: ${CURRENT_GID}
+      CELERY_ENABLE: 1
+      CELERY_BROKER_SERVICE: REDIS
+      CELERY_BACKEND_SERVICE: REDIS
+      REDIS_ENABLE: 1
+      REDIS_ENABLE_CONNECTOR: 1
+      REDIS_HOST: redis.dockerized.io
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      GWC_SEEDER_CORE_POOL_SIZE: ${GWC_SEEDER_CORE_POOL_SIZE}
+      GWC_LAYER_QUOTA_MIB: ${GWC_LAYER_QUOTA_MIB}
+      GWC_GLOBAL_QUOTA_MIB: ${GWC_GLOBAL_QUOTA_MIB:-}
+    volumes:
+      - ${SUBMODULE_DIR}/do/controller/confs/projects_defaults.yaml:/code/confs/projects_defaults.yaml
+      - ${PROJECT_DIR}/project_configuration.yaml:/code/confs/project_configuration.yaml
+      - ${PROJECT_DIR}/backend:/code/${COMPOSE_PROJECT_NAME}
+      - ${BASE_PROJECT_DIR}/backend:/code/${EXTENDED_PROJECT}
+      - ${BASE_PROJECT_DIR}/project_configuration.yaml:/code/confs/extended_project_configuration.yaml
+      - ${SUBMODULE_DIR}/http-api/restapi:${PYTHON_PATH}/restapi
+    command:
+      - celery
+      - --app
+      - restapi.connectors.celery.worker.celery_app
+      - worker
+      - --concurrency=${GWC_SEEDER_CORE_POOL_SIZE}
+      - --pool=prefork
+      - -Ofair
+      - -Q
+      - cache-warm
+      - -n
+      - maps-cache-warm@%h
   celerybeat:
     build: ${PROJECT_DIR}/builds/backend
     image: maps/backend:${RAPYDO_VERSION}
@@ -81,8 +226,7 @@ services:
     #   - ${HOST_WW3_DIR}:/ww3
     #   - ${HOST_MER_DIR}:${MER_DATA_PATH}
     #   - ${HOST_THREDDS_DIR}:${THREDDS_DATA_PATH}
-    # command: celery --app restapi.connectors.celery.beat.celery_app beat --loglevel=info
-  # thredds:
+    # command: celery --app restapi.connectors.celery.beat.celery_app beat --loglevel=info  # thredds:
   #   # Build custom THREDDS image with pre-configured directories at build time
   #   build: ${PROJECT_DIR}/builds/thredds
   #   image: maps/thredds:${RAPYDO_VERSION}
@@ -132,7 +276,7 @@ services:
       args:
         GEOSERVER_UID: ${CURRENT_UID}
         GEOSERVER_GID: ${CURRENT_GID}
-        IMAGE_VERSION: 9.0-jdk11-openjdk-slim-buster
+        # IMAGE_VERSION: 9.0-jdk11-openjdk-slim-buster
     # image: docker.osgeo.org/geoserver:2.26.1
     # build:
     #   context: ${PROJECT_DIR}/builds/geoserver
@@ -142,6 +286,7 @@ services:
     #     IMAGE_VERSION: 9.0-jdk11-openjdk-slim-buster
     ports:
       - "8081:8080"
+    stop_grace_period: 2m
     environment:
       ACTIVATE: ${ACTIVATE_GEOSERVER}
       # STABLE_EXTENSIONS: netcdf-plugin
@@ -157,14 +302,13 @@ services:
       - ${DATA_DIR}/geoserver_data:/opt/geoserver_data
       # - ${DATA_DIR}/geoserver/settings:/settings
     healthcheck:
-      test: 
+      test:
         - "CMD-SHELL"
-        - "curl -f 'http://localhost:8080/geoserver/wms?service=WMS&request=GetMap&layers=meteohub:t2m-t2m&styles=&format=image/png&version=1.1.1&width=256&height=256&srs=EPSG:3857&bbox=0,5009377.085697314,2504688.5428486555,7514065.628545967' | if grep -q 'ServiceException'; then exit 1; else exit 0; fi"
+        - "curl -fsS --max-time 8 http://localhost:8080/geoserver/web/wicket/resource/org.geoserver.web.GeoServerBasePage/img/logo.png -o /dev/null"
       interval: 30s
-          # curl -f "$(cat $$CATALINA_HOME/conf/healthcheck_url.txt)" && \
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 180s
     logging:
       driver: "json-file"
       options:
@@ -178,6 +322,7 @@ services:
   healthwatch:
     image: docker:cli
     container_name: healthwatch
+    restart: unless-stopped
     environment:
       ACTIVATE: ${ACTIVATE_GEOSERVER}
 
@@ -188,20 +333,28 @@ services:
       - ${DATA_DIR}/celery_health:/celery/status
     command: |
       sh -c '
+      if [ "$$ACTIVATE" != "1" ]; then
+        echo "GeoServer healthwatch disabled"
+        exec sleep infinity
+      fi
       echo "Waiting for maps-geoserver-1..."
       until docker ps > /dev/null 2>&1; do sleep 1; done
       sleep 30
       while true; do
-        STATUS=$$(docker inspect --format="{{.State.Health.Status}}" maps-geoserver-1 2>/dev/null)
-        echo "Geoserver status: $$STATUS"
-        if [ "$$STATUS" = "unhealthy" ] || [ -n "$$(ls -A /celery/status 2>/dev/null)" ]; then
+        for CONTAINER_ID in $$(docker ps -q --filter label=com.docker.compose.service=geoserver); do
+          STATUS=$$(docker inspect --format="{{.State.Health.Status}}" $$CONTAINER_ID 2>/dev/null)
+          if [ "$$STATUS" = "unhealthy" ]; then
+            echo "Restarting unhealthy GeoServer container $$CONTAINER_ID" >&2
+            docker restart $$CONTAINER_ID
+          fi
+        done
+        if [ -n "$$(ls -A /celery/status 2>/dev/null)" ]; then
           rm -f /celery/status/*
-          echo "Restarting geoserver due to unhealthy status..." >&2
-          docker stop maps-celery-1
-          docker restart maps-geoserver-1
-          sleep 120
-          docker restart maps-celery-1
+          for CONTAINER_ID in $$(docker ps -q --filter label=com.docker.compose.service=celery); do
+            echo "Restarting stuck Celery worker $$CONTAINER_ID" >&2
+            docker restart $$CONTAINER_ID
+          done
         fi
-        sleep 10
+        sleep 15
       done
       '
