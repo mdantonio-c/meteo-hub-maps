@@ -11,7 +11,9 @@ A comprehensive meteorological data serving platform providing REST APIs, dynami
 | Add or change a dataset | [Dataset configuration](docs/DATASET_CONFIGURATION.md) |
 | Call the API or request a WMS image | [REST API](docs/API.md) · [GeoServer WMS](docs/GEOSERVER.md#wms-services) |
 | Check ingestion and service health | [Status setup](docs/STATUS_SETUP.md) · [Status quick reference](docs/STATUS_QUICKREF.md) |
+| Use the maintenance, monitoring, and cache-refresh scripts | [Script reference and operator guide](docs/SCRIPTS.md) |
 | Understand the system | [Architecture](docs/ARCHITECTURE.md) |
+| Review release changes and target MeteoHub versions | [Changelog](changelog.md) |
 
 Browse the [documentation index](docs/README.md) for all guides and data products.
 
@@ -91,9 +93,10 @@ In production, services start automatically and are proxied by nginx.
 
 Start with the [documentation index](docs/README.md), organized by task:
 
+- **Release history:** [Changelog](changelog.md), with concise updates and linked full change descriptions.
 - **Configuration and operations:** [GeoWebCache](docs/GWC_CACHE.md),
   [GeoServer](docs/GEOSERVER.md), [datasets](docs/DATASET_CONFIGURATION.md),
-  [status setup](docs/STATUS_SETUP.md).
+  [status setup](docs/STATUS_SETUP.md), [script reference](docs/SCRIPTS.md).
 - **API and development:** [REST API](docs/API.md),
   [dynamic endpoints](docs/DYNAMIC_ENDPOINTS.md), [architecture](docs/ARCHITECTURE.md).
 - **Data products:** [Windy](docs/WINDY_DATA.md), [radar](docs/RADAR_DATA.md),

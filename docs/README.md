@@ -12,6 +12,7 @@ Choose a guide by what you need to do. For first-time installation, follow the
 | [GeoWebCache configuration](GWC_CACHE.md) | Per-layer and global disk quotas, automatic sizing, direct WMS-C integration, deployment and verification |
 | [GeoServer integration](GEOSERVER.md) | WMS requests, ImageMosaic layers, time dimensions, styles, proxy configuration and troubleshooting |
 | [Dataset configuration](DATASET_CONFIGURATION.md) | Manifest structure, discovery, ingestion, retention, cache lifetime and zoom ranges |
+| [Script reference and operator guide](SCRIPTS.md) | Every host/backend script: purpose, commands, prerequisites, configuration, effects and verification |
 | [Status setup](STATUS_SETUP.md) | Set up service and ingestion monitoring |
 | [Status quick reference](STATUS_QUICKREF.md) | Common monitoring checks and commands |
 | [Status API](STATUS_API.md) | Status endpoint payloads and integration |

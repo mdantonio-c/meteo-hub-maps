@@ -1,91 +1,78 @@
 # Status Management Scripts
 
-Scripts for managing MeteoHub Maps system status and maintenance mode.
+Use these host-side utilities to publish MeteoHub Maps maintenance and incident
+status. See the [detailed script reference](../docs/SCRIPTS.md) for every script
+in this directory and `projects/maps/backend/scripts/`, including prerequisites,
+defaults, side effects, and current limitations.
+
+## Prepare the Default Directory
+
+Run from the repository root on the host:
+
+```bash
+bash scripts/setup_status_dir.sh
+```
+
+This prepares `data/status/`, sets its directory permissions to `755`, and
+creates an operational `status.json` only if the file does not already exist.
 
 ## Quick Toggle
 
-### Enable Maintenance Mode
 ```bash
-rapydo shell backend 'python scripts/toggle_maintenance.py on'
+# Enable maintenance, optionally with a quoted message.
+python3 scripts/toggle_maintenance.py on "Database upgrade in progress"
+
+# Inspect the saved status.
+python3 scripts/toggle_maintenance.py status
+
+# Restore operational status and clear incident details.
+python3 scripts/toggle_maintenance.py off
 ```
 
-### Enable Maintenance Mode with Custom Message
-```bash
-rapydo shell backend 'python scripts/toggle_maintenance.py on "Database upgrade in progress"'
-```
-
-### Disable Maintenance Mode (Return to Operational)
-```bash
-rapydo shell backend 'python scripts/toggle_maintenance.py off'
-```
-
-### Check Current Status
-```bash
-rapydo shell backend 'python scripts/toggle_maintenance.py status'
-```
+The `on` command publishes maintenance immediately, affecting all services. Its
+current two-hour end-time calculation fails at UTC hours 22 and 23; use the
+interactive script during those hours. The saved end time does not automatically
+disable maintenance.
 
 ## Interactive Configuration
 
-For detailed status configuration with prompts:
-
 ```bash
-rapydo shell backend 'python scripts/set_status.py'
+python3 scripts/set_status.py
 ```
 
-This interactive script will ask you:
-1. Status type (operational, maintenance, degraded, outage)
-2. Status message
-3. Scheduled start/end times
-4. Affected services
+Choose `operational`, `maintenance`, `degraded`, or `outage`, then enter the
+message, applicable start/end times, affected services, and write confirmation.
+Use this script for an outage: the quick `on` command always writes maintenance,
+regardless of its message.
 
-## API Usage
+## Select the Correct File
 
-The REST API exposes a read-only system status endpoint. It does not accept status updates; use the scripts above to write status changes.
+Outside RAPyDo, both Python scripts default to the repository's
+`data/status/status.json`. The configured host volume is `HOST_STATUS_DIR`
+(default `${DATA_DIR}/status`), mounted into containers at `/var/lib/meteohub`.
+The current Compose configuration does not mount the root `scripts/` directory.
 
-### Get system status
+If your host status volume uses another location, select it explicitly:
+
+```bash
+STATUS_FILE_PATH=/srv/meteohub/status/status.json python3 scripts/set_status.py
+STATUS_FILE_PATH=/srv/meteohub/status/status.json python3 scripts/toggle_maintenance.py status
+```
+
+Replace the example path with the actual host volume path. Both write commands
+replace the complete JSON document and need write permission on that file.
+
+## Verify Through the API
+
 ```bash
 curl http://localhost:8080/api/service/status
 ```
 
-`GET /api/status` is a separate liveness check that returns `Server is alive`.
+This endpoint reads operator-managed status; it does not accept status-update
+POST requests. `GET /api/status` is the separate API liveness check.
 
-### Set a detailed status
-```bash
-rapydo shell backend 'python scripts/set_status.py'
-```
-
-## Status File Location
-
-Default: `/var/lib/meteohub/status.json`
-
-The directory is mounted from `${DATA_DIR}/status` on the host to persist across container restarts.
-
-Configure via `STATUS_FILE_PATH` environment variable if needed:
-```bash
-export STATUS_FILE_PATH=/custom/path/status.json
-```
-
-## Status Values
-
-- `operational` - All systems functioning normally
-- `maintenance` - Scheduled maintenance in progress or planned
-- `degraded` - System experiencing partial issues
-- `outage` - System unavailable
-
-## Examples
-
-### Emergency Outage
-```bash
-rapydo shell backend 'python scripts/toggle_maintenance.py on "Emergency outage - investigating"'
-```
-
-### Planned Maintenance
-```bash
-rapydo shell backend 'python scripts/set_status.py'
-# Then follow interactive prompts
-```
-
-### Return to Service
-```bash
-rapydo shell backend 'python scripts/toggle_maintenance.py off'
-```
+With the file-driven Docker nginx gate, maintenance status returns HTTP 503 to
+non-allowlisted clients except on the two status routes. Future schedule times
+do not delay the gate, and `degraded`/`outage` do not activate it. See
+[status setup](../docs/STATUS_SETUP.md) for allowlists, forced gate settings, and
+volume configuration.
