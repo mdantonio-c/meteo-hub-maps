@@ -6,9 +6,9 @@ import re
 from functools import wraps
 from ipaddress import ip_address, ip_network
 
-from flask import request
 from restapi.env import Env
 from restapi.exceptions import Forbidden
+from restapi.services.authentication import BaseAuthentication
 
 
 def check_ip_access(func):
@@ -23,7 +23,7 @@ def check_ip_access(func):
                 for entry in re.split(r"[\s,]+", allowlist.strip())
                 if entry
             ]
-            address = ip_address(request.remote_addr or "")
+            address = ip_address(BaseAuthentication.get_remote_ip(raise_warnings=False))
         except ValueError:
             raise Forbidden("Access Forbidden", is_warning=True) from None
         if not any(address in network for network in networks):

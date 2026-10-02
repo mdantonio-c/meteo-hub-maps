@@ -29,6 +29,9 @@ project_configuration:
   guard `POST` and `DELETE /api/data/monitoring` and `/api/maps/sensitive`, even
   during normal operation. Empty or invalid allowlists deny these API requests
   with HTTP **403**.
+  API checks use RAPyDo's client-IP resolver (`X-Real-IP`, or `X-Forwarded-For`
+  when `PROXIED_CONNECTION` is enabled), falling back to the connection address.
+  Backend access should pass through the configured proxy, which supplies these headers.
 - `MAINTENANCE_TRUSTED_PROXIES`: IPs/CIDRs of reverse proxies that may supply
   `X-Forwarded-For`. Leave empty for direct connections. Behind a host nginx,
   set this to its actual source address as seen by Docker nginx and ensure that

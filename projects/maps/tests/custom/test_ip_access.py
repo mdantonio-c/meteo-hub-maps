@@ -5,6 +5,7 @@ from flask import Flask
 from maps.auth.authz import check_ip_access
 from restapi.env import Env
 from restapi.exceptions import Forbidden
+from restapi.services import authentication
 
 
 class TestIPAccess(unittest.TestCase):
@@ -45,11 +46,34 @@ class TestIPAccess(unittest.TestCase):
                     self.call(address, allowlist)
         self.action.assert_not_called()
 
-    def test_forwarded_headers_cannot_override_client_address(self):
-        with self.assertRaises(Forbidden):
-            self.call(
-                "198.51.100.1",
-                "192.0.2.10",
-                headers={"X-Forwarded-For": "192.0.2.10", "X-Real-IP": "192.0.2.10"},
+    def test_nginx_real_ip_is_used_instead_of_proxy_address(self):
+        with patch.object(authentication, "PROXIED_CONNECTION", False):
+            self.assertEqual(
+                self.call(
+                    "172.20.0.2",
+                    "130.186.19.0/24, 193.205.218.0/26",
+                    headers={"X-Real-IP": "130.186.19.19"},
+                ),
+                "accepted",
             )
+
+    def test_proxied_connection_uses_forwarded_client_address(self):
+        with patch.object(authentication, "PROXIED_CONNECTION", True):
+            self.assertEqual(
+                self.call(
+                    "172.20.0.2",
+                    "130.186.19.0/24",
+                    headers={"X-Forwarded-For": "130.186.19.19, 172.20.0.1"},
+                ),
+                "accepted",
+            )
+
+    def test_non_allowlisted_forwarded_client_is_denied(self):
+        with patch.object(authentication, "PROXIED_CONNECTION", False):
+            with self.assertRaises(Forbidden):
+                self.call(
+                    "130.186.19.19",
+                    "130.186.19.0/24",
+                    headers={"X-Real-IP": "198.51.100.1"},
+                )
         self.action.assert_not_called()
