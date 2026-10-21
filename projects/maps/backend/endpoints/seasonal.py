@@ -1,16 +1,28 @@
+import glob
+import json
+import os
+from datetime import datetime
+from pathlib import Path
+
+from maps.datasets.registry import load_registry
+from maps.endpoints.datasets import _dataset_base_path
 from restapi import decorators
+from restapi.env import Env
 from restapi.exceptions import NotFound
 from restapi.rest.definition import EndpointResource, Response
-from restapi.services.download import Downloader
-from restapi.env import Env
-from pathlib import Path
-import os
-import glob
-from datetime import datetime
-import json
+from restapi.utilities.logs import log
 
 SEASONAL_PATH = Env.get("SEASONAL_DATA_PATH", "/seasonal-aim")
 BOXPLOT_FOLDER_NAME = "boxplot"
+
+
+def _boxplot_path() -> Path:
+    if Env.get_bool("ACTIVATE_DYNAMIC_DATASETS"):
+        config = load_registry().get("seasonal")
+        return (_dataset_base_path(config) / BOXPLOT_FOLDER_NAME).resolve()
+    return (Path(SEASONAL_PATH) / BOXPLOT_FOLDER_NAME).resolve()
+
+
 class SeasonalEndpoint(EndpointResource):
     labels = ["seasonal"]
 
@@ -78,8 +90,8 @@ class SeasonalEndpoint(EndpointResource):
                 )
 
 class SeasonalBoxplotListEndpoint(EndpointResource):
+    # These dataset-specific routes have no generated replacement in dynamic mode.
     labels = ["seasonal"]
-    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/seasonal/json",
@@ -90,17 +102,23 @@ class SeasonalBoxplotListEndpoint(EndpointResource):
         },
     )
     def get(self) -> Response:
-        folder_path = os.path.join(SEASONAL_PATH, BOXPLOT_FOLDER_NAME)
-        if not os.path.exists(folder_path):
+        folder_path = _boxplot_path()
+        if not folder_path.is_dir():
             raise NotFound("Boxplot folder not found")
-            
-        files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+
+        files = []
+        for item in folder_path.iterdir():
+            if item.is_file():
+                try:
+                    item.resolve().relative_to(folder_path)
+                except ValueError:
+                    continue
+                files.append(item.name)
         files.sort()
         return self.response(files)
 
 class SeasonalFileEndpoint(EndpointResource):
     labels = ["seasonal"]
-    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/seasonal/json/<filename>",
@@ -111,11 +129,20 @@ class SeasonalFileEndpoint(EndpointResource):
         },
     )
     def get(self, filename: str) -> Response:
-        
-        folder_path = os.path.join(SEASONAL_PATH, BOXPLOT_FOLDER_NAME)
-        file_path = os.path.join(folder_path, filename)
-        if not os.path.isfile(file_path):
+        folder_path = _boxplot_path()
+        if Path(filename).is_absolute():
+            raise NotFound("Invalid file path")
+        file_path = (folder_path / filename).resolve()
+        try:
+            file_path.relative_to(folder_path)
+        except ValueError as e:
+            raise NotFound("Invalid file path") from e
+        if not file_path.is_file():
             raise NotFound("File not found")
-        with open(file_path, 'r') as f:
-            content = json.load(f)
+        try:
+            with file_path.open(encoding="utf-8") as f:
+                content = json.load(f)
+        except (OSError, ValueError) as e:
+            log.error(f"Error reading seasonal json file {filename}: {e}")
+            raise NotFound(f"Error reading file {filename}") from e
         return self.response(content)
