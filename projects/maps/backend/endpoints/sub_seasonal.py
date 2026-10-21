@@ -1,15 +1,25 @@
+import json
+from datetime import datetime
+from pathlib import Path
+
+from maps.datasets.registry import load_registry
+from maps.endpoints.datasets import _dataset_base_path
 from restapi import decorators
+from restapi.env import Env
 from restapi.exceptions import NotFound
 from restapi.rest.definition import EndpointResource, Response
 from restapi.utilities.logs import log
-from restapi.env import Env
-import os
-from datetime import datetime
-from pathlib import Path
-import json
 
 DATA_PATH = Path(Env.get("SUB_SEASONAL_AIM_PATH", "/sub-seasonal-aim"))
 JSONS_PATH = DATA_PATH / "json_weekly"
+
+
+def _jsons_path() -> Path:
+    if Env.get_bool("ACTIVATE_DYNAMIC_DATASETS"):
+        config = load_registry().get("sub-seasonal")
+        return (_dataset_base_path(config) / "json_weekly").resolve()
+    return JSONS_PATH.resolve()
+
 
 class SubSeasonalEndpoint(EndpointResource):
     labels = ["sub-seasonal"]
@@ -113,8 +123,8 @@ class SubSeasonalEndpoint(EndpointResource):
 
 
 class SubSeasonalJSONsEndpoint(EndpointResource):
+    # These dataset-specific routes have no generated replacement in dynamic mode.
     labels = ["sub-seasonal"]
-    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/sub-seasonal/data/cities",
@@ -125,13 +135,18 @@ class SubSeasonalJSONsEndpoint(EndpointResource):
         },
     )
     def get(self) -> Response:
-        if not JSONS_PATH.exists():
-            raise NotFound(f"Sub-seasonal jsons path {JSONS_PATH} does not exist")
+        base_path = _jsons_path()
+        if not base_path.is_dir():
+            raise NotFound(f"Sub-seasonal jsons path {base_path} does not exist")
 
         files = []
-        for item in JSONS_PATH.rglob("*"):
+        for item in base_path.rglob("*"):
             if item.is_file() and item.suffix.lower() == ".json":
-                files.append(str(item.relative_to(JSONS_PATH)))
+                try:
+                    item.resolve().relative_to(base_path)
+                except ValueError:
+                    continue
+                files.append(str(item.relative_to(base_path)))
         files.sort()
 
         return self.response(files)
@@ -139,7 +154,6 @@ class SubSeasonalJSONsEndpoint(EndpointResource):
 
 class SubSeasonalJSONFileEndpoint(EndpointResource):
     labels = ["sub-seasonal"]
-    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/sub-seasonal/data/cities/<path:filename>",
@@ -150,20 +164,23 @@ class SubSeasonalJSONFileEndpoint(EndpointResource):
         },
     )
     def get(self, filename: str) -> Response:
-        base_path = JSONS_PATH
+        base_path = _jsons_path()
+        if Path(filename).is_absolute():
+            raise NotFound(f"Invalid file path: {filename}")
         file_path = (base_path / filename).resolve()
 
-        # Security check: ensure the resolved path is within base_path
-        if not str(file_path).startswith(str(base_path.resolve())):
-            raise NotFound(f"Invalid file path: {filename}")
+        try:
+            file_path.relative_to(base_path)
+        except ValueError as e:
+            raise NotFound(f"Invalid file path: {filename}") from e
 
-        if not file_path.exists():
+        if not file_path.is_file() or file_path.suffix.lower() != ".json":
             raise NotFound(f"File {filename} not found")
 
         try:
-            with open(file_path, 'r') as f:
+            with file_path.open(encoding="utf-8") as f:
                 content = json.load(f)
-            return self.response(content)
-        except Exception as e:
+        except (OSError, ValueError) as e:
             log.error(f"Error reading sub-seasonal json file {filename}: {e}")
-            raise NotFound(f"Error reading file {filename}")
+            raise NotFound(f"Error reading file {filename}") from e
+        return self.response(content)

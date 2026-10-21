@@ -1,6 +1,18 @@
 version: "3.9"
 services:
   flower:
+    build: ${PROJECT_DIR}/builds/backend
+    image: maps/backend:${RAPYDO_VERSION}
+    healthcheck:
+      # Use a scalar: RAPyDo concatenates list overrides with the inherited test.
+      test: >-
+        python3 -c 'import base64, os, urllib.request;
+        credentials = os.environ["FLOWER_USER"] + ":" + os.environ["FLOWER_PASSWORD"];
+        authorization = "Basic " + base64.b64encode(credentials.encode()).decode();
+        url = "http://127.0.0.1:" + os.environ["FLOWER_PORT"] + "/flower/";
+        request = urllib.request.Request(url, headers={"Authorization": authorization});
+        response = urllib.request.urlopen(request, timeout=5);
+        assert response.status == 200; response.close()'
     command:
       - celery
       - --app

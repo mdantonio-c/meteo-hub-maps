@@ -1,4 +1,9 @@
 # Public GeoServer routes share the server-level maintenance gate.
+location = /geoserver {
+    add_header Cache-Control "no-store" always;
+    return 302 /geoserver/;
+}
+
 location /geoserver/ {
     proxy_pass http://geoserver.dockerized.io:8080/geoserver/;
     proxy_set_header Host $host;
