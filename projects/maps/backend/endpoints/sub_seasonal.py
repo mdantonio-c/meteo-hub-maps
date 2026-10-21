@@ -13,6 +13,7 @@ JSONS_PATH = DATA_PATH / "json_weekly"
 
 class SubSeasonalEndpoint(EndpointResource):
     labels = ["sub-seasonal"]
+    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/sub-seasonal/status",
@@ -113,6 +114,7 @@ class SubSeasonalEndpoint(EndpointResource):
 
 class SubSeasonalJSONsEndpoint(EndpointResource):
     labels = ["sub-seasonal"]
+    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/sub-seasonal/data/cities",
@@ -137,6 +139,7 @@ class SubSeasonalJSONsEndpoint(EndpointResource):
 
 class SubSeasonalJSONFileEndpoint(EndpointResource):
     labels = ["sub-seasonal"]
+    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/sub-seasonal/data/cities/<path:filename>",

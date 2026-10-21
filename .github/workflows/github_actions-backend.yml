@@ -28,7 +28,7 @@ jobs:
           rapydo start
           rapydo shell backend 'restapi wait'
 
-          rapydo shell backend 'restapi tests --wait --destroy'
+          rapydo shell backend 'restapi tests --wait --destroy --folder custom'
 
           LOGURU_LEVEL=WARNING rapydo list services
           # This should fail if at least one container is in Exit status

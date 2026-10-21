@@ -1,6 +1,6 @@
 ARG GEOSERVER_VER="2.26.x-latest"
-FROM docker.osgeo.org/geoserver:2.26.1
-ARG GEOSERVER_VER="2.26.1"
+FROM docker.osgeo.org/geoserver:3.0.1
+ARG GEOSERVER_VER="3.0.1"
 #ARG GEOSERVER_VER="2.18.2"
 #FROM geonode/geoserver:$GEOSERVER_VER
 #ARG GEOSERVER_VER
@@ -15,28 +15,27 @@ RUN test -n "$CURRENT_GID"
 
 # Install GEOSERVER-NETCDF extension
 # NOTE check lib webapps/geoserver/WEB-INF/lib in cp command when upgrading to 2.19.x
-ENV TMPDIR=/var/tmp
-RUN mkdir /tmp/geoserver-netcdf && \
-    wget -L --quiet --no-check-certificate -O /tmp/geoserver-netcdf/geoserver-$GEOSERVER_VER-netcdf-out-plugin.zip \
-        https://sourceforge.net/projects/geoserver/files/GeoServer/$GEOSERVER_VER/extensions/geoserver-$GEOSERVER_VER-netcdf-out-plugin.zip/download && \
-    unzip -d /tmp/geoserver-netcdf /tmp/geoserver-netcdf/geoserver-$GEOSERVER_VER-netcdf-out-plugin.zip && \
-    cp /tmp/geoserver-netcdf/*.jar $CATALINA_HOME/webapps/geoserver/WEB-INF/lib && \
-    rm -rf /tmp/geoserver-netcdf && \
-    apt-get update -qq && \
-    apt-get install --yes --no-install-recommends libnetcdf-dev vim && \
-    apt-get autoremove --yes && apt-get clean && rm -rf /var/lib/apt/lists/*
+# ENV TMPDIR=/var/tmp
+# RUN mkdir /tmp/geoserver-netcdf && \
+#     wget -L --quiet --no-check-certificate -O /tmp/geoserver-netcdf/geoserver-$GEOSERVER_VER-netcdf-out-plugin.zip \
+#         https://sourceforge.net/projects/geoserver/files/GeoServer/$GEOSERVER_VER/extensions/geoserver-$GEOSERVER_VER-netcdf-out-plugin.zip/download && \
+#     unzip -d /tmp/geoserver-netcdf /tmp/geoserver-netcdf/geoserver-$GEOSERVER_VER-netcdf-out-plugin.zip && \
+#     cp /tmp/geoserver-netcdf/*.jar $CATALINA_HOME/webapps/geoserver/WEB-INF/lib && \
+#     rm -rf /tmp/geoserver-netcdf && \
+#     apt-get update -qq && \
+#     apt-get install --yes --no-install-recommends libnetcdf-dev vim && \
+#     apt-get autoremove --yes && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-ENV TOMCAT_USER tomcat
+ENV TOMCAT_USER=tomcat
 
-RUN useradd \
+RUN id $TOMCAT_USER >/dev/null 2>&1 || useradd \
     -r -M -d /home/$TOMCAT_USER -s /bin/bash -p ! \
-    --uid $CURRENT_UID $TOMCAT_USER \
-    && groupmod -og $CURRENT_GID $TOMCAT_USER \
-    && mkdir -p /home/$TOMCAT_USER \
-    && chown $CURRENT_UID:$CURRENT_GID /home/$TOMCAT_USER
+    --uid $CURRENT_UID $TOMCAT_USER; \
+    groupmod -og $CURRENT_GID $TOMCAT_USER 2>/dev/null || true; \
+    mkdir -p /home/$TOMCAT_USER; \
+    chown $CURRENT_UID:$CURRENT_GID /home/$TOMCAT_USER
 
-# # Prevent RCE exploit in log4j CVE-2021-44228
-ENV JAVA_OPTS="${JAVA_OPTS} -Dlog4j2.formatMsgNoLookups=true -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true"
+ENV JAVA_OPTS=-Dlog4j2.formatMsgNoLookups=true -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true --add-opens=jdk.proxy3/jdk.proxy3=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
 
 # # Force tomcat to run as NO-root user
 # SHELL ["/bin/bash", "-o", "pipefail", "-c"]

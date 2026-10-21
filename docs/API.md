@@ -1,5 +1,7 @@
 # REST API Documentation
 
+[Project README](../README.md) · [Documentation index](README.md) · [GeoServer WMS](GEOSERVER.md#wms-services)
+
 This document provides comprehensive documentation for all REST API endpoints exposed by the Meteo-Hub-Maps service.
 
 ## Base URL
@@ -518,13 +520,14 @@ List available WW3 vector files (JSON format).
 
 Retrieve the content of a specific WW3 vector file.
 
-**Endpoint:** `GET /api/ww3/vectors/<filename>`
+**Endpoint:** `GET /api/ww3/vectors/<zoom>/<filename>`
 
 **Path Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `filename` | string | Yes | Name of the vector file (e.g., `20251203_00.json`) |
+| `zoom` | integer | Yes | Web Mercator zoom level from `0` through `22` |
+| `filename` | string | Yes | Vector file name, for example `14-09-2026-01-00.geojson` |
 
 **Response:** `200 OK`
 
@@ -644,6 +647,11 @@ These endpoints expose generic THREDDS layer metadata and remain available for b
 
 ## Data Monitoring Endpoints
 
+Both operations require the client IP to match `MAINTENANCE_ALLOWLIST`, a
+comma/space-separated list of IPv4, IPv6 or CIDR entries. This restriction applies
+regardless of maintenance mode. Non-allowlisted clients receive `403 Forbidden`;
+an empty or invalid allowlist denies access.
+
 ### Start Data Monitoring
 
 Start periodic Celery tasks to monitor data directories and trigger GeoServer imports.
@@ -688,7 +696,7 @@ or
 
 ### Health Check
 
-Check if the API service is running.
+Check if the API service is running. This liveness check is separate from the operator-managed system status endpoint documented below.
 
 **Endpoint:** `GET /api/status`
 
@@ -704,7 +712,8 @@ Server is alive
 
 ### Authentication
 
-Most endpoints are publicly accessible. Some administrative endpoints (e.g., `/api/data/monitoring`, `/api/data/ready`) are IP-restricted.
+Most endpoints are publicly accessible. `/api/data/monitoring` and
+`/api/maps/sensitive` are IP-restricted using `MAINTENANCE_ALLOWLIST`.
 
 ### Caching
 
@@ -721,3 +730,68 @@ The availability of data depends on:
 ### Platform Selection
 
 When `platform` parameter is not specified for maps endpoints, the service automatically selects the platform with the most recent available data, checking in order: G100 (default), leonardo.
+
+---
+
+## System Status Endpoint
+
+### Get System Status
+
+Retrieve the operator-managed system status and any scheduled maintenance information. The response is read from the persisted status JSON file; if that file does not exist or cannot be parsed, the endpoint reports `operational` by default.
+
+**Endpoint:** `GET /api/service/status`
+
+**Response:** `200 OK`
+
+```json
+{
+  "status": "operational",
+  "message": null,
+  "scheduled_start": null,
+  "scheduled_end": null,
+  "affected_services": [],
+  "updated_at": "2026-09-29T10:00:00Z"
+}
+```
+
+**Status values:**
+- `operational` - All systems functioning normally
+- `maintenance` - Scheduled maintenance in progress or planned
+- `degraded` - System experiencing partial issues
+- `outage` - System unavailable
+
+**Response fields:**
+- `status` (string): Current system state
+- `message` (string, optional): Human-readable description
+- `scheduled_start` (string, optional): ISO 8601 timestamp for planned maintenance start
+- `scheduled_end` (string, optional): ISO 8601 timestamp for planned maintenance end
+- `affected_services` (array): List of affected services (e.g., `["maps", "windy"]`)
+- `updated_at` (string): ISO 8601 timestamp of last update
+
+### Update System Status
+
+There is currently no `POST /api/service/status` (or `POST /api/status`) operation. Update the persisted status file using the operator scripts, then read the new value with `GET /api/service/status`.
+
+For a quick maintenance toggle or to restore normal service:
+
+```bash
+rapydo shell backend 'python scripts/toggle_maintenance.py on "Database upgrade"'
+rapydo shell backend 'python scripts/toggle_maintenance.py off'
+rapydo shell backend 'python scripts/toggle_maintenance.py status'
+```
+
+To set all status fields interactively—including `degraded` or `outage`—run:
+
+```bash
+rapydo shell backend 'python scripts/set_status.py'
+```
+
+The scripts write `status.json` at `STATUS_FILE_PATH`; the backend and Celery containers share the configured status volume. The default in-container path is `/var/lib/meteohub/status.json`, backed by `${DATA_DIR}/status/status.json` on the host. After updating, verify via:
+
+```bash
+curl http://localhost:8080/api/service/status
+```
+
+`GET /api/status` is a separate API liveness check and returns the plain-text response `Server is alive`; it does not report maintenance state. The status file path is configurable with `STATUS_FILE_PATH` (default: `/var/lib/meteohub/status.json`).
+
+For setup and operational details, see [STATUS_SETUP.md](STATUS_SETUP.md) and [STATUS_API.md](STATUS_API.md).

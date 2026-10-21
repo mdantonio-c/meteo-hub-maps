@@ -17,15 +17,12 @@ from maps.endpoints.config import (
     get_base_path,
     get_ready_file
 )
-from maps.utils.env import Env
 from restapi import decorators
 from restapi.exceptions import NotFound, ServiceUnavailable
 from restapi.models import Schema, fields, validate
 from restapi.rest.definition import EndpointResource, Response
 from restapi.services.download import Downloader
 from restapi.utilities.logs import log
-
-ALLOWED_IPS = Env.get_set("ALLOWED_IPS", frozenset())
 
 
 def get_schema(set_required: bool) -> Type[Schema]:
@@ -316,6 +313,6 @@ class MapSensitiveData(EndpointResource):
             403: "Access Forbidden",
         },
     )
-    @check_ip_access(ALLOWED_IPS)
+    @check_ip_access
     def get(self) -> Response:
         return self.empty_response()

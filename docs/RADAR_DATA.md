@@ -1,6 +1,12 @@
 # Radar Data Documentation
 
+[Project README](../README.md) · [Documentation index](README.md) · [Cache configuration](GWC_CACHE.md)
+
 This document describes radar data ingestion, processing, and serving through GeoServer ImageMosaics with temporal support.
+
+To change tile-cache disk limits or verify worker configuration, read the
+[GeoWebCache guide](GWC_CACHE.md). Radar granule retention and cache lifetime are
+separate from those disk quotas.
 
 ## Overview
 
@@ -115,6 +121,34 @@ After batch processing:
    - Remove old `.tif` files from disk
    - Remove oldest granules from GeoServer index
    - Maintain 72-hour window ending at latest data
+
+### GeoWebCache Lifetime and Metadata
+
+Radar server-side tiles expire after three days (`geoserver.cache.expire_seconds:
+259200` in `datasets.yml`), matching the radar retention window. Other layers
+default to one day (`GWC_CACHE_EXPIRE_SECONDS: 86400`). Client cache lifetime is
+controlled separately by `GWC_CLIENT_EXPIRE_SECONDS`.
+
+The number of `parameters-*.properties` files is not the number of populated tile
+folders: GWC keeps parameter metadata after targeted truncation removes tiles.
+Radar discovery submits only files after the latest successful
+`.GEOSERVER.READY` endpoint; the 72-hour scan is used for initial ingestion.
+Radar ingestion invalidates additions, newly copied files and timestamps removed
+from the mosaic, then pre-seeds retained affected timesteps at zoom levels 5–9.
+Unchanged files in overlapping batches retain their existing cached tiles.
+
+To refresh existing tiles manually, use:
+
+```bash
+python projects/maps/backend/scripts/refresh_cache.py --dataset radar --variable sri --parallelism 4
+```
+
+`--parallelism` defaults to 4 and controls the maximum number of timestep seed
+jobs submitted per batch. Each job uses one GWC seeder thread; the server's
+seeder pool also limits actual concurrency. `--no-wait` skips waiting for the
+final seed batch, but earlier batches still drain before the next is submitted.
+Timestamped progress shows layer configuration, every truncation, batch
+submission and completion, and failures.
 
 ### 6. Status Tracking
 

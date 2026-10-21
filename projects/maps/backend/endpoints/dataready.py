@@ -24,10 +24,9 @@ from restapi.services.download import Downloader
 from restapi.utilities.logs import log
 from restapi.connectors import celery
 from restapi.env import Env
-from maps.utils.env import Env as utils_env
 from maps.auth.authz import check_ip_access
+from maps.datasets.monitoring import start_monitoring, stop_monitoring
 
-ALLOWED_IPS = utils_env.get_set("ALLOWED_IPS", frozenset())
 
 class DataReady(EndpointResource):
     labels = ["maps"]
@@ -39,7 +38,6 @@ class DataReady(EndpointResource):
         responses={202: "Notification received"},
 
     )
-    #@check_ip_access(ALLOWED_IPS)
     def post(
         self, run, date, model, **kwargs
     ) -> Response:
@@ -85,117 +83,30 @@ class StartMonitoring(EndpointResource):
     @decorators.endpoint(
         path="/data/monitoring",
         summary="Start monitoring a dataset",
-        responses={202: "Monitoring started"},
+        responses={202: "Monitoring started", 403: "Access Forbidden"},
     )
-
-    #@check_ip_access(ALLOWED_IPS)
+    @check_ip_access
     def post(self):
         c = celery.get_instance()
-        # Create a periodic task to check for the latest data and trigger Geoserver import
-        task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_geoserver_import_windy",
-            hour="*",
-            minute="*",
-            day_of_week="*",
-            day_of_month="*",
-            month_of_year="*",
-            task="check_latest_data_and_trigger_geoserver_import_windy",
+
+        task = c.celery_app.send_task(
+            name="initialize_geoserver",
             args=[],
-        )            
-        task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_geoserver_import_seasonal",
-            hour="*",
-            minute="*",
-            day_of_week="*",
-            day_of_month="*",
-            month_of_year="*",
-            task="check_latest_data_and_trigger_geoserver_import_seasonal",
-            args=[]
-            )
-        task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_geoserver_import_radar",
-            hour="*",
-            minute="*",
-            day_of_week="*",
-            day_of_month="*",
-            month_of_year="*",
-            task="check_latest_data_and_trigger_geoserver_import_radar",
-            args=[]
-            )
-        task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_geoserver_import_sub_seasonal",
-            hour="*",
-            minute="*",
-            day_of_week="*",
-            day_of_month="*",
-            month_of_year="*",
-            task="check_latest_data_and_trigger_geoserver_import_sub_seasonal",
-            args=[],
+            queue="ingest"
         )
-        task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_geoserver_import_ww3",
-            hour="*",
-            minute="*",
-            day_of_week="*",
-            day_of_month="*",
-            month_of_year="*",
-            task="check_latest_data_and_trigger_geoserver_import_ww3",
-            args=[],
-        )
-        task = c.create_crontab_task(
-            name="check_latest_data_and_trigger_geoserver_import_mer_bolam",
-            hour="*",
-            minute="*",
-            day_of_week="*",
-            day_of_month="*",
-            month_of_year="*",
-            task="check_latest_data_and_trigger_geoserver_import_mer_bolam",
-            args=[],
-        )
-        # Thredds integration disabled.
-        # task = c.create_crontab_task(
-        #     name="check_latest_data_and_trigger_thredds_ingestion",
-        #     hour="*",
-        #     minute="*",
-        #     day_of_week="*",
-        #     day_of_month="*",
-        #     month_of_year="*",
-        #     task="check_latest_data_and_trigger_thredds_ingestion",
-        #     args=[],
-        # )
+
+        self.delete()
+        start_monitoring(c)
         return self.response("Monitoring started", code=202)
     
     @decorators.endpoint(
         path="/data/monitoring",
         summary="Delete monitoring",
-        responses={202: "Monitoring ended"},
+        responses={202: "Monitoring ended", 403: "Access Forbidden"},
     )
-    #@check_ip_access(ALLOWED_IPS)
+    @check_ip_access
     def delete(self):
         c = celery.get_instance()
-        res = None
-        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_windy"):
-            res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_windy")
-        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_seasonal"):
-            res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_seasonal")
-            log.info(f"Deleted periodic task: {res}")
-        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_radar"):
-            res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_radar")
-            log.info(f"Deleted periodic task: {res}")
-        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_sub_seasonal"):
-            res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_sub_seasonal")
-            log.info(f"Deleted periodic task: {res}")
-        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_ww3"):
-            res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_ww3")
-            log.info(f"Deleted periodic task: {res}")
-        if c.get_periodic_task("check_latest_data_and_trigger_geoserver_import_mer_bolam"):
-            res = c.delete_periodic_task("check_latest_data_and_trigger_geoserver_import_mer_bolam")
-            log.info(f"Deleted periodic task: {res}")
-        # Thredds integration disabled.
-        # if c.get_periodic_task("check_latest_data_and_trigger_thredds_ingestion"):
-        #     res = c.delete_periodic_task("check_latest_data_and_trigger_thredds_ingestion")
-        #     log.info(f"Deleted periodic task: {res}")
-        if res:
+        if stop_monitoring(c):
             return self.response("Monitoring has been disabled", code=202)
-        # Create a periodic task to check for the latest data and trigger Geoserver import
         return self.response("Monitoring is not active", code=202)

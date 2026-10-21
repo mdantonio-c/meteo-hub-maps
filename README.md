@@ -2,6 +2,21 @@
 
 A comprehensive meteorological data serving platform providing REST APIs, dynamic WMS services, and static tile serving for weather forecast and radar data.
 
+## Start Here
+
+| I want to… | Read |
+| --- | --- |
+| Run the project locally | [Quick Start](#quick-start) |
+| Configure cache sizes, global quota or WMS-C integration | [GeoWebCache guide](docs/GWC_CACHE.md) |
+| Add or change a dataset | [Dataset configuration](docs/DATASET_CONFIGURATION.md) |
+| Call the API or request a WMS image | [REST API](docs/API.md) · [GeoServer WMS](docs/GEOSERVER.md#wms-services) |
+| Check ingestion and service health | [Status setup](docs/STATUS_SETUP.md) · [Status quick reference](docs/STATUS_QUICKREF.md) |
+| Use the maintenance, monitoring, and cache-refresh scripts | [Script reference and operator guide](docs/SCRIPTS.md) |
+| Understand the system | [Architecture](docs/ARCHITECTURE.md) |
+| Review release changes and target MeteoHub versions | [Changelog](changelog.md) |
+
+Browse the [documentation index](docs/README.md) for all guides and data products.
+
 ## Overview
 
 Meteo-Hub-Maps delivers multi-source meteorological data through a unified service architecture:
@@ -27,13 +42,16 @@ Meteo-Hub-Maps delivers multi-source meteorological data through a unified servi
 ```bash
 git clone https://gitlab.hpc.cineca.it/mistral/meteo-hub-maps.git
 cd meteo-hub-maps
-git checkout 0.6
+```
 
 ### Install RAPyDo Controller
 
 ```bash
 sudo pip3 install --upgrade git+https://github.com/rapydo/do.git@3.0
 rapydo install
+```
+
+### Initialize and Start Services
 
 ```bash
 rapydo init
@@ -54,6 +72,8 @@ In dev mode, start the API service manually:
 
 ```bash
 rapydo shell backend --default
+# Inside the backend container:
+restapi run
 ```
 
 ### Verify Installation
@@ -71,15 +91,28 @@ In production, services start automatically and are proxied by nginx.
 
 ## Documentation
 
-Comprehensive documentation is available in the [`docs/`](docs/) directory:
+Start with the [documentation index](docs/README.md), organized by task:
 
-- **[API Reference](docs/API.md)** - Complete REST API documentation
-- **[Windy Data](docs/WINDY_DATA.md)** - Forecast model data (ICON, COSMO)
-- **[Seasonal Data](docs/SEASONAL_DATA.md)** - Long-range forecasts
-- **[Radar Data](docs/RADAR_DATA.md)** - Precipitation observations
-- **[Tiles Data](docs/TILES_DATA.md)** - Static tile serving
-- **[GeoServer Integration](docs/GEOSERVER.md)** - WMS/WCS configuration
-- **[Architecture](docs/ARCHITECTURE.md)** - System design and components
+- **Release history:** [Changelog](changelog.md), with concise updates and linked full change descriptions.
+- **Configuration and operations:** [GeoWebCache](docs/GWC_CACHE.md),
+  [GeoServer](docs/GEOSERVER.md), [datasets](docs/DATASET_CONFIGURATION.md),
+  [status setup](docs/STATUS_SETUP.md), [script reference](docs/SCRIPTS.md).
+- **API and development:** [REST API](docs/API.md),
+  [dynamic endpoints](docs/DYNAMIC_ENDPOINTS.md), [architecture](docs/ARCHITECTURE.md).
+- **Data products:** [Windy](docs/WINDY_DATA.md), [radar](docs/RADAR_DATA.md),
+  [seasonal](docs/SEASONAL_DATA.md), [sub-seasonal](docs/SUB_SEASONAL_DATA.md),
+  [WW3](docs/WW3_DATA.md), [static tiles](docs/TILES_DATA.md).
+
+### Cache Configuration at a Glance
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `GWC_LAYER_QUOTA_MIB` | `1024` | Independent cache limit for each managed layer, in MiB |
+| `GWC_GLOBAL_QUOTA_MIB` | Empty | Automatic: per-layer quota × current GWC layer count; set a positive MiB value to override |
+
+These are deployment environment settings, configured through
+`projects/maps/project_configuration.yaml` or local `.projectrc` overrides.
+See [examples, deployment steps and verification](docs/GWC_CACHE.md).
 
 ## Key Features
 
@@ -133,7 +166,7 @@ http://server/tiles/00-lm2.2/7/67/45.png
 
 - **Backend:** Python 3.x, Flask, RAPyDo
 - **Task Queue:** Celery, Redis
-- **Geospatial:** GeoServer 2.26.x, GDAL
+- **Geospatial:** GeoServer 3.0.1, GeoWebCache, GDAL
 - **Infrastructure:** Docker, Nginx
 - **Data Formats:** GeoTIFF, PNG, WMS, WCS
 

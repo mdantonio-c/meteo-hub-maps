@@ -81,6 +81,7 @@ def calculate_estimated_finish(from_time: str, to_time: str, detected_timestamp:
 
 class RadarStatusEndpoint(EndpointResource):
     labels = ["radar"]
+    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/radar/<radar_type>/status",

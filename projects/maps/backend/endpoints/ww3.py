@@ -4,11 +4,27 @@ from restapi.rest.definition import EndpointResource, Response
 from restapi.utilities.logs import log
 from pathlib import Path
 import json
+import re
 from datetime import datetime
 
 from restapi.env import Env
 
-WW3_PATH = Path(Env.get("WW3_DATA_PATH", "/ww3"))
+VECTOR_FILENAME = re.compile(
+    r"^(?:\d{2}-\d{2}-\d{4}-\d{2}-\d{2}|\d{8}_\d{2})\.(?:geojson|json)$"
+)
+MIN_VECTOR_ZOOM = 0
+MAX_VECTOR_ZOOM = 22
+
+
+def get_ww3_path() -> Path:
+    """Return the WW3 Mediterranean data directory."""
+    return Path(Env.get("WW3_DATA_PATH", "/ww3")) / "Mediterraneo"
+
+
+def get_vectors_path() -> Path:
+    """Return the WW3 vector directory."""
+    return get_ww3_path() / "dir-dir"
+
 
 class WW3Endpoint(EndpointResource):
     labels = ["ww3"]
@@ -22,7 +38,7 @@ class WW3Endpoint(EndpointResource):
         },
     )
     def get(self) -> Response:
-        vectors_path = WW3_PATH / "dir-dir"
+        vectors_path = get_vectors_path()
         if not vectors_path.exists():
             raise NotFound(f"WW3 vectors path {vectors_path} does not exist")
 
@@ -38,23 +54,36 @@ class WW3FileEndpoint(EndpointResource):
     labels = ["ww3"]
     
     @decorators.endpoint(
-        path="/ww3/vectors/<path:filename>",
+        path="/ww3/vectors/<int:zoom>/<path:filename>",
         summary="Get a specific WW3 vector file",
         responses={
             200: "File content",
             404: "File not found",
         },
     )
-    def get(self, filename: str) -> Response:
-        gradients_path = WW3_PATH / "dir-dir"
+    def get(self, zoom: int, filename: str) -> Response:
+        if not MIN_VECTOR_ZOOM <= zoom <= MAX_VECTOR_ZOOM:
+            raise NotFound(
+                f"Invalid vector zoom {zoom}; expected {MIN_VECTOR_ZOOM}-{MAX_VECTOR_ZOOM}"
+            )
+
+        if (
+            not VECTOR_FILENAME.fullmatch(Path(filename).name)
+            or Path(filename).name != filename
+        ):
+            raise NotFound(f"Invalid vector filename: {filename}")
+
+        gradients_path = (get_vectors_path() / str(zoom)).resolve()
         file_path = (gradients_path / filename).resolve()
         
         # Security check: ensure the resolved path is within gradients_path
-        if not str(file_path).startswith(str(gradients_path.resolve())):
+        try:
+            file_path.relative_to(gradients_path)
+        except ValueError:
             raise NotFound(f"Invalid file path: {filename}")
-        
-        if not file_path.exists():
-            raise NotFound(f"File {filename} not found")
+
+        if not file_path.is_file():
+            raise NotFound(f"File {filename} not found for zoom {zoom}")
             
         try:
             with open(file_path, 'r') as f:
@@ -66,6 +95,7 @@ class WW3FileEndpoint(EndpointResource):
 
 class WW3StatusEndpoint(EndpointResource):
     labels = ["ww3"]
+    depends_on = ["not ACTIVATE_DYNAMIC_DATASETS"]
 
     @decorators.endpoint(
         path="/ww3/status",
@@ -77,7 +107,8 @@ class WW3StatusEndpoint(EndpointResource):
     )
     def get(self) -> Response:
         # Find latest run from .READY files
-        ready_files = sorted([f for f in WW3_PATH.glob("*.READY") if not f.name.endswith(".GEOSERVER.READY")], reverse=True)
+        ww3_path = get_ww3_path()
+        ready_files = sorted([f for f in ww3_path.glob("*.READY") if not f.name.endswith(".GEOSERVER.READY")], reverse=True)
         if not ready_files:
             raise NotFound("No READY files found")
         
@@ -99,7 +130,7 @@ class WW3StatusEndpoint(EndpointResource):
         step = 1
         
         # Find GEOSERVER.READY file to get offsets
-        gs_ready_files = sorted(WW3_PATH.glob("*.GEOSERVER.READY"), reverse=True)
+        gs_ready_files = sorted(ww3_path.glob("*.GEOSERVER.READY"), reverse=True)
         
         if gs_ready_files:
             latest_gs_ready = gs_ready_files[0]
