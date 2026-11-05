@@ -16,14 +16,15 @@ def test_publish_layer_accepts_existing_mosaic_coverage(mock_post):
 
 def test_ingestion_uses_watcher_source_directory():
     source_directory = "/windy/Windy-12-WRF.web/Italia"
-    with patch.object(windy_processing, "_ingest_windy_image_mosaic", return_value=[]), patch(
-        "maps.tasks.cache_control.schedule_cache_refresh_chord"
-    ) as schedule:
+    with (
+        patch.object(windy_processing, "_ingest_windy_image_mosaic", return_value=[]) as ingest,
+        patch("maps.tasks.cache_control.schedule_cache_refresh_chord") as schedule,
+    ):
         windy_processing.update_geoserver_image_mosaic(
             None, "http://geoserver", "12", "20260922", "/SLDs", "WRF", source_directory
         )
 
-    assert windy_processing._ingest_windy_image_mosaic.call_args.kwargs[
+    assert ingest.call_args.kwargs[
         "source_directory"
     ] == source_directory
     assert schedule.call_args.kwargs["ready_file"] == (

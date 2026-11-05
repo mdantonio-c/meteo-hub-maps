@@ -7,6 +7,10 @@ from restapi.connectors.celery import CeleryExt
 @CeleryExt.task(idempotent=True)
 def check_latest_data_and_trigger_geoserver_import_windy(self, paths=None):
     load_adapter("icon").discover(paths)
+    # ICON and WRF share this periodic task; both manifest entries need discovery.
+    # Explicit paths are already routed by the Windy adapter, so scan them once.
+    if paths is None:
+        load_adapter("wrf").discover()
 
 
 @CeleryExt.task(idempotent=True)
