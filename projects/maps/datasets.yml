@@ -324,7 +324,7 @@ datasets:
       task: check_latest_data_and_trigger_geoserver_import_seasonal
       base_path_env: SEASONAL_DATA_PATH
       base_path_default: /seasonal-aim
-      variables: [ano_max_TM, ano_min_Tm, ano_P, mean_TM, mean_Tm, sum_P]
+      variables: [ano_max_TM, ano_min_Tm, ano_P, mean_Tmax, mean_Tmin, sum_P]
       markers:
         ready_suffix: .READY
         checked_suffix: .CELERY.CHECKED
@@ -356,12 +356,12 @@ datasets:
         ano_P:
           layer_name: seasonal_ano_P
           style_name: precip_anomaly
-        mean_TM:
-          layer_name: seasonal_mean_TM
-          style_name: t2m
-        mean_Tm:
-          layer_name: seasonal_mean_Tm
-          style_name: t2m
+        mean_Tmax:
+          layer_name: seasonal_mean_Tmax
+          style_name: temperature
+        mean_Tmin:
+          layer_name: seasonal_mean_Tmin
+          style_name: temperature
         sum_P:
           layer_name: seasonal_sum_P
           style_name: precip_sum

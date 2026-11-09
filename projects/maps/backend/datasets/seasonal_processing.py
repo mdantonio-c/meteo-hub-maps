@@ -30,8 +30,8 @@ seasonal_to_copies_mapping = {
     "ano_max_TM": "seasonal-ano-max-TM",
     "ano_min_Tm": "seasonal-ano-min-Tm",
     "ano_P": "seasonal-ano-P",
-    "mean_TM": "seasonal-mean-TM",
-    "mean_Tm": "seasonal-mean-Tm",
+    "mean_Tmax": "seasonal-mean-Tmax",
+    "mean_Tmin": "seasonal-mean-Tmin",
     "sum_P": "seasonal-sum-P",
 }
 
@@ -76,8 +76,8 @@ def process_seasonal_tiff_files(
         "ano_max_TM",
         "ano_min_Tm",
         "ano_P",
-        "mean_TM",
-        "mean_Tm",
+        "mean_Tmax",
+        "mean_Tmin",
         "sum_P",
     ]
 
@@ -315,8 +315,8 @@ def find_seasonal_sld_mapping(seasonal_dir: str) -> Optional[str]:
         "ano_max_TM": "temp_anomaly",
         "ano_min_Tm": "temp_anomaly",
         "ano_P": "precip_anomaly",
-        "mean_TM": "t2m",
-        "mean_Tm": "t2m",
+        "mean_Tmax": "temperature",
+        "mean_Tmin": "temperature",
         "sum_P": "precip_sum",
     }
 
