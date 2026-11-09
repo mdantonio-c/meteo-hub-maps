@@ -169,7 +169,7 @@ def process_seasonal_tiff_files(
                             log.info(
                                 f"SLD style '{sld_name}' exists in GeoServer, proceeding with association"
                             )
-                            sld_success = associate_sld_with_layer(
+                            sld_success = associate_sld_with_layer_generic(
                                 geoserver_url, layer_name, sld_name, username, password
                             )
                             if sld_success:
