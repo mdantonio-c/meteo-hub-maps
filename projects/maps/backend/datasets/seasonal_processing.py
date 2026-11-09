@@ -8,6 +8,7 @@ import requests
 from datetime import datetime
 from .geoserver_utils import (
     create_ready_file_generic,
+    create_workspace_generic,
     update_slds_from_local_folders,
     upload_geotiff_generic,
     publish_layer_generic,
@@ -168,7 +169,7 @@ def process_seasonal_tiff_files(
                             log.info(
                                 f"SLD style '{sld_name}' exists in GeoServer, proceeding with association"
                             )
-                            sld_success = associate_sld_with_layer(
+                            sld_success = associate_sld_with_layer_generic(
                                 geoserver_url, layer_name, sld_name, username, password
                             )
                             if sld_success:
