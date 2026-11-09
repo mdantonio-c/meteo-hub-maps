@@ -8,6 +8,7 @@ import requests
 from datetime import datetime
 from .geoserver_utils import (
     create_ready_file_generic,
+    create_workspace_generic,
     update_slds_from_local_folders,
     upload_geotiff_generic,
     publish_layer_generic,
