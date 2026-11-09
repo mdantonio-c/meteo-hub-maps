@@ -27,6 +27,7 @@ PASSWORD = Env.get("GEOSERVER_ADMIN_PASSWORD", None)
 WORKSPACE = "meteohub"
 
 # Mapping of seasonal directories to their corresponding names in copies
+# Note: copies directory names use hyphens, but layer names use underscores (from datasets.yml)
 seasonal_to_copies_mapping = {
     "ano_max_TM": "seasonal-ano-max-TM",
     "ano_min_Tm": "seasonal-ano-min-Tm",
@@ -34,6 +35,16 @@ seasonal_to_copies_mapping = {
     "mean_Tmax": "seasonal-mean-Tmax",
     "mean_Tmin": "seasonal-mean-Tmin",
     "sum_P": "seasonal-sum-P",
+}
+
+# Mapping of seasonal directories to their GeoServer layer names (must match datasets.yml)
+seasonal_layer_names = {
+    "ano_max_TM": "seasonal_ano_max_TM",
+    "ano_min_Tm": "seasonal_ano_min_Tm",
+    "ano_P": "seasonal_ano_P",
+    "mean_Tmax": "seasonal_mean_Tmax",
+    "mean_Tmin": "seasonal_mean_Tmin",
+    "sum_P": "seasonal_sum_P",
 }
 
 
@@ -134,7 +145,7 @@ def process_seasonal_tiff_files(
 
             # Create and publish temporal mosaic in GeoServer
             store_name = f"mosaic_{seasonal_copies_name}"
-            layer_name = seasonal_copies_name
+            layer_name = seasonal_layer_names.get(subdir, seasonal_copies_name)
 
             # Upload as ImageMosaic (temporal) - use generic function directly to preserve path handling
             if upload_geotiff_generic(
